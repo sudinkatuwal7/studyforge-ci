@@ -1,6 +1,6 @@
 # StudyForge
 
-![StudyForge Logo](StudyForge.png)
+![StudyForge Logo](images/StudyForge.png)
 
 **Turn your class materials into smarter study resources.**
 
@@ -69,7 +69,7 @@ Instead of manually creating every summary, study guide, flashcard set, or pract
 
 ### Project Image
 
-![StudyForge Project Icon](StudyForge.png)
+![StudyForge Project Icon](images/StudyForge.png)
 
 The StudyForge project image represents the combination of education and technology. It reflects the idea of taking existing course materials and transforming them into useful tools for learning, reviewing, and practicing course content.
 
