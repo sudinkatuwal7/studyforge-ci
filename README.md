@@ -81,25 +81,28 @@ Their feedback could help us determine which features are most useful, identify 
 
 ---
 
-## Technologies Used
+## Technologies
 
-The technologies used in StudyForge may evolve as the project develops. Our current planned technologies and development tools include:
+| Layer | Technology | Why |
+|---|---|---|
+| Frontend | React + TypeScript (Vite), PDF.js | SPA with an in-browser PDF viewer for one-click citation checking |
+| Backend | Python 3.12, Django, Django REST Framework | REST API, authentication, ORM and migrations in one framework |
+| Background jobs | Celery + Redis | Document parsing and embedding run outside the request cycle |
+| Document parsing | pypdf, python-pptx | Text extraction with page and slide numbers preserved |
+| Database | PostgreSQL + pgvector | Relational data and vector similarity search in one database |
+| AI | LLM API and embedding model (provider chosen after our accuracy spike) | Answer generation and retrieval |
+| Testing | pytest-django, Vitest, React Testing Library, Mock Service Worker | Backend, frontend and mocked-API tests |
+| Containers | Docker, Docker Compose | Reproducible local environment |
+| Deployment | Kubernetes (kind for local clusters) | Course requirement; runs web, api, worker and database |
+| Source control | Bitbucket + Bitbucket Pipelines | Course requirement; CI on pull requests |
+| Project tracking | Jira (Study Forge, key SCRUM) | Course requirement; sprints and user stories |
 
-* *Java* – Primary programming language for backend development.
-* *Spring Boot* – Framework for building backend services and REST API endpoints.
-* *React* – Library for building the application's interactive user interface.
-* *HTML, CSS, and JavaScript* – Used for the structure, styling, and functionality of the frontend.
-* *PostgreSQL* – Relational database for storing users, courses, uploaded materials, and generated study resources.
-* *OpenAI API* – Planned AI service for processing course materials and generating study content.
-* *Docker* – Used to containerize application components and provide consistent development environments.
-* *Kubernetes* – Used to manage and coordinate the application's containerized services as the project grows.
-* *Minikube* – Used to run and test the Kubernetes environment locally during development.
-* *Git* – Used for version control and tracking changes to the project.
-* *Bitbucket* – Used to host the team repository and support source-code collaboration.
-* *Jira* – Used to manage user stories, sprint tasks, and overall project progress.
-* *Postman* – Used to test and debug backend API endpoints.
+### Starter code
 
-Additional frameworks, libraries, or deployment technologies may be added as the project develops.
+No starter code is taken from GitHub or any similar site. Projects are generated with the
+official tools: `django-admin startproject` for the backend and `npm create vite` for the
+frontend. We reviewed two open-source projects for reference only, without copying code:
+open-notebook (MIT) and kotaemon (Apache-2.0).
 
 ---
 
