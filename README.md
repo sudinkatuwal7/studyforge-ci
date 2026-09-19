@@ -106,50 +106,113 @@ open-notebook (MIT) and kotaemon (Apache-2.0).
 
 ---
 
-## Features
+###Features
 
-The following features are planned as the initial focus for the first sprint.
+The following features are planned based on the current StudyForge Jira user stories and development tasks.
 
-### 1. User Account and Login
 
-*What it does:*  
-Allows students to create an account and log in to StudyForge so that their courses, uploaded materials, and generated resources can be associated with their profile.
+1. User Authentication
 
-*Who uses it:*  
-Students use this feature to securely access their personal StudyForge workspace.
+What it does:
+Allows students to create an account, securely log in, and log out of StudyForge. Authentication protects courses, uploaded materials, and generated study resources so that students can access only their own data.
 
-### 2. Course Management
+Who uses it:
+Students use this feature to securely access their personal StudyForge workspace and protected application features.
 
-*What it does:*  
-Allows students to create courses or subjects and organize their study materials under the appropriate class.
 
-*Who uses it:*  
-Students use this feature to keep materials from different courses separated and easier to manage.
 
-### 3. Class Material Upload
+2. Course Management
 
-*What it does:*  
-Allows students to upload course materials such as lecture notes, PDFs, or other supported documents.
+What it does:
+Allows students to create one or more courses with a name and optional description. Students can view their course list, rename courses, delete courses with confirmation, and view the materials associated with each course.
 
-*Who uses it:*  
-Students use this feature to provide StudyForge with the source material that will be used to create study resources.
+Who uses it:
+Students use this feature to organize their study materials and generated resources by class or subject.
 
-### 4. Study Material Organization
 
-*What it does:*  
-Allows students to view and organize uploaded materials by course or subject.
 
-*Who uses it:*  
-Students use this feature to quickly find and manage previously uploaded course materials.
+3. PDF Upload and Processing Status
 
-### 5. Initial Study Resource Generation
+What it does:
+Allows students to upload PDF course materials to a course and view the processing status of each document.
 
-*What it does:*  
-Allows students to generate an initial study resource from uploaded course material. The first version will focus on establishing the basic workflow between uploaded content and AI-generated study output.
+Uploaded documents can display statuses such as Processing, Ready, or Failed so students know when a document is available for study features. Invalid files, unsupported PDFs, and files that exceed the upload limit are rejected with a clear error message.
 
-*Who uses it:*  
-Students use this feature to turn their uploaded course material into a resource they can review while studying.
+Who uses it:
+Students use this feature to add course materials to StudyForge and track when those materials are ready to use.
 
----
+
+
+4. Course Material Management
+
+What it does:
+Allows students to view and manage materials uploaded to a course. The material list can display information such as the file name, file type, and upload date.
+
+Students can rename uploaded materials or delete them after confirming the deletion. Deleted materials are no longer available for future study-resource generation.
+
+Who uses it:
+Students use this feature to keep their uploaded course materials organized and up to date.
+
+
+
+5. Source Selection
+
+What it does:
+Allows students to choose which uploaded materials should be used when asking questions or generating study resources.
+
+Students can select one, multiple, or all materials from a course. StudyForge uses only the selected materials when retrieving information or generating resources, and the selection can remain available during the current session for follow-up requests.
+
+Who uses it:
+Students use this feature when they want StudyForge to focus on specific lectures, notes, or documents instead of every file in a course.
+
+
+
+6. Page-Cited Question Answering
+
+What it does:
+Allows students to ask questions about their uploaded course materials and receive answers supported by citations.
+
+Answers can include the source document and page number where the information was found. Students can select a citation to open the corresponding PDF at the cited page and verify the information directly.
+
+If the uploaded materials do not contain enough information to answer a question, StudyForge indicates that the answer could not be found instead of relying on unrelated general information.
+
+Who uses it:
+Students use this feature to review course content, ask questions, and verify AI-generated answers against their original class materials.
+
+
+
+7. Study Guide Generation
+
+What it does:
+Allows students to generate a structured study guide from one or more selected course materials.
+
+Generated study guides can include organized summaries, important terms, and key concepts based only on information retrieved from the selected materials.
+
+Who uses it:
+Students use this feature to quickly create organized review material before quizzes, exams, or study sessions.
+
+
+
+8. Flashcard Quiz Generation
+
+What it does:
+Allows students to generate practice quizzes from materials associated with a selected course.
+
+Students can answer generated questions and submit their responses while StudyForge tracks their progress through the quiz.
+
+Who uses it:
+Students use this feature to practice recalling and applying information from their course materials.
+
+
+
+9. Quiz Feedback, Explanations, and Scoring
+
+What it does:
+Provides feedback after students submit quiz answers.
+
+StudyForge indicates whether an answer is correct or incorrect, displays an explanation after each response, tracks quiz progress, and provides a final score or completion summary when the quiz is finished.
+
+Who uses it:
+Students use this feature to identify areas they understand and topics that may require additional review.
 
 As development continues, StudyForge will be expanded through additional sprints based on team priorities, testing results, technical feasibility, and student feedback.
