@@ -216,3 +216,23 @@ Who uses it:
 Students use this feature to identify areas they understand and topics that may require additional review.
 
 As development continues, StudyForge will be expanded through additional sprints based on team priorities, testing results, technical feasibility, and student feedback.
+10. Study Progress Tracking
+
+What it does:
+Allows students to track their study progress for each course.
+
+StudyForge allows students to create study goals, mark goals as completed, view completed and incomplete goals, and see their overall progress for each course.
+
+Who uses it:
+Students use this feature to keep track of their study goals and identify what they have completed and what they still need to work on.
+
+
+11. Study Session Scheduling
+
+What it does:
+Allows students to schedule and manage study sessions for their courses.
+
+StudyForge allows students to create study sessions for a selected course, specify the date, start time, and duration, view upcoming study sessions, and edit or delete scheduled sessions.
+
+Who uses it:
+Students use this feature to organize their study time and prepare for upcoming assignments and exams.
