@@ -1,0 +1,15 @@
+---
+description: React and TypeScript conventions for the StudyForge frontend
+globs: frontend/**/*.{ts,tsx}
+alwaysApply: false
+---
+
+# Frontend Rules
+
+- Use React + TypeScript.
+- Put API calls under `src/api/`.
+- Put API and domain interfaces under `src/types/`.
+- Read the backend URL from environment configuration (`VITE_API_BASE_URL`).
+- Keep page-level screens and reusable components in separate folders.
+- Avoid `any`.
+- Do not implement unrelated UI while completing a Jira task.
