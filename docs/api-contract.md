@@ -1,48 +1,89 @@
-# Document Upload API Contract — SCRUM-8
+# API Contract
 
-## Status Values
+All StudyForge APIs are versioned under `/api/v1/`.
 
-| Status | Meaning |
-|---|---|
-| PENDING | Document uploaded and stored; not yet picked up for processing. |
-| PROCESSING | Background worker is extracting text and building chunks. |
-| READY | Processing finished successfully; document can be used for notes/Q&A. |
-| FAILED | Processing failed (e.g. scanned PDF with no text layer, corrupted file). Includes an error_code. |
+The only implemented endpoint in this bootstrap is:
 
-## Upload Endpoint
+```text
+GET /api/v1/health/
+```
 
-`POST /api/courses/{course_id}/documents`
-
-### Request
-- Multipart form upload
-- Field: `file` (PDF only, max 25 MB)
-
-### Response (202 Accepted)
 ```json
 {
-  "document_id": "uuid",
-  "course_id": "uuid",
-  "filename": "lecture1.pdf",
-  "status": "PENDING",
-  "created_at": "2026-09-21T10:00:00Z"
+  "status": "ok"
 }
 ```
 
-### Error Responses
-- `400` — file too large, not a valid PDF, or missing file
-- `404` — course does not belong to the authenticated user
-- `401` — not authenticated
+The endpoints below are the planned Sprint 1 API. Do not treat them as implemented.
 
-## Status Check Endpoint
+## Planned Sprint 1 endpoints
 
-`GET /api/documents/{document_id}`
+```text
+POST   /api/v1/auth/register/
+POST   /api/v1/auth/token/
+POST   /api/v1/auth/token/refresh/
 
-### Response
+GET    /api/v1/courses/
+POST   /api/v1/courses/
+GET    /api/v1/courses/{id}/
+PATCH  /api/v1/courses/{id}/
+DELETE /api/v1/courses/{id}/
+
+GET    /api/v1/courses/{id}/documents/
+POST   /api/v1/courses/{id}/documents/
+
+GET    /api/v1/documents/{id}/
+PATCH  /api/v1/documents/{id}/
+DELETE /api/v1/documents/{id}/
+
+POST   /api/v1/documents/{id}/notes/
+GET    /api/v1/documents/{id}/notes/
+```
+
+## Example contracts
+
+### Course
+
 ```json
 {
-  "document_id": "uuid",
+  "id": 12,
+  "name": "Operating Systems",
+  "created_at": "2026-09-21T20:00:00Z"
+}
+```
+
+### Document
+
+```json
+{
+  "id": 42,
+  "course_id": 12,
+  "name": "Processes.pdf",
   "status": "READY",
-  "page_count": 12,
-  "error_code": null
+  "created_at": "2026-09-21T20:10:00Z"
 }
 ```
+
+### Note
+
+```json
+{
+  "id": 91,
+  "document_id": 42,
+  "content": {
+    "key_concepts": [],
+    "important_points": [],
+    "summary": ""
+  },
+  "created_at": "2026-09-21T20:15:00Z"
+}
+```
+
+## Contract changes
+
+If an API contract changes later, update all of the following:
+
+- `docs/api-contract.md`
+- backend serializer / response logic
+- frontend TypeScript type
+- affected tests

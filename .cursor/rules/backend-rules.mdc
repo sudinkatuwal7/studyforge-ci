@@ -1,0 +1,15 @@
+---
+description: Django and DRF conventions for the StudyForge backend
+globs: backend/**/*.py
+alwaysApply: false
+---
+
+# Backend Rules
+
+- Use the Django ORM for database access.
+- Use Django REST Framework for REST APIs.
+- Use serializers for input and output validation.
+- Keep substantial business logic out of views.
+- Database schema changes require Django migrations. Commit migration files.
+- User-owned resources must eventually be scoped to the authenticated user.
+- Do not modify another backend domain without a reason.

@@ -1,0 +1,15 @@
+---
+description: StudyForge shared architecture and domain boundaries
+alwaysApply: true
+---
+
+# Project Architecture
+
+StudyForge uses a Django / Django REST Framework backend and a React + TypeScript frontend.
+
+- Respect domain ownership boundaries. Do not create unrelated features.
+- Do not introduce new top-level architecture without justification.
+- Read `docs/` before implementing a feature.
+- Follow the documented API and database contracts in `docs/api-contract.md` and `docs/database-schema.md`.
+- Do not hard-code secrets or environment URLs.
+- Inspect the existing implementation before modifying shared files.
