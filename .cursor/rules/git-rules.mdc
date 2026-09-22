@@ -1,0 +1,12 @@
+---
+description: Git and Jira branch workflow for StudyForge
+alwaysApply: true
+---
+
+# Git Rules
+
+- Never implement feature work directly on `main`.
+- One Jira task normally equals one feature branch.
+- Branch format is `feature/STUD-XX-description`.
+- Do not mix unrelated tasks in the same branch.
+- Keep modifications focused on the current Jira task.
