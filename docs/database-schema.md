@@ -39,10 +39,12 @@ Models should generally include:
 
 | State | Meaning |
 |---|---|
-| `PENDING` | Uploaded, not processed yet |
-| `PROCESSING` | Processing is in progress |
-| `READY` | Processing succeeded |
-| `FAILED` | Processing failed |
+| `PENDING` | The PDF has been accepted and stored, and a Document record exists, but processing has not started. |
+| `PROCESSING` | The background worker has started processing the document. |
+| `READY` | Processing completed successfully and the document can be used by downstream study features. |
+| `FAILED` | Processing failed and the document cannot currently be used. |
+
+These are the only valid document status values, using the exact uppercase spelling shown. See the [Document status contract](api-contract.md#document-status-contract) for ownership, the processing handoff, and lifecycle details.
 
 ## Migration rules
 
