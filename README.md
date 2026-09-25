@@ -249,6 +249,104 @@ Health endpoint:
 http://localhost:8000/api/v1/health/
 ```
 
+## Local infrastructure
+
+Django still uses SQLite by default. This stack only starts PostgreSQL (with pgvector) and Redis for local development. You do not need it to run the current backend.
+
+### Prerequisites
+
+- Docker Desktop or Docker Engine
+- Docker Compose (`docker compose`)
+
+### Start
+
+From the repository root:
+
+```bash
+docker compose up -d
+```
+
+Defaults are in `docker-compose.yml`. Copy `.env.example` to `.env` only if you need to change them. Do not commit `.env`.
+
+### Check
+
+```bash
+docker compose ps
+```
+
+You should see:
+
+- `db` — PostgreSQL 16 with pgvector
+- `redis` — Redis
+
+Both should become healthy.
+
+### Connection details
+
+When Django or Celery runs on your machine (not inside Compose):
+
+```text
+Postgres host: localhost
+Postgres port: 5432
+Database: studyforge
+User: studyforge
+Password: studyforge_dev
+Redis: redis://localhost:6379/0
+```
+
+That Redis URL is already the Celery default in `backend/config/settings.py`.
+
+If Django later runs inside Compose, Redis would be `redis://redis:6379/0` and Postgres host would be `db`, because those are the service names on the Compose network.
+
+### Verify Postgres
+
+```bash
+docker compose exec db psql -U studyforge -d studyforge -c "SELECT 1;"
+```
+
+### Verify pgvector
+
+```bash
+docker compose exec db psql -U studyforge -d studyforge -c "SELECT extname, extversion FROM pg_extension WHERE extname = 'vector';"
+```
+
+You should see a row for `vector`. The extension is created automatically the first time the database volume is initialized.
+
+### Verify Redis
+
+```bash
+docker compose exec redis redis-cli ping
+```
+
+The reply should be `PONG`.
+
+### Stop
+
+```bash
+docker compose down
+```
+
+This stops the containers and keeps the Postgres data volume.
+
+### Delete local database data
+
+```bash
+docker compose down -v
+```
+
+WARNING: `-v` deletes the `postgres_data` volume. Local Postgres data is gone. The next `docker compose up -d` creates an empty database and runs the pgvector init script again.
+
+### Port already in use
+
+If `5432` or `6379` is taken, set another host port in `.env` and start again:
+
+```text
+POSTGRES_PORT=5433
+REDIS_PORT=6380
+```
+
+If you change `REDIS_PORT`, also set `CELERY_BROKER_URL` to that port, for example `redis://localhost:6380/0`.
+
 ## Git workflow
 
 After cloning, update `main` and create a branch for your Jira task:
