@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import unittest
+from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 from apps.processing.constants import SCANNED_TEXT_THRESHOLD_PER_PAGE
 from apps.processing.exceptions import InvalidPDFError, PermanentProcessingError
 from apps.processing.pdf_parser import extract_pdf_text
+
+FIXTURES_DIR = Path(__file__).resolve().parent / "fixtures"
 
 
 class PdfParserTests(unittest.TestCase):
@@ -85,3 +88,29 @@ class PdfParserTests(unittest.TestCase):
             load_reader.side_effect = PermanentProcessingError("pypdf is not installed")
             with self.assertRaises(PermanentProcessingError):
                 extract_pdf_text("lecture.pdf")
+
+
+class PdfFixtureExtractionTests(unittest.TestCase):
+    """Jira DoD: three fixture PDFs keep a known sentence on a known page."""
+
+    def test_processes_sentence_is_on_page_two(self):
+        result = extract_pdf_text(FIXTURES_DIR / "lecture_processes.pdf")
+        self.assertEqual(result.page_count, 2)
+        self.assertEqual(result.pages[1].page_number, 2)
+        self.assertIn("The scheduler chooses the next process to run.", result.pages[1].text)
+        self.assertNotIn("The scheduler chooses the next process to run.", result.pages[0].text)
+
+    def test_memory_sentence_is_on_page_two(self):
+        result = extract_pdf_text(FIXTURES_DIR / "lecture_memory.pdf")
+        self.assertEqual(result.page_count, 2)
+        self.assertEqual(result.pages[1].page_number, 2)
+        self.assertIn("A page fault occurs when the requested page is not in RAM.", result.pages[1].text)
+        self.assertNotIn("A page fault occurs when the requested page is not in RAM.", result.pages[0].text)
+
+    def test_deadlock_sentence_is_on_page_three(self):
+        result = extract_pdf_text(FIXTURES_DIR / "lecture_deadlock.pdf")
+        self.assertEqual(result.page_count, 3)
+        self.assertEqual(result.pages[2].page_number, 3)
+        self.assertIn("Circular wait completes the four deadlock conditions.", result.pages[2].text)
+        self.assertNotIn("Circular wait completes the four deadlock conditions.", result.pages[0].text)
+        self.assertNotIn("Circular wait completes the four deadlock conditions.", result.pages[1].text)
