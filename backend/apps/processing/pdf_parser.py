@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import logging
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 from apps.processing.exceptions import InvalidPDFError, PermanentProcessingError
@@ -12,11 +12,20 @@ logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
+class PageText:
+    """Text extracted from a single PDF page. Page numbers are 1-based."""
+
+    page_number: int
+    text: str
+
+
+@dataclass(frozen=True)
 class ExtractionResult:
-    """Text extracted from a PDF."""
+    """Text extracted from a PDF, including per-page boundaries."""
 
     text: str
     page_count: int
+    pages: list[PageText] = field(default_factory=list)
 
 
 def _load_pdf_reader():
@@ -45,20 +54,25 @@ def extract_pdf_text(source: Any) -> ExtractionResult:
     if getattr(reader, "is_encrypted", False):
         raise InvalidPDFError("Encrypted PDFs are not supported.")
 
-    pages = list(getattr(reader, "pages", []))
-    page_texts: list[str] = []
-    for index, page in enumerate(pages):
+    raw_pages = list(getattr(reader, "pages", []))
+    extracted_pages: list[PageText] = []
+    for index, page in enumerate(raw_pages):
         try:
-            page_texts.append(page.extract_text() or "")
+            page_text = page.extract_text() or ""
         except Exception as exc:
             raise InvalidPDFError(
                 f"Failed to extract text from PDF page {index + 1}."
             ) from exc
+        extracted_pages.append(PageText(page_number=index + 1, text=page_text))
 
-    text = "\n".join(page_texts).strip()
+    text = "\n".join(page.text for page in extracted_pages).strip()
     if not text:
         raise InvalidPDFError("PDF has no extractable text.")
 
-    result = ExtractionResult(text=text, page_count=len(pages))
+    result = ExtractionResult(
+        text=text,
+        page_count=len(extracted_pages),
+        pages=extracted_pages,
+    )
     logger.info("Extracted %s characters from %s PDF pages.", len(text), result.page_count)
     return result
