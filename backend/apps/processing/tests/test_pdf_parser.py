@@ -5,6 +5,7 @@ from __future__ import annotations
 import unittest
 from unittest.mock import MagicMock, patch
 
+from apps.processing.constants import SCANNED_TEXT_THRESHOLD_PER_PAGE
 from apps.processing.exceptions import InvalidPDFError, PermanentProcessingError
 from apps.processing.pdf_parser import extract_pdf_text
 
@@ -42,15 +43,42 @@ class PdfParserTests(unittest.TestCase):
             with self.assertRaises(InvalidPDFError):
                 extract_pdf_text("secret.pdf")
 
-    def test_empty_text_layer_is_rejected(self):
+    def test_empty_text_layer_is_likely_scanned(self):
         page = MagicMock()
         page.extract_text.return_value = "   "
         reader = MagicMock()
         reader.is_encrypted = False
         reader.pages = [page]
         with patch("apps.processing.pdf_parser._load_pdf_reader", return_value=lambda _src: reader):
-            with self.assertRaises(InvalidPDFError):
-                extract_pdf_text("scan.pdf")
+            result = extract_pdf_text("scan.pdf")
+
+        self.assertTrue(result.likely_scanned)
+        self.assertEqual(result.page_count, 1)
+        self.assertEqual(result.pages[0].page_number, 1)
+
+    def test_sparse_text_is_flagged_as_likely_scanned(self):
+        page = MagicMock()
+        page.extract_text.return_value = "hi"
+        reader = MagicMock()
+        reader.is_encrypted = False
+        reader.pages = [page]
+        with patch("apps.processing.pdf_parser._load_pdf_reader", return_value=lambda _src: reader):
+            result = extract_pdf_text("scan.pdf")
+
+        self.assertLess(result.average_text_per_page, SCANNED_TEXT_THRESHOLD_PER_PAGE)
+        self.assertTrue(result.likely_scanned)
+
+    def test_dense_text_is_not_flagged_as_scanned(self):
+        page = MagicMock()
+        page.extract_text.return_value = "A" * 200
+        reader = MagicMock()
+        reader.is_encrypted = False
+        reader.pages = [page]
+        with patch("apps.processing.pdf_parser._load_pdf_reader", return_value=lambda _src: reader):
+            result = extract_pdf_text("lecture.pdf")
+
+        self.assertFalse(result.likely_scanned)
+        self.assertGreaterEqual(result.average_text_per_page, SCANNED_TEXT_THRESHOLD_PER_PAGE)
 
     def test_missing_pypdf_is_permanent(self):
         with patch("apps.processing.pdf_parser._load_pdf_reader") as load_reader:
