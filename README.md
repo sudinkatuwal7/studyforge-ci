@@ -251,7 +251,7 @@ http://localhost:8000/api/v1/health/
 
 ## Local infrastructure
 
-Django still uses SQLite by default. This stack only starts PostgreSQL (with pgvector) and Redis for local development. You do not need it to run the current backend.
+Django uses the Docker PostgreSQL database by default (`localhost:5432`, database `studyforge`). Start this stack before `python manage.py migrate`. Set `DATABASE_ENGINE=sqlite3` only if you need the old SQLite file.
 
 ### Prerequisites
 
@@ -294,7 +294,7 @@ Password: studyforge_dev
 Redis: redis://localhost:6379/0
 ```
 
-That Redis URL is already the Celery default in `backend/config/settings.py`.
+Django reads the same Postgres values from the environment, with these defaults. That Redis URL is already the Celery default in `backend/config/settings.py`.
 
 If Django later runs inside Compose, Redis would be `redis://redis:6379/0` and Postgres host would be `db`, because those are the service names on the Compose network.
 
@@ -311,6 +311,27 @@ docker compose exec db psql -U studyforge -d studyforge -c "SELECT extname, extv
 ```
 
 You should see a row for `vector`. The extension is created automatically the first time the database volume is initialized.
+
+### Connect Django
+
+From `backend/`:
+
+```bash
+pip install -r requirements.txt
+python manage.py migrate
+```
+
+Django should report `Engine: django.db.backends.postgresql` if you inspect the connection. To confirm:
+
+```bash
+python manage.py dbshell
+```
+
+Then run:
+
+```sql
+SELECT current_database(), current_user;
+```
 
 ### Verify Redis
 
