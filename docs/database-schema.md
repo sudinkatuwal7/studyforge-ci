@@ -1,6 +1,6 @@
 # Database Schema
 
-These models are the intended Sprint 1 relationships. They are not implemented yet.
+User, Course, Document, and Job have model definitions. DocumentChunk and Note remain planned relationships. SCRUM-9 adds persistence only, not upload or processing behavior.
 
 ```text
 User
@@ -14,6 +14,7 @@ Course
 Document
  │
  ├── processing status
+ ├── Job (1:N)
  ├── DocumentChunk
  └── Note
 ```
@@ -24,6 +25,8 @@ Document
 |---|---|
 | `Course.owner` | The user who owns the course |
 | `Document.course` | The course the document belongs to |
+| `Document.owner` | The owning user, explicitly required by SCRUM-9 Jira |
+| `Job.document` | The document for one logical processing run |
 | `DocumentChunk.document` | The document a chunk was extracted from |
 | `Note.document` | The document a note was generated for |
 
@@ -48,45 +51,85 @@ These are the only valid document status values, using the exact uppercase spell
 
 The SCRUM-8 contract also defines `PENDING -> FAILED` when upload-side processing dispatch definitely fails after persistence. Retain the Document/file and expose `PROCESSING_DISPATCH_FAILED` through the public `error` object (`code` and safe `message`). An uncertain dispatch outcome does not itself change the persisted status. This documents the API boundary only; it does not implement models or worker transitions.
 
-## SCRUM-9: Document and Job design boundary
+## SCRUM-9: Document and Job schema
 
-SCRUM-9 requires **both Document and Job models and migrations**. The existing relationship diagram does not define Job, and its omission does not remove Job from the Jira scope. This section records evidence and open decisions; it does not declare an agreed Job schema.
+The Jira requirement is Document (`owner`, `course`, `title`, `sha256`, `file`, `status`, `error_code`, `page_count`) and Job (`type`, `status`, `attempts`, `run_after`), with owner/status indexes and clean migrations on local PostgreSQL.
 
-### Document: established integration requirements
+### Dependency provenance
 
-| Concern | Evidence / constraint |
+The existing schema dependencies are integrated without their API implementations:
+
+- Course model/package and `courses/0001_initial.py`: SCRUM-31 commit `5958401`, which includes SCRUM-30. The migration explicitly uses `BigAutoField` and depends on the configured user model.
+- User model/app configuration and `users/0001_initial.py`: authentication commit `166784f`. The existing custom User uses `BigAutoField`, and its migration depends on `auth/0012_alter_user_first_name_max_length`.
+- `AUTH_USER_MODEL = "users.User"`; owner relations use `settings.AUTH_USER_MODEL`. User and Course implementation files are retained from those commits.
+
+### Document
+
+Defined in `apps.documents.models.Document`. The automatically generated `id` is a `BigAutoField`, matching the documents app and project configuration.
+
+| Field | Storage and default |
 |---|---|
-| Model location | Processing branch `99c9e3d` imports `apps.documents.models.Document`; notes branch `139e60c` references `documents.Document`. |
-| Course relationship | Use `Document.course` as a ForeignKey to the real Course model. Notes already checks ownership through `course__owner`. Do not duplicate Course or store a free-standing course ID. |
-| Course key and owner | Course branch `269420d` defines `Course.owner` against `settings.AUTH_USER_MODEL`, with no explicit primary key; its Django default is `BigAutoField`. No Course migration exists in that snapshot. |
-| File | Processing explicitly reads `Document.file`; use a storage-backed field compatible with opening the file in binary mode. The physical storage name is independent of the public display name. |
-| Status | Processing reads/writes `status` and supports `Document.Status` members. Upload initializes `PENDING`; processing owns subsequent lifecycle transitions. |
-| Name and timestamps | The SCRUM-8 working API contract uses `name`, `created_at`, and `updated_at`. Status writers must update modification time. |
+| `owner` | Required FK to `settings.AUTH_USER_MODEL`, `CASCADE`, reverse name `documents`; automatically indexed. |
+| `course` | Required FK to the actual `courses.Course`, `CASCADE`, reverse name `documents`; automatically indexed. |
+| `title` | Required `CharField(255)`; display filename including its extension. Supplies the API's `name`. |
+| `sha256` | Required `CharField(64)` with a lowercase hexadecimal digest validator. Not unique or indexed; duplicate content is not prohibited. Hash calculation is outside this task. |
+| `file` | Required `FileField`, storage-name length 255, under `documents/%Y/%m/`, using Django's configured default storage. No file writes, PDF validation, or extraction occur merely by declaring the field. |
+| `status` | Indexed `CharField(10)` with `Document.Status` choices; defaults to `PENDING`. A database check permits only the four SCRUM-8 statuses. |
+| `error_code` | Nullable `CharField(64)`, defaults to `None`; choices and database check allow `PROCESSING_FAILED` and `PROCESSING_DISPATCH_FAILED`. |
+| `page_count` | Nullable `PositiveIntegerField`, defaults to `None` until known. Validation and a database check require at least one page when populated. |
+| `created_at` | Non-editable datetime; initialized when the Document is saved for the first time. |
+| `updated_at` | Non-editable datetime; updated on normal and partial model saves. |
 
-Processing currently checks for optional `error_code`, `error_message`, `extracted_text`, and `page_count` fields. Those checks are not an agreed requirement to add all four to Document. Decide storage ownership with Sanish, and keep public errors separate from internal exception text. Its current storage hook may write nothing and still proceed to `READY`; the required persisted output must be agreed before integration.
+A normal initial save assigns the same timestamp to `created_at` and `updated_at`. A partial `save(update_fields=[...])` also includes `updated_at`; an empty `update_fields` remains a no-op. Bulk creation/update and `QuerySet.update()` bypass the model's timestamp maintenance: callers using those operations must supply timestamps themselves. No lifecycle transition is performed by `save()`.
 
-### Job: contract questions before migration
+`Document.owner_id` must equal `Document.course.owner_id`. Both FKs are required by the schema, but ordinary FK constraints do not enforce equality across the related Course row. Creation/update callers must preserve that invariant; this task does not implement request authorization or silently choose an owner.
 
-No Job/ProcessingJob/DocumentJob model, relationship, or field schema was found in the inspected local and remote branches on 2026-09-23. The current processing task accepts `document_id` only and updates Document directly.
+SCRUM-8's public representation is unchanged: map `title` to `name`, and map a terminal `error_code` to its fixed safe `{code, message}` response. No separate name or error-message column is needed. There is no raw exception text, extracted text, or embedding storage in this model. Serializers and processing behavior are outside SCRUM-9.
 
-Sudin and Sanish must agree:
+The nullable code supports a missing error normally. The schema does not enforce a status/error pairing or execute state transitions; the agreed upload/processing writers must maintain the API contract's failure semantics.
 
-1. What a Job represents: one processing lifecycle or one execution/attempt.
-2. Whether a Document has one Job or can have several, and which app owns the model/migrations.
-3. Who creates the Job, when it is committed, and how the processing task finds and updates it.
-4. Which fields are necessary, where authoritative status/errors live, and how any repeated data stays consistent.
-5. Whether a private task identifier or attempt metadata is actually needed; do not add them merely because Celery exists.
-6. Job behavior for dispatch failures and worker retries, plus deliberate relationship deletion behavior needed by the initial schema.
+### Job
 
-Keep the resulting model minimal. Do not silently omit Job, choose one-to-one versus one-to-many, introduce new status names, or build retry history before this agreement. No public Job representation is required by existing repository evidence.
+Defined in `apps.documents.models.Job`, owned with the document persistence schema. This does not register or implement Person 4's processing app.
 
-### Migration prerequisites and future compatibility
+A Document has zero or more Jobs; each Job belongs to exactly one Document. Each row represents a logical processing run/handoff, with execution attempts counted within that run. A future separate run may create another Job. This is the provisional design authorized for SCRUM-9; no worker currently updates it in this branch.
 
-- Integrate the agreed custom User baseline before creating dependent migrations. Authentication branch `166784f` sets `AUTH_USER_MODEL = "users.User"` and includes its initial migration.
-- Depend on Aashish's actual registered Course app and committed migration. Do not invent a Course migration name or reference a substitute model.
-- Create Document/Job migrations only after their relationship and ownership decisions are recorded. Use normal Django relations and migrations rather than manually copied IDs.
-- Specify necessary `on_delete` behavior deliberately with the affected owners; this does not implement the later rename/delete endpoint or cleanup policy tasks.
-- Keep display naming separate from storage keys so future rename work does not require moving uploaded files.
+| Field | Storage and default |
+|---|---|
+| `id` | Automatically generated `BigAutoField` primary key. |
+| `document` | Required FK to Document, `CASCADE`, reverse name `jobs`; automatically indexed. |
+| `type` | `CharField(32)` with `Job.Type`; defaults to `DOCUMENT_PROCESSING`, currently the only allowed value. |
+| `status` | Indexed `CharField(16)` with `Job.Status`; defaults to `QUEUED`. Allowed values: `QUEUED`, `RUNNING`, `SUCCEEDED`, `FAILED`. |
+| `attempts` | Non-negative `PositiveIntegerField`, defaults to zero. Future execution code owns counting attempts. |
+| `run_after` | Nullable datetime, defaults to `None`, meaning no scheduled delay. A value denotes earliest execution eligibility. |
+
+Job status describes a run, whereas Document status describes usability of the document. Job type/status have database checks. Job has no public API, owner duplicate, error duplicate, Celery task ID, automatic attempt increment, scheduler, or retry algorithm. Extra Job timestamps and scheduling indexes are omitted from this minimal schema.
+
+### Relationships, indexes, and migrations
+
+`User -> Course -> Document -> Job` uses one-to-many relationships; User also has a direct one-to-many relationship to Document. All dependent FKs use Django `CASCADE` for database rows. This does not delete physical files or implement any delete endpoint.
+
+The owner FK provides the Jira owner index without a duplicate explicit index. Document and Job status fields each use `db_index=True`; Course and Job-document FKs also receive Django's normal indexes. No digest, timestamp, or `run_after` index is added without a current query requirement.
+
+`documents/0001_initial.py` creates Document and Job with their FKs, indexes, and checks. Its dependencies are `courses/0001_initial` and `migrations.swappable_dependency(settings.AUTH_USER_MODEL)`, resolving to the integrated User baseline. No processing migration is needed.
+
+### Local PostgreSQL verification
+
+Backend settings use `django.db.backends.postgresql` and read `POSTGRES_DB`, `POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, and `POSTGRES_PORT` from the process environment. `backend/.env.example` documents those names; Django does not automatically load an `.env` file. Keep actual credentials out of Git.
+
+Use Python 3.12 with `backend/venv`, install `backend/requirements.txt`, and provide a running local PostgreSQL database plus its connection variables. Then run from `backend`:
+
+```text
+python manage.py check
+python manage.py makemigrations
+python manage.py makemigrations --check
+python manage.py migrate
+python manage.py test apps.documents
+```
+
+`apps.documents.tests` contains only focused model/schema checks. Upload/ownership API tests and worker execution are outside this task. Successful SQLite checks do not satisfy Jira's PostgreSQL acceptance criterion.
+
+Verified locally with Python 3.12.12, Django 6.1.1, and PostgreSQL 16.15: system checks passed, no migration drift remained, all initial migrations applied, and all seven schema tests passed on PostgreSQL.
 
 ## Migration rules
 

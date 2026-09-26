@@ -21,6 +21,9 @@ INSTALLED_APPS = [
     "rest_framework",
     "corsheaders",
     "apps.processing",
+    "apps.users.apps.UsersConfig",
+    "apps.courses",
+    "apps.documents.apps.DocumentsConfig",
 ]
 
 MIDDLEWARE = [
@@ -52,6 +55,8 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "config.wsgi.application"
+
+AUTH_USER_MODEL = "users.User"
 
 # Default is the Docker Compose Postgres database. Set DATABASE_ENGINE=sqlite3
 # to keep using the local SQLite file.

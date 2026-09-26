@@ -215,6 +215,8 @@ source venv/bin/activate
 
 pip install -r requirements.txt
 
+# Before the commands below, export the PostgreSQL connection variables
+# listed in backend/.env.example and start your local PostgreSQL database.
 python manage.py migrate
 python manage.py runserver
 ```
@@ -223,6 +225,25 @@ On Windows, activate the virtual environment with:
 
 ```bash
 venv\Scripts\activate
+```
+
+Use Python 3.12 for the backend. Database configuration uses `POSTGRES_DB`,
+`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, and `POSTGRES_PORT` from
+the process environment. See `backend/.env.example` for the names and local
+defaults. Django does not automatically load `.env` files. Keep actual credentials
+in your local environment or ignored `.env` file; export them before running
+management commands. PostgreSQL, rather than SQLite, is required for SCRUM-9
+migration verification.
+
+If you keep local PostgreSQL values in `backend/.env`, load them into the current
+PowerShell session from the `backend` directory before running Django:
+
+```powershell
+foreach ($line in Get-Content .env) {
+    if ($line -match '^(POSTGRES_(DB|USER|PASSWORD|HOST|PORT))=(.*)$') {
+        [Environment]::SetEnvironmentVariable($Matches[1], $Matches[3], 'Process')
+    }
+}
 ```
 
 ### Frontend

@@ -14,7 +14,7 @@ Django ORM
 Database
 ```
 
-The frontend talks to the backend only through the versioned REST API under `/api/v1/`. The backend uses Django REST Framework for request handling and Django ORM for persistence. The current bootstrap database is SQLite. PostgreSQL is planned later and is not configured yet.
+The frontend talks to the backend only through the versioned REST API under `/api/v1/`. The backend uses Django REST Framework for request handling and Django ORM for persistence. The backend now uses PostgreSQL, configured through the `POSTGRES_*` process environment variables documented in `backend/.env.example`. SCRUM-9 verifies relational migrations on PostgreSQL; vector storage and processing remain separate work.
 
 ## Backend domain ownership
 
