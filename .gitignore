@@ -19,3 +19,5 @@ dist/
 .idea/
 .vscode/
 backend/apps/notes/fixtures/
+backend/try_notes.py
+backend/try_failures.py

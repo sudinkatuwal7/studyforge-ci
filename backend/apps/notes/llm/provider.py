@@ -9,6 +9,11 @@ from apps.notes.llm.base import InvalidLLMOutput, LLMError, validate_study_guide
 
 DEFAULT_MODEL = "gpt-4o-mini"
 
+# Characters, not tokens — roughly 4 characters per token, so this leaves
+# generous room for the system prompt and the response. Overridable so the
+# staged path can be exercised without a 200-page PDF.
+DEFAULT_SINGLE_PASS_LIMIT = 200_000
+
 SYSTEM_PROMPT = """You build study guides from a student's own course materials.
 The material may come from any subject and any format — lecture slides, prose
 readings, problem sets, lab handouts, transcripts.
@@ -47,6 +52,36 @@ Respond with a JSON object in exactly this shape:
 }"""
 
 
+def _split_into_sections(text, limit):
+    """Split text into chunks under `limit`, cutting on blank lines.
+
+    Cutting mid-sentence would hand the model a fragment it cannot interpret.
+    Paragraph boundaries are the cheapest safe place to cut, and because the
+    fixture joins pages with blank lines, they usually fall on page breaks.
+    """
+    sections, current = [], ""
+
+    for paragraph in text.split("\n\n"):
+        # A single paragraph longer than the limit has to be cut somewhere.
+        while len(paragraph) > limit:
+            if current:
+                sections.append(current)
+                current = ""
+            sections.append(paragraph[:limit])
+            paragraph = paragraph[limit:]
+
+        if current and len(current) + len(paragraph) + 2 > limit:
+            sections.append(current)
+            current = paragraph
+        else:
+            current = f"{current}\n\n{paragraph}" if current else paragraph
+
+    if current:
+        sections.append(current)
+
+    return sections
+
+
 class OpenAIStudyGuideLLM:
     def __init__(self):
         key = os.environ.get("OPENAI_API_KEY")
@@ -54,10 +89,40 @@ class OpenAIStudyGuideLLM:
             raise LLMError("OPENAI_API_KEY is not set")
 
         self.name = os.environ.get("NOTES_LLM_MODEL", DEFAULT_MODEL)
-        self._client = OpenAI(api_key=key)
+        self._single_pass_limit = int(
+            os.environ.get("NOTES_SINGLE_PASS_LIMIT", DEFAULT_SINGLE_PASS_LIMIT)
+        )
+        # A hung request must not hang a worker forever. max_retries handles
+        # transient 429s and 5xx without us writing a retry loop.
+        self._client = OpenAI(api_key=key, timeout=60.0, max_retries=2)
 
     def generate(self, text):
-        raw = self._call(text)
+        if len(text) <= self._single_pass_limit:
+            return self._generate_once(text)
+        return self._generate_staged(text)
+
+    def _generate_staged(self, text):
+        """Summarise section by section, then summarise the summaries.
+
+        Sections stay in document order throughout — this is a full-document
+        study guide, not a search result, so order carries meaning.
+        """
+        sections = _split_into_sections(text, self._single_pass_limit)
+        print(f"[llm] staged: {len(sections)} sections", flush=True)
+
+        partials = [self._generate_once(section) for section in sections]
+
+        combined = "\n\n".join(
+            f"Section {i + 1}\n"
+            f"Concepts: {' | '.join(p['key_concepts'])}\n"
+            f"Points: {' | '.join(p['important_points'])}\n"
+            f"Summary: {p['summary']}"
+            for i, p in enumerate(partials)
+        )
+        return self._generate_once(combined, merging=True)
+
+    def _generate_once(self, text, merging=False):
+        raw = self._call(text, merging=merging)
 
         try:
             payload = json.loads(raw)
@@ -66,7 +131,16 @@ class OpenAIStudyGuideLLM:
 
         return validate_study_guide(payload)
 
-    def _call(self, text):
+    def _call(self, text, merging=False):
+        if merging:
+            instruction = (
+                "Below are notes taken from consecutive sections of one document, "
+                "in order. Consolidate them into a single study guide, merging "
+                "duplicates and keeping the most specific wording."
+            )
+        else:
+            instruction = "Build a study guide from the document below."
+
         try:
             response = self._client.chat.completions.create(
                 model=self.name,
@@ -75,10 +149,7 @@ class OpenAIStudyGuideLLM:
                     {"role": "system", "content": SYSTEM_PROMPT},
                     {
                         "role": "user",
-                        "content": (
-                            "Build a study guide from the document below.\n\n"
-                            f"<document>\n{text}\n</document>"
-                        ),
+                        "content": f"{instruction}\n\n<document>\n{text}\n</document>",
                     },
                 ],
             )
