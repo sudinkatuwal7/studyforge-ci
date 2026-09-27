@@ -104,6 +104,17 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 
+# Private uploads: no public media route is registered.
+MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT", str(BASE_DIR / "media")))
+
+# Producer configuration only. Person 4 owns the worker and task implementation.
+CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
+CELERY_BROKER_CONNECTION_TIMEOUT = 3
+CELERY_BROKER_TRANSPORT_OPTIONS = {
+    "socket_connect_timeout": 3,
+    "socket_timeout": 3,
+}
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {

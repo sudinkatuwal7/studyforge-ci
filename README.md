@@ -240,11 +240,54 @@ PowerShell session from the `backend` directory before running Django:
 
 ```powershell
 foreach ($line in Get-Content .env) {
-    if ($line -match '^(POSTGRES_(DB|USER|PASSWORD|HOST|PORT))=(.*)$') {
-        [Environment]::SetEnvironmentVariable($Matches[1], $Matches[3], 'Process')
+    if ($line -match '^(POSTGRES_DB|POSTGRES_USER|POSTGRES_PASSWORD|POSTGRES_HOST|POSTGRES_PORT|CELERY_BROKER_URL|MEDIA_ROOT)=(.*)$') {
+        [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process')
     }
 }
 ```
+
+### Document upload API (SCRUM-10)
+
+The backend implements authenticated PDF upload and document/status retrieval:
+
+```text
+POST /api/v1/courses/{id}/documents/
+GET  /api/v1/documents/{id}/
+```
+
+Send `Authorization: Bearer <access_token>` and one multipart file field named
+`file`. The course must belong to the authenticated user. The inclusive upload
+limit is 20 MiB. Structurally valid scanned PDFs are accepted; encrypted,
+malformed, empty, and zero-page PDFs are rejected without text extraction.
+Responses and error codes follow [the API contract](docs/api-contract.md).
+
+Uploads default to the ignored `backend/media/` directory; `MEDIA_ROOT` can
+override it. Files are private: no public media URL is registered. The API and
+processing worker must use the same storage and PostgreSQL database.
+
+Set `CELERY_BROKER_URL` to the same broker as Person 4's worker (default
+`redis://127.0.0.1:6379/0`). The API publishes
+`apps.processing.tasks.process_document_task` with one positional `document_id`
+after committing the Document and its initial queued Job. It does not execute
+processing, start a worker, or retry publication. Job attempts and worker-side
+Job transitions remain Person 4's responsibility; the API marks its Job failed
+only when dispatch definitely fails.
+
+An unavailable broker returns the contract's `503` with the saved document ID;
+the file is retained. An uncertain send leaves the document state unchanged.
+A successful publish does not prove a worker is running: the document can stay
+`PENDING` until a worker consumes it. Do not automatically repeat an upload after
+an uncertain response.
+
+SCRUM-10 uses SimpleJWT to validate access tokens on these two endpoints. Login,
+registration, and token refresh remain the authentication domain's endpoints.
+Receive those and the worker through `development` according to the team
+workflow. Token issuance and validation must share signing configuration.
+
+With PostgreSQL configured, run the existing schema checks and the focused
+SCRUM-10 integration checks with `python manage.py test apps.documents`.
+Those tests isolate uploaded files and mock the processing handoff; the full
+pytest upload matrix remains SCRUM-12 work.
 
 ### Frontend
 

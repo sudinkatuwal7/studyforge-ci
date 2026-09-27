@@ -10,6 +10,7 @@ __pycache__/
 
 db.sqlite3
 *.sqlite3
+backend/media/
 
 node_modules/
 dist/
