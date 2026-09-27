@@ -391,15 +391,23 @@ If you change `REDIS_PORT`, also set `CELERY_BROKER_URL` to that port, for examp
 
 ## Git workflow
 
-After cloning, update `main` and create a branch for your Jira task:
+Create each Jira task branch from its domain branch. Completed work is merged
+through pull requests: **Jira task -> domain -> development -> main**.
+To receive another domain's shared work, merge `development` into your domain
+branch, then merge the updated domain into any active task branch.
+
+For example, Person 3 starts a new task from the document domain:
 
 ```bash
-git switch main
-git pull origin main
+git fetch origin
+git switch feature/document-upload-status
+git pull --ff-only origin feature/document-upload-status
 git switch -c feature/SCRUM-XX-short-description
 ```
 
-See `docs/git-workflow.md` for the full convention.
+See [Git workflow](docs/git-workflow.md) for domain owners, update commands, and
+pull-request targets. The branch called `dev` in team discussions is named
+`development` in this repository.
 
 ## Documentation
 
