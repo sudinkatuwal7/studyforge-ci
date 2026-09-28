@@ -23,6 +23,7 @@ INSTALLED_APPS = [
     "rest_framework",
     "corsheaders",
     "apps.processing",
+    "apps.knowledge",
     "apps.users.apps.UsersConfig",
     "apps.courses",
     "apps.documents.apps.DocumentsConfig",
