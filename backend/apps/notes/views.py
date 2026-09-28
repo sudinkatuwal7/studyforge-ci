@@ -2,23 +2,22 @@ from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
+from apps.documents.models import Document
 
 from apps.notes.selectors import get_owned_document
 from apps.notes.serializers import StudyGuideSerializer
 from apps.notes.services import generate_study_guide
 
-# TODO(SCRUM-8): replace with Document.Status.READY once Sudin's
-# status constants merge — this local string is a placeholder.
-READY = "READY"
-
 
 class StudyGuideView(APIView):
+    """POST /api/v1/documents/{document_id}/study-guide/"""
+
     permission_classes = [IsAuthenticated]
 
     def post(self, request, document_id):
         document = get_owned_document(request.user, document_id)
 
-        if document.status != READY:
+        if document.status != Document.Status.READY:
             return Response(
                 {
                     "code": "DOCUMENT_NOT_READY",
