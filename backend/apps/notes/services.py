@@ -1,15 +1,25 @@
 from apps.notes.llm import get_client
 from apps.notes.models import StudyGuide
+from apps.notes.selectors import get_ordered_chunks
+
+
+class EmptyDocumentError(Exception):
+    """A READY document that produced no usable text."""
 
 
 def generate_study_guide(document, text=None):
     """Create or replace the study guide for a document.
 
-    `text` is injected for now. SCRUM-69 replaces the fallback with a
-    real read of the document's ordered chunks.
+    `text` can be injected to bypass the database, which is what the
+    tests use to work with known content.
     """
     if text is None:
-        text = _placeholder_text(document)
+        text = "\n\n".join(chunk.content for chunk in get_ordered_chunks(document))
+
+    if not text.strip():
+        raise EmptyDocumentError(
+            "This document finished processing but produced no readable text."
+        )
 
     client = get_client()
     result = client.generate(text)
@@ -24,8 +34,3 @@ def generate_study_guide(document, text=None):
         },
     )
     return guide
-
-
-def _placeholder_text(document):
-    """TODO(SCRUM-69): replace with ordered chunks once SCRUM-17 lands."""
-    return "Placeholder document text."

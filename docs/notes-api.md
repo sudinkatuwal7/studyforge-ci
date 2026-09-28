@@ -16,8 +16,13 @@ Authentication required.
   "summary": "..."
 }
 
-### 409 Conflict — document has not finished processing
-{"code": "DOCUMENT_NOT_READY", "detail": "This document is still processing."}
+### 409 Conflict — no text
+{"code": "DOCUMENT_HAS_NO_TEXT",
+ "detail": "No readable text could be extracted from this document."}
+
+Returned when a document reached READY but produced no chunks — a scanned
+PDF, or an extraction that yielded nothing. Both 409s share a status code;
+clients should branch on `code`, not on the status alone.
 
 ### 404 Not Found
 Returned when the document does not exist **or** belongs to another user.

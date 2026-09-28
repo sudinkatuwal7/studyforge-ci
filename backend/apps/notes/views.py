@@ -6,7 +6,7 @@ from apps.documents.models import Document
 
 from apps.notes.selectors import get_owned_document
 from apps.notes.serializers import StudyGuideSerializer
-from apps.notes.services import generate_study_guide
+from apps.notes.services import EmptyDocumentError, generate_study_guide
 
 
 class StudyGuideView(APIView):
@@ -26,5 +26,18 @@ class StudyGuideView(APIView):
                 status=status.HTTP_409_CONFLICT,
             )
 
-        guide = generate_study_guide(document)
+        try:
+            guide = generate_study_guide(document)
+        except EmptyDocumentError:
+            # READY but no usable text: a scanned PDF, or extraction that
+            # produced nothing. A document problem, not a model failure,
+            # so it gets its own code rather than surfacing as a 500.
+            return Response(
+                {
+                    "code": "DOCUMENT_HAS_NO_TEXT",
+                    "detail": "No readable text could be extracted from this document.",
+                },
+                status=status.HTTP_409_CONFLICT,
+            )
+
         return Response(StudyGuideSerializer(guide).data, status=status.HTTP_200_OK)
