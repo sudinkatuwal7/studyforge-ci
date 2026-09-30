@@ -3,6 +3,7 @@ import { getHealth } from "./api/health";
 import  { useAuth } from "./context/AuthContext";
 import CourseForm from "./components/courses/CourseForm";
 import LoginPage from "./pages/LoginPage";
+import CourseList from "./components/courses/CourseList";
 
 type HealthState =
   | { status: "checking" }
@@ -59,6 +60,7 @@ function App() {
        ) : user ? (
         <>
           <p>Signed in as {user.email}</p>
+          <CourseList />
           <CourseForm />
         </>
        ) : (
