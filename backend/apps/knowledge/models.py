@@ -19,8 +19,8 @@ class Chunk(models.Model):
     )
     page_number = models.PositiveIntegerField(validators=[MinValueValidator(1)])
     content = models.TextField()
-    # No embedding model is chosen yet. An unsized vector column can be filled later.
-    embedding = VectorField(null=True, blank=True)
+    # Gemini embeddings are exactly 768 values. Null until a chunk is embedded.
+    embedding = VectorField(dimensions=768, null=True, blank=True)
 
     class Meta:
         constraints = [
