@@ -12,7 +12,7 @@ type HealthState =
 function App() {
   const [health, setHealth] = useState<HealthState>({ status: "checking" });
 
-  const { user } = useAuth();
+  const { user, isRestoring } = useAuth();
 
   useEffect(() => {
     let cancelled = false;
@@ -54,8 +54,10 @@ function App() {
         {health.status === "error" && `Backend unavailable. ${health.message}`}
       </p>
     
-       {user ? (
-         <>
+       {isRestoring ? (
+         <p>Checking your session...</p>
+       ) : user ? (
+        <>
           <p>Signed in as {user.email}</p>
           <CourseForm />
         </>
