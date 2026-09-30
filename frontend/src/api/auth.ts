@@ -1,4 +1,4 @@
-import { API_BASE_URL } from "./client";
+import { API_BASE_URL, getJson } from "./client";
 
 export type PublicUser = {
   id: number;
@@ -56,4 +56,42 @@ export async function login(
   }
 
   return (await response.json()) as LoginResult;
+}
+
+export async function restoreSession(): Promise<LoginResult> {
+  if (!API_BASE_URL) {
+    throw new Error("VITE_API_BASE_URL is not configured");
+  }
+
+  const csrfResponse = await fetch(`${API_BASE_URL}/auth/csrf/`, {
+    credentials: "include",
+  });
+
+  if (!csrfResponse.ok) {
+    throw new Error(`CSRF setup failed: ${csrfResponse.status}`);
+  }
+
+  const csrfToken = getCsrfToken();
+  if (!csrfToken) {
+    throw new Error("CSRF cookie was not set");
+  }
+
+  const refreshResponse = await fetch(`${API_BASE_URL}/auth/token/refresh/`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      "X-CSRFToken": csrfToken,
+    },
+    body: "{}",
+  });
+
+  if (!refreshResponse.ok) {
+    throw new Error(`Refresh failed: ${refreshResponse.status}`);
+  }
+
+  const { access } = (await refreshResponse.json()) as { access: string };
+  const { user } = await getJson<{ user: PublicUser }>("/auth/me/", access);
+
+  return { access, user };
 }

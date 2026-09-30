@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
 import { getHealth } from "./api/health";
+import  { useAuth } from "./context/AuthContext";
 import CourseForm from "./components/courses/CourseForm";
+import LoginPage from "./pages/LoginPage";
 
 type HealthState =
   | { status: "checking" }
@@ -9,6 +11,8 @@ type HealthState =
 
 function App() {
   const [health, setHealth] = useState<HealthState>({ status: "checking" });
+
+  const { user, isRestoring } = useAuth();
 
   useEffect(() => {
     let cancelled = false;
@@ -49,7 +53,18 @@ function App() {
         {health.status === "ok" && "Backend connected."}
         {health.status === "error" && `Backend unavailable. ${health.message}`}
       </p>
-      <CourseForm />
+    
+       {isRestoring ? (
+         <p>Checking your session...</p>
+       ) : user ? (
+        <>
+          <p>Signed in as {user.email}</p>
+          <CourseForm />
+        </>
+       ) : (
+         <LoginPage />
+  
+     )}
     </main>
   );
 }
