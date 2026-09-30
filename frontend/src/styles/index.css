@@ -36,3 +36,15 @@ p {
 .health-error {
   color: #b91c1c;
 }
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 2rem;
+  width: min(100%, 24rem);
+}
+
+.form-error {
+  color: #b91c1c;
+}

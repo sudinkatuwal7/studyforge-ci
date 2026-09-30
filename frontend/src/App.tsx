@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { getHealth } from "./api/health";
+import CourseForm from "./components/courses/CourseForm";
 
 type HealthState =
   | { status: "checking" }
@@ -48,6 +49,7 @@ function App() {
         {health.status === "ok" && "Backend connected."}
         {health.status === "error" && `Backend unavailable. ${health.message}`}
       </p>
+      <CourseForm />
     </main>
   );
 }

@@ -4,11 +4,15 @@ All StudyForge APIs are versioned under `/api/v1/`.
 
 This file is the source of truth for the working SCRUM-8 API contract, incorporating Person 3's decisions on 2026-09-25. No `contracts/openapi.yaml` exists, and the repository instructions and supplied SCRUM-8 requirements do not require OpenAPI. SCRUM-8 covers the upload and individual document/status contracts below, not their implementation or the course-document listing contract.
 
-The only implemented endpoint in this bootstrap is:
+Implemented endpoints on the SCRUM-10 branch are:
 
 ```text
 GET /api/v1/health/
+POST /api/v1/courses/{id}/documents/
+GET /api/v1/documents/{id}/
 ```
+
+The health response is:
 
 ```json
 {
@@ -16,7 +20,9 @@ GET /api/v1/health/
 }
 ```
 
-The endpoints below are the planned Sprint 1 API. Do not treat them as implemented.
+The endpoints below remain planned or belong to other domain branches. They are
+not implemented by SCRUM-10. The upload and individual document retrieval
+endpoints above implement the unchanged SCRUM-8 contract described below.
 
 ## Planned Sprint 1 endpoints
 
@@ -32,9 +38,6 @@ PATCH  /api/v1/courses/{id}/
 DELETE /api/v1/courses/{id}/
 
 GET    /api/v1/courses/{id}/documents/
-POST   /api/v1/courses/{id}/documents/
-
-GET    /api/v1/documents/{id}/
 
 POST   /api/v1/documents/{id}/notes/
 GET    /api/v1/documents/{id}/notes/

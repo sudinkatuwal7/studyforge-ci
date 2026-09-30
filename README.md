@@ -215,6 +215,8 @@ source venv/bin/activate
 
 pip install -r requirements.txt
 
+# Before the commands below, export the PostgreSQL connection variables
+# listed in backend/.env.example and start your local PostgreSQL database.
 python manage.py migrate
 python manage.py runserver
 ```
@@ -224,6 +226,68 @@ On Windows, activate the virtual environment with:
 ```bash
 venv\Scripts\activate
 ```
+
+Use Python 3.12 for the backend. Database configuration uses `POSTGRES_DB`,
+`POSTGRES_USER`, `POSTGRES_PASSWORD`, `POSTGRES_HOST`, and `POSTGRES_PORT` from
+the process environment. See `backend/.env.example` for the names and local
+defaults. Django does not automatically load `.env` files. Keep actual credentials
+in your local environment or ignored `.env` file; export them before running
+management commands. PostgreSQL, rather than SQLite, is required for SCRUM-9
+migration verification.
+
+If you keep local PostgreSQL values in `backend/.env`, load them into the current
+PowerShell session from the `backend` directory before running Django:
+
+```powershell
+foreach ($line in Get-Content .env) {
+    if ($line -match '^(POSTGRES_DB|POSTGRES_USER|POSTGRES_PASSWORD|POSTGRES_HOST|POSTGRES_PORT|CELERY_BROKER_URL|MEDIA_ROOT)=(.*)$') {
+        [Environment]::SetEnvironmentVariable($Matches[1], $Matches[2], 'Process')
+    }
+}
+```
+
+### Document upload API (SCRUM-10)
+
+The backend implements authenticated PDF upload and document/status retrieval:
+
+```text
+POST /api/v1/courses/{id}/documents/
+GET  /api/v1/documents/{id}/
+```
+
+Send `Authorization: Bearer <access_token>` and one multipart file field named
+`file`. The course must belong to the authenticated user. The inclusive upload
+limit is 20 MiB. Structurally valid scanned PDFs are accepted; encrypted,
+malformed, empty, and zero-page PDFs are rejected without text extraction.
+Responses and error codes follow [the API contract](docs/api-contract.md).
+
+Uploads default to the ignored `backend/media/` directory; `MEDIA_ROOT` can
+override it. Files are private: no public media URL is registered. The API and
+processing worker must use the same storage and PostgreSQL database.
+
+Set `CELERY_BROKER_URL` to the same broker as Person 4's worker (default
+`redis://127.0.0.1:6379/0`). The API publishes
+`apps.processing.tasks.process_document_task` with one positional `document_id`
+after committing the Document and its initial queued Job. It does not execute
+processing, start a worker, or retry publication. Job attempts and worker-side
+Job transitions remain Person 4's responsibility; the API marks its Job failed
+only when dispatch definitely fails.
+
+An unavailable broker returns the contract's `503` with the saved document ID;
+the file is retained. An uncertain send leaves the document state unchanged.
+A successful publish does not prove a worker is running: the document can stay
+`PENDING` until a worker consumes it. Do not automatically repeat an upload after
+an uncertain response.
+
+SCRUM-10 uses SimpleJWT to validate access tokens on these two endpoints. Login,
+registration, and token refresh remain the authentication domain's endpoints.
+Receive those and the worker through `development` according to the team
+workflow. Token issuance and validation must share signing configuration.
+
+With PostgreSQL configured, run the existing schema checks and the focused
+SCRUM-10 integration checks with `python manage.py test apps.documents`.
+Those tests isolate uploaded files and mock the processing handoff; the full
+pytest upload matrix remains SCRUM-12 work.
 
 ### Frontend
 
@@ -249,17 +313,144 @@ Health endpoint:
 http://localhost:8000/api/v1/health/
 ```
 
-## Git workflow
+## Local infrastructure
 
-After cloning, update `main` and create a branch for your Jira task:
+Django uses the Docker PostgreSQL database by default (`localhost:5432`, database `studyforge`). Start this stack before `python manage.py migrate`. Set `DATABASE_ENGINE=sqlite3` only if you need the old SQLite file.
+
+### Prerequisites
+
+- Docker Desktop or Docker Engine
+- Docker Compose (`docker compose`)
+
+### Start
+
+From the repository root:
 
 ```bash
-git switch main
-git pull origin main
+docker compose up -d
+```
+
+Defaults are in `docker-compose.yml`. Copy `.env.example` to `.env` only if you need to change them. Do not commit `.env`.
+
+### Check
+
+```bash
+docker compose ps
+```
+
+You should see:
+
+- `db` — PostgreSQL 16 with pgvector
+- `redis` — Redis
+
+Both should become healthy.
+
+### Connection details
+
+When Django or Celery runs on your machine (not inside Compose):
+
+```text
+Postgres host: localhost
+Postgres port: 5432
+Database: studyforge
+User: studyforge
+Password: studyforge_dev
+Redis: redis://localhost:6379/0
+```
+
+Django reads the same Postgres values from the environment, with these defaults. That Redis URL is already the Celery default in `backend/config/settings.py`.
+
+If Django later runs inside Compose, Redis would be `redis://redis:6379/0` and Postgres host would be `db`, because those are the service names on the Compose network.
+
+### Verify Postgres
+
+```bash
+docker compose exec db psql -U studyforge -d studyforge -c "SELECT 1;"
+```
+
+### Verify pgvector
+
+```bash
+docker compose exec db psql -U studyforge -d studyforge -c "SELECT extname, extversion FROM pg_extension WHERE extname = 'vector';"
+```
+
+You should see a row for `vector`. The extension is created automatically the first time the database volume is initialized.
+
+### Connect Django
+
+From `backend/`:
+
+```bash
+pip install -r requirements.txt
+python manage.py migrate
+```
+
+Django should report `Engine: django.db.backends.postgresql` if you inspect the connection. To confirm:
+
+```bash
+python manage.py dbshell
+```
+
+Then run:
+
+```sql
+SELECT current_database(), current_user;
+```
+
+### Verify Redis
+
+```bash
+docker compose exec redis redis-cli ping
+```
+
+The reply should be `PONG`.
+
+### Stop
+
+```bash
+docker compose down
+```
+
+This stops the containers and keeps the Postgres data volume.
+
+### Delete local database data
+
+```bash
+docker compose down -v
+```
+
+WARNING: `-v` deletes the `postgres_data` volume. Local Postgres data is gone. The next `docker compose up -d` creates an empty database and runs the pgvector init script again.
+
+### Port already in use
+
+If `5432` or `6379` is taken, set another host port in `.env` and start again:
+
+```text
+POSTGRES_PORT=5433
+REDIS_PORT=6380
+```
+
+If you change `REDIS_PORT`, also set `CELERY_BROKER_URL` to that port, for example `redis://localhost:6380/0`.
+
+## Git workflow
+
+Create each Jira task branch from its domain branch. Completed work is merged
+through pull requests: **Jira task -> domain -> development -> main**.
+To receive another domain's shared work, merge `development` into your domain
+branch, then merge the updated domain into any active task branch.
+
+For example, Person 3 starts a new task from the document domain:
+
+```bash
+git fetch origin
+git switch feature/document-upload-status
+git pull --ff-only origin feature/document-upload-status
 git switch -c feature/SCRUM-XX-short-description
 ```
 
-See `docs/git-workflow.md` for the full convention.
+See [Git workflow](docs/git-workflow.md) for domain owners, update commands, and
+pull-request targets. The branch called `dev` in team discussions is named
+`development` in this repository.
 
 ## Documentation
 
