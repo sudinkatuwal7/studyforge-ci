@@ -80,7 +80,13 @@ class RefreshView(APIView):
             raise AuthenticationFailed("Refresh token is missing or invalid.")
 
         serializer = TokenRefreshSerializer(data={"refresh": refresh_token})
-        serializer.is_valid(raise_exception=True)
+
+        try:
+            serializer.is_valid(raise_exception=True)
+        except TokenError as exc:
+            raise AuthenticationFailed(
+                "Refresh token is missing or invalid."
+            ) from exc
 
         return Response({"access": serializer.validated_data["access"]})
 @method_decorator(csrf_protect, name="dispatch")

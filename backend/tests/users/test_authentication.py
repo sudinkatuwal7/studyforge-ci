@@ -47,13 +47,18 @@ def test_me_returns_authenticated_user(user):
 @pytest.mark.django_db
 def test_logout_blacklists_refresh_token_and_clears_cookie(user):
     refresh = RefreshToken.for_user(user)
+    refresh_token = str(refresh)
+
     client = APIClient()
-    client.cookies["studyforge_refresh"] = str(refresh)
+    client.cookies["studyforge_refresh"] = refresh_token
 
     response = client.post(LOGOUT_URL)
 
     assert response.status_code == 204
     assert response.cookies["studyforge_refresh"]["max-age"] == 0
+
+    # Simulate replaying the old refresh token after logout.
+    client.cookies["studyforge_refresh"] = refresh_token
 
     refresh_response = client.post(
         "/api/v1/auth/token/refresh/",
@@ -62,3 +67,4 @@ def test_logout_blacklists_refresh_token_and_clears_cookie(user):
     )
 
     assert refresh_response.status_code == 401
+
