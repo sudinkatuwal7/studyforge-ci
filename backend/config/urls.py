@@ -3,7 +3,7 @@
 from django.contrib import admin
 from django.http import JsonResponse
 from django.urls import include, path
-from apps.users.views import LoginView, RefreshView, RegisterView, csrf_cookie
+from apps.users.views import LoginView, LogoutView, RefreshView, RegisterView, csrf_cookie
 from apps.users.views import MeView
 
 def health(_request):
@@ -25,4 +25,6 @@ urlpatterns = [
     path("api/v1/auth/token/refresh/", RefreshView.as_view()),
 
     path("api/v1/auth/me/", MeView.as_view()),
+
+    path("api/v1/auth/logout/", LogoutView.as_view()),
 ]

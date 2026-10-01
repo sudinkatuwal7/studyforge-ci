@@ -1,8 +1,10 @@
+
 from rest_framework import status
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from rest_framework.exceptions import AuthenticationFailed
+from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.exceptions import AuthenticationFailed, TokenError
 from rest_framework_simplejwt.serializers import TokenRefreshSerializer
 from rest_framework.permissions import AllowAny, IsAuthenticated
 
@@ -63,16 +65,7 @@ class LoginView(APIView):
        
     def get_authenticate_header(self, request):
         return 'Bearer realm="api"'
-        response.set_cookie(
-            "studyforge_refresh",
-            serializer.validated_data["refresh"],
-            max_age=int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds()),
-            httponly=True,
-            secure=not settings.DEBUG,
-            samesite="Lax",
-            path="/api/v1/auth/",
-        )
-        return response
+        
 @method_decorator(csrf_protect, name="dispatch")
 class RefreshView(APIView):
     authentication_classes = []
@@ -90,6 +83,28 @@ class RefreshView(APIView):
         serializer.is_valid(raise_exception=True)
 
         return Response({"access": serializer.validated_data["access"]})
+@method_decorator(csrf_protect, name="dispatch")
+class LogoutView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        refresh_token = request.COOKIES.get("studyforge_refresh")
+
+        if refresh_token:
+            try:
+                RefreshToken(refresh_token).blacklist()
+            except TokenError:
+                # Still clear the cookie if the token is expired or invalid.
+                pass
+
+        response = Response(status=status.HTTP_204_NO_CONTENT)
+        response.delete_cookie(
+            "studyforge_refresh",
+            path="/api/v1/auth/",
+            samesite="Lax",
+        )
+        return response
 
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
