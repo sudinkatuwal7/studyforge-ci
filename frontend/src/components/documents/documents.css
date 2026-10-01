@@ -1,0 +1,19 @@
+.document-upload {
+  width: min(100%, 34rem);
+  margin: 1.5rem 0;
+  padding: 1rem;
+  box-sizing: border-box;
+  border: 1px solid #d1d5db;
+  border-radius: .5rem;
+  overflow-wrap: anywhere;
+}
+
+.document-upload form { width: 100%; margin: 1rem 0; gap: .75rem; }
+.document-upload input { max-width: 100%; }
+.document-upload button { align-self: flex-start; padding: .5rem .75rem; cursor: pointer; }
+.document-upload button:disabled { cursor: default; }
+.document-upload :focus-visible { outline: 2px solid #1d4ed8; outline-offset: 3px; }
+.document-upload p { margin: .5rem 0; line-height: 1.5; }
+.document-upload .document-error { color: #b91c1c; }
+.document-status { margin: 1rem 0; padding-top: .5rem; border-top: 1px solid #d1d5db; }
+.document-status h3 { margin: .75rem 0; }
