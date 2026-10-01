@@ -7,9 +7,11 @@ venv/
 
 __pycache__/
 *.pyc
+.pytest_cache/
 
 db.sqlite3
 *.sqlite3
+backend/media/
 
 node_modules/
 dist/
@@ -18,3 +20,6 @@ dist/
 
 .idea/
 .vscode/
+backend/apps/notes/fixtures/
+backend/try_notes.py
+backend/try_failures.py

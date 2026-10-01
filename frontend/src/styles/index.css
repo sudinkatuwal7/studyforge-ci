@@ -36,3 +36,35 @@ p {
 .health-error {
   color: #b91c1c;
 }
+
+form {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 2rem;
+  width: min(100%, 24rem);
+}
+
+.form-error {
+  color: #b91c1c;
+}
+
+.course-list {
+  margin-top: 2rem;
+  width: min(100%, 24rem);
+}
+
+.course-list ul {
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.course-list li {
+  padding: 0.75rem 0;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.course-list li p {
+  margin-top: 0.25rem;
+}

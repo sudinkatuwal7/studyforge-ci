@@ -1,0 +1,10 @@
+"""Django app configuration for processing."""
+
+from django.apps import AppConfig
+
+
+class ProcessingConfig(AppConfig):
+    default_auto_field = "django.db.models.BigAutoField"
+    name = "apps.processing"
+    label = "processing"
+    verbose_name = "Processing"

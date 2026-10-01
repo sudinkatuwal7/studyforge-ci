@@ -1,6 +1,9 @@
 """Django settings for StudyForge."""
 
+import os
 from pathlib import Path
+
+from datetime import timedelta
 
 BASE_DIR = Path(__file__).resolve().parent.parent
 
@@ -19,9 +22,13 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "rest_framework",
     "corsheaders",
+    "apps.processing",
+    "apps.knowledge",
+    "apps.users.apps.UsersConfig",
     "apps.courses",
+    "apps.documents.apps.DocumentsConfig",
 ]
-
+AUTH_USER_MODEL = "users.User"
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
     "corsheaders.middleware.CorsMiddleware",
@@ -52,12 +59,28 @@ TEMPLATES = [
 
 WSGI_APPLICATION = "config.wsgi.application"
 
-DATABASES = {
-    "default": {
-        "ENGINE": "django.db.backends.sqlite3",
-        "NAME": BASE_DIR / "db.sqlite3",
+AUTH_USER_MODEL = "users.User"
+
+# Default is the Docker Compose Postgres database. Set DATABASE_ENGINE=sqlite3
+# to keep using the local SQLite file.
+if os.environ.get("DATABASE_ENGINE", "postgresql") == "sqlite3":
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
     }
-}
+else:
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ.get("POSTGRES_DB", "studyforge"),
+            "USER": os.environ.get("POSTGRES_USER", "studyforge"),
+            "PASSWORD": os.environ.get("POSTGRES_PASSWORD", "studyforge_dev"),
+            "HOST": os.environ.get("POSTGRES_HOST", "localhost"),
+            "PORT": os.environ.get("POSTGRES_PORT", "5432"),
+        }
+    }
 
 AUTH_PASSWORD_VALIDATORS = [
     {
@@ -84,14 +107,37 @@ USE_TZ = True
 
 STATIC_URL = "static/"
 
+# Private uploads: no public media route is registered.
+MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT", str(BASE_DIR / "media")))
+
+# Producer configuration only. Person 4 owns the worker and task implementation.
+CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
+CELERY_BROKER_CONNECTION_TIMEOUT = 3
+CELERY_BROKER_TRANSPORT_OPTIONS = {
+    "socket_connect_timeout": 3,
+    "socket_timeout": 3,
+}
+
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
     "DEFAULT_PERMISSION_CLASSES": [
         "rest_framework.permissions.AllowAny",
     ],
+    "DEFAULT_AUTHENTICATION_CLASSES": [
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ],
 }
-
+SIMPLE_JWT = {
+    "ACCESS_TOKEN_LIFETIME": timedelta(minutes=15),
+    "REFRESH_TOKEN_LIFETIME": timedelta(days=7),
+    "AUTH_HEADER_TYPES": ("Bearer",),
+}
 CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+]
+CORS_ALLOW_CREDENTIALS = True
+
+CSRF_TRUSTED_ORIGINS = [
     "http://localhost:5173",
 ]
