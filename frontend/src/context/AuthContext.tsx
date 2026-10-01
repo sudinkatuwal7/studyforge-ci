@@ -6,6 +6,7 @@ type AuthContextValue = {
   user: LoginResult["user"] | null;
   isRestoring: boolean;
   saveLogin: (result: LoginResult) => void;
+  clearSession: () => void;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -38,6 +39,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     user: session?.user ?? null,
     isRestoring,
     saveLogin: (result) => setSession(result),
+    clearSession: () => setSession(null),
   };
 
   return <AuthContext value={value}>{children}</AuthContext>;

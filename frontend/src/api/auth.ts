@@ -95,3 +95,33 @@ export async function restoreSession(): Promise<LoginResult> {
 
   return { access, user };
 }
+export async function logout(): Promise<void> {
+  if (!API_BASE_URL) {
+    throw new Error("VITE_API_BASE_URL is not configured");
+  }
+
+  const csrfResponse = await fetch(`${API_BASE_URL}/auth/csrf/`, {
+    credentials: "include",
+  });
+
+  if (!csrfResponse.ok) {
+    throw new Error(`CSRF setup failed: ${csrfResponse.status}`);
+  }
+
+  const csrfToken = getCsrfToken();
+  if (!csrfToken) {
+    throw new Error("CSRF cookie was not set");
+  }
+
+  const response = await fetch(`${API_BASE_URL}/auth/logout/`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "X-CSRFToken": csrfToken,
+    },
+  });
+
+  if (!response.ok) {
+    throw new Error(`Logout failed: ${response.status}`);
+  }
+}
