@@ -67,4 +67,15 @@ def test_logout_blacklists_refresh_token_and_clears_cookie(user):
     )
 
     assert refresh_response.status_code == 401
+@pytest.mark.django_db
+def test_refresh_after_user_deletion_returns_401_and_clears_cookie(user):
+    refresh_token = str(RefreshToken.for_user(user))
+    user.delete()
+
+    client = APIClient()
+    client.cookies["studyforge_refresh"] = refresh_token
+    response = client.post("/api/v1/auth/token/refresh/", {}, format="json")
+
+    assert response.status_code == 401
+    assert response.cookies["studyforge_refresh"]["max-age"] == 0
 
