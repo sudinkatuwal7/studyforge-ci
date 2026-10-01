@@ -107,29 +107,23 @@ class ChunkSchemaTests(TestCase):
         chunk.refresh_from_db()
         self.assertEqual(chunk.content, text)
 
-    def test_embedding_is_nullable_unsized_vector_field(self):
+    def test_embedding_is_nullable_768_vector_field(self):
         field = Chunk._meta.get_field("embedding")
         self.assertIsInstance(field, VectorField)
-        self.assertIsNone(field.dimensions)
+        self.assertEqual(field.dimensions, 768)
         self.assertTrue(field.null)
+        self.assertTrue(field.blank)
 
         chunk = self.make_chunk(self.document)
         chunk.refresh_from_db()
         self.assertIsNone(chunk.embedding)
 
     def test_embedding_round_trip(self):
-        short = self.make_chunk(self.document, content="short", embedding=[1.0, 2.0])
-        longer = self.make_chunk(
-            self.document,
-            page_number=2,
-            content="longer",
-            embedding=[1.0, 2.0, 3.0, 4.0],
-        )
+        embedding = [float(index) for index in range(768)]
+        chunk = self.make_chunk(self.document, content="embedded", embedding=embedding)
 
-        short.refresh_from_db()
-        longer.refresh_from_db()
-        self.assertEqual(short.embedding, [1.0, 2.0])
-        self.assertEqual(longer.embedding, [1.0, 2.0, 3.0, 4.0])
+        chunk.refresh_from_db()
+        self.assertEqual(chunk.embedding, embedding)
 
     def test_owner_filter_returns_only_that_user(self):
         own_first = self.make_chunk(self.document, content="mine-1")
@@ -158,11 +152,15 @@ class ChunkSchemaTests(TestCase):
             extension = cursor.fetchone()
             cursor.execute(
                 """
-                SELECT udt_name
-                FROM information_schema.columns
-                WHERE table_schema = 'public'
-                  AND table_name = %s
-                  AND column_name = 'embedding'
+                SELECT format_type(a.atttypid, a.atttypmod)
+                FROM pg_attribute a
+                JOIN pg_class c ON a.attrelid = c.oid
+                JOIN pg_namespace n ON c.relnamespace = n.oid
+                WHERE n.nspname = 'public'
+                  AND c.relname = %s
+                  AND a.attname = 'embedding'
+                  AND a.attnum > 0
+                  AND NOT a.attisdropped
                 """,
                 [Chunk._meta.db_table],
             )
@@ -173,4 +171,4 @@ class ChunkSchemaTests(TestCase):
             {"id", "owner_id", "document_id", "page_number", "content", "embedding"},
         )
         self.assertEqual(extension, ("vector",))
-        self.assertEqual(embedding_type, ("vector",))
+        self.assertEqual(embedding_type, ("vector(768)",))
