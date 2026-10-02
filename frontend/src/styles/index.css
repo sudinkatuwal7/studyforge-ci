@@ -8,12 +8,14 @@ body {
   margin: 0;
 }
 
+/* Keep the page content centered with room around the edges. */
 main {
-  min-height: 100vh;
+  box-sizing: border-box;
+  max-width: 72rem;
+  margin: 0 auto;
+  padding: 3rem 1.5rem;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
 }
 
 h1 {
@@ -51,18 +53,108 @@ form {
 
 .course-list {
   margin-top: 2rem;
-  width: min(100%, 24rem);
+  min-width: 0;
 }
 
+/* Fit as many course cards as the available width allows. */
 .course-list ul {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 16rem), 1fr));
+  gap: 1rem;
   margin: 0.75rem 0 0;
   padding: 0;
   list-style: none;
 }
 
-.course-list li {
-  padding: 0.75rem 0;
-  border-bottom: 1px solid #e5e7eb;
+/* The whole card is a link, with the action kept at the bottom. */
+.course-card {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  box-sizing: border-box;
+  height: 100%;
+  padding: 1.5rem;
+  border: 1px solid #d1d5db;
+  border-top: 0.4rem solid #334155;
+  border-radius: 0.5rem;
+  background: white;
+  color: inherit;
+  text-decoration: none;
+  overflow-wrap: anywhere;
+}
+
+.course-card:hover {
+  border-color: #2563eb;
+  box-shadow: 0 2px 8px #00000012;
+}
+
+a {
+  color: #1d4ed8;
+}
+
+/* Show keyboard users which link, field, or button is selected. */
+a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible {
+  outline: 3px solid #2563eb;
+  outline-offset: 3px;
+}
+
+.course-card-action {
+  margin-top: auto;
+  padding-top: 0.75rem;
+  color: #1d4ed8;
+}
+
+/* On wider screens, put the course list and create form next to each other. */
+.dashboard {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(14rem, 20rem);
+  align-items: start;
+  gap: 2rem;
+}
+
+/* Space the opened course and its materials area below the app header. */
+.course-detail {
+  margin-top: 2rem;
+  overflow-wrap: anywhere;
+}
+
+.course-detail > p {
+  margin-top: 1rem;
+}
+
+.course-materials {
+  margin-top: 2rem;
+  padding: 1.5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.5rem;
+  background: white;
+}
+
+.course-materials h3 {
+  margin-top: 0;
+}
+
+input, textarea, button {
+  box-sizing: border-box;
+  font: inherit;
+  padding: 0.65rem;
+}
+
+button {
+  cursor: pointer;
+}
+
+button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+/* Stack the list and form vertically on smaller screens. */
+@media (max-width: 48rem) {
+  .dashboard {
+    grid-template-columns: 1fr;
+    gap: 0;
+  }
 }
 
 .course-list li p {
