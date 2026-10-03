@@ -1,8 +1,8 @@
-import react from "@vitejs/plugin-react";
-import { defineConfig } from "vitest/config";
+import { defineConfig, mergeConfig } from "vitest/config";
+import viteConfig from "./vite.config.ts";
 
-export default defineConfig({
-  plugins: [react()],
+// Reuse the app's React setup and provide a browser-like DOM for the tests.
+export default mergeConfig(viteConfig, defineConfig({
   test: {
     environment: "jsdom",
     setupFiles: ["./src/test/setup.ts"],
@@ -10,4 +10,4 @@ export default defineConfig({
     clearMocks: true,
     restoreMocks: true,
   },
-});
+}));
