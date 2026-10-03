@@ -1,57 +1,42 @@
-import { API_BASE_URL } from "./client";
+import { ApiError, request } from "./client";
 import type { StudyGuide } from "../types/studyGuide";
 
-export class StudyGuideError extends Error {
-  status?: number;
+/**
+ * Two different problems share status 409 on this endpoint, so the status
+ * alone cannot pick a message. Carrying the backend's `code` lets the UI
+ * word them apart without the API layer deciding what the student reads.
+ */
+export class StudyGuideError extends ApiError {
+  code: string;
 
-  constructor(message: string, status?: number) {
-    super(message);
+  constructor(status: number, code: string) {
+    super(status);
     this.name = "StudyGuideError";
-    this.status = status;
+    this.code = code;
   }
 }
 
-/**
- * Generate (or regenerate) the study guide for one document.
- *
- * The backend persists the result, so calling this twice replaces the
- * guide rather than creating a second one.
- */
 export async function generateStudyGuide(
   documentId: number,
   accessToken: string,
+  signal?: AbortSignal,
 ): Promise<StudyGuide> {
-  if (!API_BASE_URL) {
-    throw new StudyGuideError("VITE_API_BASE_URL is not configured");
-  }
-
-  const response = await fetch(
-    `${API_BASE_URL}/documents/${documentId}/study-guide/`,
-    {
-      method: "POST",
-      headers: { Authorization: `Bearer ${accessToken}` },
-    },
+  const response = await request(
+    `/documents/${documentId}/study-guide/`,
+    { method: "POST", signal },
+    accessToken,
   );
 
-  if (response.ok) {
-    return (await response.json()) as StudyGuide;
+  if (response.ok) return (await response.json()) as StudyGuide;
+
+  let code = "";
+  try {
+    const body = (await response.json()) as { code?: string };
+    code = body.code ?? "";
+  } catch {
+    // A proxy error or a server crash returns HTML, not JSON. An empty code
+    // is correct here — the caller falls back to a status-based message.
   }
 
-  // Turn status codes into something a student can act on.
-  switch (response.status) {
-    case 401:
-      throw new StudyGuideError("Your session has expired. Sign in again.", 401);
-    case 404:
-      throw new StudyGuideError("That document could not be found.", 404);
-    case 409:
-      throw new StudyGuideError(
-        "This document is still processing. Try again once it is ready.",
-        409,
-      );
-    default:
-      throw new StudyGuideError(
-        "Notes could not be generated right now. Please try again.",
-        response.status,
-      );
-  }
+  throw new StudyGuideError(response.status, code);
 }
