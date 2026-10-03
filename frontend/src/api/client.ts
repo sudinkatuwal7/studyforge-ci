@@ -66,3 +66,21 @@ export async function postJson<T>(
 
   return (await response.json()) as T;
 }
+
+export async function fetchWithAccessToken(
+  path: string,
+  accessToken: string,
+  options: RequestInit = {},
+): Promise<Response> {
+  if (!API_BASE_URL) {
+    throw new Error("VITE_API_BASE_URL is not configured");
+  }
+
+  const headers = new Headers(options.headers);
+  headers.set("Authorization", `Bearer ${accessToken}`);
+
+  return fetch(`${API_BASE_URL}${path}`, {
+    ...options,
+    headers,
+  });
+}

@@ -1,19 +1,23 @@
+from django.conf import settings
+from django.contrib.auth import get_user_model
+from django.http import JsonResponse
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
 from rest_framework import status
+from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.serializers import TokenObtainPairSerializer
-from rest_framework.exceptions import AuthenticationFailed
-from rest_framework_simplejwt.serializers import TokenRefreshSerializer
-from rest_framework.permissions import AllowAny, IsAuthenticated
+from rest_framework_simplejwt.exceptions import AuthenticationFailed, TokenError
+from rest_framework_simplejwt.serializers import (
+    TokenObtainPairSerializer,
+    TokenRefreshSerializer,
+)
+from rest_framework_simplejwt.tokens import RefreshToken
 
 from .serializers import PublicUserSerializer, RegisterSerializer
 
-from django.http import JsonResponse
-from django.views.decorators.csrf import ensure_csrf_cookie
-from django.utils.decorators import method_decorator
-from django.views.decorators.csrf import csrf_protect
-from django.conf import settings
 
+User = get_user_model()
 
 
 @ensure_csrf_cookie
@@ -34,6 +38,7 @@ class RegisterView(APIView):
             status=status.HTTP_201_CREATED,
         )
 
+
 @method_decorator(csrf_protect, name="dispatch")
 class LoginView(APIView):
     authentication_classes = []
@@ -45,34 +50,28 @@ class LoginView(APIView):
 
         response = Response(
             {
-            "access": serializer.validated_data["access"],
-            "user": PublicUserSerializer(serializer.user).data,
+                "access": serializer.validated_data["access"],
+                "user": PublicUserSerializer(serializer.user).data,
             },
-             status=status.HTTP_200_OK,
+            status=status.HTTP_200_OK,
         )
         response.set_cookie(
             key="studyforge_refresh",
             value=serializer.validated_data["refresh"],
-            max_age=int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds()),
-            httponly=True,
-            secure=not settings.DEBUG,
-            samesite="Lax",
-            path="/api/v1/auth/",
-      )
-        return response
-       
-    def get_authenticate_header(self, request):
-        return 'Bearer realm="api"'
-        response.set_cookie(
-            "studyforge_refresh",
-            serializer.validated_data["refresh"],
-            max_age=int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds()),
+            max_age=int(
+                settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds()
+            ),
             httponly=True,
             secure=not settings.DEBUG,
             samesite="Lax",
             path="/api/v1/auth/",
         )
         return response
+
+    def get_authenticate_header(self, request):
+        return 'Bearer realm="api"'
+
+
 @method_decorator(csrf_protect, name="dispatch")
 class RefreshView(APIView):
     authentication_classes = []
@@ -87,9 +86,50 @@ class RefreshView(APIView):
             raise AuthenticationFailed("Refresh token is missing or invalid.")
 
         serializer = TokenRefreshSerializer(data={"refresh": refresh_token})
-        serializer.is_valid(raise_exception=True)
+
+        try:
+            serializer.is_valid(raise_exception=True)
+        except (TokenError, User.DoesNotExist, AuthenticationFailed):
+            response = Response(
+                {"detail": "Refresh token is missing or invalid."},
+                status=status.HTTP_401_UNAUTHORIZED,
+                headers={
+                    "WWW-Authenticate": self.get_authenticate_header(request)
+                },
+            )
+            response.delete_cookie(
+                "studyforge_refresh",
+                path="/api/v1/auth/",
+                samesite="Lax",
+            )
+            return response
 
         return Response({"access": serializer.validated_data["access"]})
+
+
+@method_decorator(csrf_protect, name="dispatch")
+class LogoutView(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def post(self, request):
+        refresh_token = request.COOKIES.get("studyforge_refresh")
+
+        if refresh_token:
+            try:
+                RefreshToken(refresh_token).blacklist()
+            except TokenError:
+                # Still clear the cookie if the token is expired or invalid.
+                pass
+
+        response = Response(status=status.HTTP_204_NO_CONTENT)
+        response.delete_cookie(
+            "studyforge_refresh",
+            path="/api/v1/auth/",
+            samesite="Lax",
+        )
+        return response
+
 
 class MeView(APIView):
     permission_classes = [IsAuthenticated]
