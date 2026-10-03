@@ -52,7 +52,7 @@ function CourseDetail({ courseId }: { courseId: string }) {
         <>
           <h2>{state.course.name}</h2>
           {state.course.description && <p>{state.course.description}</p>}
-          {/* Give the future upload component the ID returned by the course API. */}
+          {/* Upload into the owned course returned by the course API. */}
           <CourseMaterials courseId={state.course.id} />
         </>
       )}
