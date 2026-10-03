@@ -1,20 +1,25 @@
 """Document processing orchestration.
 
-This module owns the status lifecycle and the calls into PDF extraction
-and extracted-content storage. It does not create a Document model; it
-uses Person 3's documents app at runtime.
+This module owns the status lifecycle and the calls into PDF extraction,
+page chunking, embedding, and chunk storage. It does not create a Document
+model; it uses Person 3's documents app at runtime.
 """
 
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
+from typing import Any, Callable, Sequence
 
+from django.db import transaction
+
+from apps.knowledge.models import Chunk
+from apps.processing.chunking import TextChunk, chunk_pages
 from apps.processing.constants import (
     STATUS_FAILED,
     STATUS_PROCESSING,
     STATUS_READY,
 )
+from apps.processing.embedding_service import embed_texts
 from apps.processing.exceptions import (
     DocumentNotFoundError,
     PermanentProcessingError,
@@ -131,6 +136,37 @@ def store_extracted_text(document: Any, result: ExtractionResult) -> None:
     )
 
 
+def replace_document_chunks(
+    document: Any,
+    text_chunks: Sequence[TextChunk],
+    embeddings: Sequence[Sequence[float]],
+) -> None:
+    """Replace this document's chunks, then mark it READY.
+
+    Embeddings are already in hand. The delete, insert, and READY write
+    share one transaction so a retry cannot append a second copy.
+    """
+    if len(embeddings) != len(text_chunks):
+        raise PermanentProcessingError(
+            f"Expected {len(text_chunks)} embeddings but received {len(embeddings)}."
+        )
+
+    rows = [
+        Chunk(
+            owner=document.owner,
+            document=document,
+            page_number=text_chunk.page_number,
+            content=text_chunk.content,
+            embedding=list(embedding),
+        )
+        for text_chunk, embedding in zip(text_chunks, embeddings, strict=True)
+    ]
+    with transaction.atomic():
+        Chunk.objects.filter(document=document).delete()
+        Chunk.objects.bulk_create(rows)
+        set_document_status(document, STATUS_READY)
+
+
 def mark_document_failed(document_id: Any, error: str | None = None) -> None:
     """Move a document to FAILED. No-op when the row no longer exists."""
     try:
@@ -147,8 +183,15 @@ def process_document(
     load_document_fn: Callable[[Any], Any] = load_document,
     extract_fn: Callable[[Any], ExtractionResult] = extract_pdf_from_document,
     store_fn: Callable[[Any, ExtractionResult], None] = store_extracted_text,
+    chunk_fn: Callable[..., list[TextChunk]] = chunk_pages,
+    embed_fn: Callable[[Sequence[str]], list[list[float]]] = embed_texts,
+    persist_fn: Callable[..., None] = replace_document_chunks,
 ) -> dict[str, Any]:
-    """Run the PROCESSING → extract → store → READY lifecycle for one document."""
+    """Run PROCESSING → extract → store → chunk → embed → persist → READY.
+
+    A document that is already READY is skipped. Chunk rows are written
+    inside persist_fn, which marks READY only after that write commits.
+    """
     document = load_document_fn(document_id)
 
     if is_ready(document):
@@ -160,6 +203,9 @@ def process_document(
     try:
         extraction = extract_fn(document)
         store_fn(document, extraction)
+        text_chunks = list(chunk_fn(extraction.pages))
+        embeddings = embed_fn([text_chunk.content for text_chunk in text_chunks])
+        persist_fn(document, text_chunks, embeddings)
     except PermanentProcessingError:
         set_document_status(document, STATUS_FAILED)
         raise
@@ -168,5 +214,4 @@ def process_document(
     except Exception as exc:
         raise RetryableProcessingError(str(exc)) from exc
 
-    set_document_status(document, STATUS_READY)
     return {"document_id": document_id, "status": STATUS_READY, "skipped": False}
