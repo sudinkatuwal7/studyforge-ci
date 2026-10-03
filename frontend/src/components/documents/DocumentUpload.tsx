@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import type { TrackedDocument } from "../../types/document";
 import DocumentStatus from "./DocumentStatus";
 import "./documents.css";
+import StudyGuidePanel from "../notes/StudyGuidePanel";
 
 type Props = { courseId: number };
 
@@ -91,6 +92,7 @@ function UploadForm({ courseId, accessToken }: Props & { accessToken: string | n
       {error && <p id={`${inputId}-error`} className="document-error" role="alert">{error}</p>}
       {tracked && <>
         <DocumentStatus key={tracked.id} tracked={tracked} courseId={courseId} accessToken={accessToken} />
+        <StudyGuidePanel documentId={tracked.id} documentName={tracked.name} accessToken={accessToken} />
         <button type="button" onClick={() => {
           setTracked(null);
           setFile(null);
