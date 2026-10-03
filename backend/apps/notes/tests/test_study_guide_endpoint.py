@@ -96,3 +96,12 @@ class StudyGuideEndpointTests(APITestCase):
 
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.json()["code"], "DOCUMENT_NOT_READY")
+
+    def test_unauthenticated_request_is_rejected(self):
+        """The project's DRF default is AllowAny, so this endpoint's
+        permission_classes are the only thing keeping it private."""
+        self.client.force_authenticate(user=None)
+
+        response = self.client.post(self.url)
+
+        self.assertIn(response.status_code, (401, 403))
