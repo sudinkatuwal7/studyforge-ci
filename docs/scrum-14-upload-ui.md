@@ -1,13 +1,17 @@
 # SCRUM-14: PDF upload and status UI
 
 `DocumentUpload` accepts an existing course ID and uses the shared `AuthProvider`.
+The main app now renders it inside `CourseMaterials` on `/courses/:courseId`.
+Sign in, create or select a course on the dashboard, and use **Upload PDF** in
+that course's **Course materials** section. The course detail API checks ownership
+before the page renders the uploader; no course ID needs to be entered manually.
 Course creation and dashboard selection remain in the courses domain.
 
 ```tsx
-import DocumentUpload from "./components/documents/DocumentUpload";
+import DocumentUpload from "../documents/DocumentUpload";
 
-// Inside the authenticated course screen:
-<DocumentUpload courseId={selectedCourse.id} />
+// Inside CourseMaterials, using the ID returned by the course detail API:
+<DocumentUpload courseId={courseId} />
 ```
 
 The component has its own scoped styles and does not modify the course form,
@@ -45,9 +49,9 @@ Sign in through the existing login form. Use a local test account and a course
 owned by that account. You can also open `/upload-preview.html` without a query
 parameter, enter the course ID on the page, and select **Open upload form**.
 No credentials or fixed course IDs are stored in source.
-The preview is a separate development entry; the normal app and production build
-continue to use `index.html`. The normal course screen will display the uploader
-when its owner integrates the component as shown above.
+The preview remains an optional, separate development entry for isolated checks.
+The normal app and production build use `index.html` and include the integrated
+course uploader. Neither depends on the preview.
 
 ## Checks
 
@@ -61,11 +65,20 @@ npm run lint
 
 Tests exercise upload validation and multipart/auth headers, saved-upload errors,
 terminal and transient polling states, manual recovery, and stale-request cleanup.
+Integration tests also cover dashboard course selection, authenticated multipart
+upload into that course, status polling, and keeping uploads hidden for a missing
+or inaccessible course.
 Live processing still depends on the shared backend and worker implementation.
+The current embedding pipeline needs `GEMINI_API_KEY` in the worker environment
+and the latest database migrations. Restart Celery after receiving processing
+changes; it does not automatically reload updated Python modules.
+Final live verification of the integrated course page through to `READY` is
+pending Gemini configuration. Current local uploads save and extract text, but
+the worker reports `GEMINI_API_KEY is not set` at the embedding step.
 
-Verified locally: 28 automated tests pass, the TypeScript/production build passes,
+Verified locally: 33 automated tests pass, the TypeScript/production build passes,
 and lint reports only the existing Fast Refresh warning in `AuthContext.tsx`.
-A browser check using the temporary account and an owned course confirmed login,
+An earlier preview browser check using a temporary account and an owned course confirmed login,
 HTTP 201 upload, and polling through to `READY`. The preview was also checked at
 390px width without horizontal overflow. The processing fixture PDF needed to be
 rewritten into a valid temporary PDF for upload because its original reference
