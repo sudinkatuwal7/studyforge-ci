@@ -26,6 +26,13 @@ endpoints above implement the unchanged SCRUM-8 contract described below.
 
 ## Planned Sprint 1 endpoints
 
+Course integration update: `GET /courses/`, `POST /courses/`, and
+`GET /courses/{id}/` are implemented under `/api/v1/`. All require bearer
+authentication and are scoped to the current owner. Course detail returns the same
+fields as course creation/listing. The frontend course page passes the selected
+course ID to `CourseMaterials` for upload integration. Course PATCH/DELETE and
+document collection GET remain planned.
+
 ```text
 POST   /api/v1/auth/register/
 POST   /api/v1/auth/token/

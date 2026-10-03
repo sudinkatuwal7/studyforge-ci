@@ -286,8 +286,23 @@ workflow. Token issuance and validation must share signing configuration.
 
 With PostgreSQL configured, run the existing schema checks and the focused
 SCRUM-10 integration checks with `python manage.py test apps.documents`.
-Those tests isolate uploaded files and mock the processing handoff; the full
-pytest upload matrix remains SCRUM-12 work.
+
+### Backend tests (SCRUM-12)
+
+Activate `backend/venv`, export the `POSTGRES_*` variables described above, and
+keep local PostgreSQL running. Its user needs permission to create the separate
+`test_<POSTGRES_DB>` database, which Django removes after the run.
+
+```bash
+# From the repository root:
+python -m pip install -r backend/requirements-dev.txt
+python -m pytest backend/tests/documents backend/apps/documents -q
+```
+
+This runs the SCRUM-12 cases plus existing document model and smoke tests.
+Fixtures isolate uploaded files and mock processing dispatch; no Redis or worker
+is needed. Coverage includes PDF validation, authentication, ownership, statuses,
+and storage/database/dispatch failures, including the empty-multipart regression.
 
 ### Frontend
 

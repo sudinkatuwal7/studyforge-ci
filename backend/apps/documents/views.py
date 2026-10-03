@@ -71,6 +71,10 @@ class DocumentUploadView(DocumentAPIView):
         # Resolve ownership before accessing request.data, which parses the body.
         if request.content_type.split(";", 1)[0].strip().lower() != "multipart/form-data":
             raise DocumentAPIError("UNSUPPORTED_MEDIA_TYPE", 415)
+        # DRF skips parser invocation for a zero-length body. Such a body has no
+        # multipart framing; it differs from a valid form with a missing file.
+        if request.stream is None:
+            raise DocumentAPIError("INVALID_REQUEST")
         data = request.data
         if set(data) - {"file"}:
             raise DocumentAPIError("INVALID_UPLOAD")

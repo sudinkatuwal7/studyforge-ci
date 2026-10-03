@@ -18,7 +18,8 @@ from apps.processing.exceptions import (
     PermanentProcessingError,
     RetryableProcessingError,
 )
-from apps.processing.pdf_parser import ExtractionResult
+from apps.processing.chunking import TextChunk
+from apps.processing.pdf_parser import ExtractionResult, PageText
 from apps.processing.services import (
     extract_pdf_from_document,
     is_ready,
@@ -30,18 +31,32 @@ from apps.processing.services import (
 from apps.processing.tests.fakes import FakeDocument, FakeFile
 
 
+def _mark_ready(document, text_chunks, embeddings):
+    del text_chunks, embeddings
+    set_document_status(document, STATUS_READY)
+
+
 class ProcessDocumentSuccessTests(unittest.TestCase):
-    def test_successful_processing_sets_processing_then_ready(self):
+    def test_successful_processing_chunks_embeds_then_persists_before_ready(self):
         document = FakeDocument(status=STATUS_PENDING)
-        extraction = ExtractionResult(text="hello pages", page_count=2)
+        pages = [PageText(page_number=2, text="hello pages")]
+        extraction = ExtractionResult(text="hello pages", page_count=2, pages=pages)
         extract_fn = MagicMock(return_value=extraction)
         store_fn = MagicMock()
+        text_chunk = TextChunk(page_number=2, content="hello pages")
+        embedding = [0.25] * 768
+        chunk_fn = MagicMock(return_value=[text_chunk])
+        embed_fn = MagicMock(return_value=[embedding])
+        persist_fn = MagicMock(side_effect=_mark_ready)
 
         result = process_document(
             document.pk,
             load_document_fn=lambda _document_id: document,
             extract_fn=extract_fn,
             store_fn=store_fn,
+            chunk_fn=chunk_fn,
+            embed_fn=embed_fn,
+            persist_fn=persist_fn,
         )
 
         self.assertEqual(result["status"], STATUS_READY)
@@ -50,6 +65,13 @@ class ProcessDocumentSuccessTests(unittest.TestCase):
         self.assertEqual(document.save_calls, [STATUS_PROCESSING, STATUS_READY])
         extract_fn.assert_called_once_with(document)
         store_fn.assert_called_once_with(document, extraction)
+        chunk_fn.assert_called_once_with(pages)
+        embed_fn.assert_called_once_with(["hello pages"])
+        persist_fn.assert_called_once_with(document, [text_chunk], [embedding])
+        self.assertLess(
+            document.save_calls.index(STATUS_PROCESSING),
+            document.save_calls.index(STATUS_READY),
+        )
 
     def test_sets_processing_before_extraction_runs(self):
         document = FakeDocument(status=STATUS_PENDING)
@@ -64,6 +86,9 @@ class ProcessDocumentSuccessTests(unittest.TestCase):
             load_document_fn=lambda _document_id: document,
             extract_fn=extract_fn,
             store_fn=MagicMock(),
+            chunk_fn=MagicMock(return_value=[]),
+            embed_fn=MagicMock(return_value=[]),
+            persist_fn=_mark_ready,
         )
 
         self.assertEqual(seen_status["during_extract"], STATUS_PROCESSING)
@@ -182,6 +207,9 @@ class StorageAndParserWiringTests(unittest.TestCase):
             load_document_fn=lambda _document_id: document,
             extract_fn=extract_fn,
             store_fn=store_fn,
+            chunk_fn=MagicMock(return_value=[]),
+            embed_fn=MagicMock(return_value=[]),
+            persist_fn=_mark_ready,
         )
 
         extract_fn.assert_called_once_with(document)

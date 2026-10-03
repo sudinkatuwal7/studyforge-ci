@@ -23,9 +23,11 @@ INSTALLED_APPS = [
     "rest_framework",
     "corsheaders",
     "apps.processing",
+    "apps.knowledge",
     "apps.users.apps.UsersConfig",
     "apps.courses",
     "apps.documents.apps.DocumentsConfig",
+    "apps.notes",
 ]
 AUTH_USER_MODEL = "users.User"
 MIDDLEWARE = [
@@ -111,6 +113,12 @@ MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT", str(BASE_DIR / "media")))
 
 # Producer configuration only. Person 4 owns the worker and task implementation.
 CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
+# Gemini embeddings. The key is required only when an embedding call runs.
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "gemini-embedding-2")
+EMBEDDING_DIMENSION = int(os.environ.get("EMBEDDING_DIMENSION", "768"))
+EMBEDDING_BATCH_SIZE = int(os.environ.get("EMBEDDING_BATCH_SIZE", "16"))
+
 CELERY_BROKER_CONNECTION_TIMEOUT = 3
 CELERY_BROKER_TRANSPORT_OPTIONS = {
     "socket_connect_timeout": 3,
