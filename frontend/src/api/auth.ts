@@ -58,7 +58,7 @@ export async function login(
   return (await response.json()) as LoginResult;
 }
 
-export async function restoreSession(): Promise<LoginResult> {
+export async function refreshAccessToken(): Promise<string> {
   if (!API_BASE_URL) {
     throw new Error("VITE_API_BASE_URL is not configured");
   }
@@ -76,7 +76,7 @@ export async function restoreSession(): Promise<LoginResult> {
     throw new Error("CSRF cookie was not set");
   }
 
-  const refreshResponse = await fetch(`${API_BASE_URL}/auth/token/refresh/`, {
+  const response = await fetch(`${API_BASE_URL}/auth/token/refresh/`, {
     method: "POST",
     credentials: "include",
     headers: {
@@ -86,13 +86,20 @@ export async function restoreSession(): Promise<LoginResult> {
     body: "{}",
   });
 
-  if (!refreshResponse.ok) {
-    throw new Error(`Refresh failed: ${refreshResponse.status}`);
-  }
+  if (!response.ok) {
+   if (response.status === 401) {
+    throw new RefreshRejectedError("Session expired. Please sign in again.");
+   }
+   throw new Error(`Refresh failed: ${response.status}`);
+ }
 
-  const { access } = (await refreshResponse.json()) as { access: string };
+  const { access } = (await response.json()) as { access: string };
+  return access;
+}
+
+export async function restoreSession(): Promise<LoginResult> {
+  const access = await refreshAccessToken();
   const { user } = await getJson<{ user: PublicUser }>("/auth/me/", access);
-
   return { access, user };
 }
 export async function logout(): Promise<void> {
@@ -122,6 +129,7 @@ export async function logout(): Promise<void> {
   });
 
   if (!response.ok) {
-    throw new Error(`Logout failed: ${response.status}`);
+  throw new Error(`Logout failed: ${response.status}`);
   }
 }
+export class RefreshRejectedError extends Error {}
