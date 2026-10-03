@@ -17,3 +17,7 @@ TASK_RETRY_COUNTDOWN_SECONDS = 60
 # Average extracted characters per page below this value is treated as likely scanned.
 # A real text page is typically hundreds of characters; a scan's text layer is near empty.
 SCANNED_TEXT_THRESHOLD_PER_PAGE = 50
+
+# Character windows for one PDF page. Overlap must stay smaller than the window.
+CHUNK_SIZE = 1000
+CHUNK_OVERLAP = 150

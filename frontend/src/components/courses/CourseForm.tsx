@@ -1,26 +1,48 @@
 import { type SubmitEvent, useState } from "react";
+import { createCourse } from "../../api/courses";
+import { useAuth } from "../../context/AuthContext";
 
-function CourseForm() {
-  // Text the student types into the name box. Required.
+function CourseForm({ onCreated }: { onCreated: () => void }) {
+  // Use the token saved by the shared authentication provider after login.
+  const { accessToken } = useAuth();
   const [name, setName] = useState("");
-  // Text the student types into the description box. Optional.
   const [description, setDescription] = useState("");
-  // Empty until Create is clicked with a blank name.
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
-  function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
-    // Keep the page from reloading when the form is submitted.
+  async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
+    // Handle submission in React without reloading the browser page.
     event.preventDefault();
+    // Ignore repeat submissions while the first request is still running.
+    if (submitting) return;
 
-    // trim() removes spaces, so a name of only spaces still fails.
+    // Reject empty names, including names made up of only spaces.
     if (name.trim() === "") {
       setError("Course name is required.");
       return;
     }
 
-    // Name is present, so hide any old error.
     setError("");
-    // Do not call the API here. Saving is a later ticket.
+    setSubmitting(true);
+
+    try {
+      await createCourse(accessToken, {
+        name: name.trim(),
+        description,
+      });
+      // Clear the form only after saving succeeds, then ask App to refresh the list.
+      setName("");
+      setDescription("");
+      onCreated();
+    } catch (caught: unknown) {
+      // Keep the typed values so the student can correct or retry the submission.
+      const message =
+        caught instanceof Error ? caught.message : "Could not create the course.";
+      setError(message);
+    } finally {
+      // Allow another submission after either success or failure.
+      setSubmitting(false);
+    }
   }
 
   return (
@@ -30,6 +52,7 @@ function CourseForm() {
       <label htmlFor="course-name">Course name</label>
       <input
         id="course-name"
+        maxLength={200}
         value={name}
         onChange={(event) => setName(event.target.value)}
       />
@@ -41,10 +64,12 @@ function CourseForm() {
         onChange={(event) => setDescription(event.target.value)}
       />
 
-      <button type="submit">Create</button>
+      <button type="submit" disabled={submitting}>
+        {submitting ? "Creating..." : "Create"}
+      </button>
 
       {/* Error sits under the button and only renders when error is not empty. */}
-      {error !== "" && <p className="form-error">{error}</p>}
+      {error !== "" && <p className="form-error" role="alert">{error}</p>}
     </form>
   );
 }
