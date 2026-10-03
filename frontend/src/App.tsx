@@ -4,6 +4,7 @@ import { getHealth } from "./api/health";
 import  { useAuth } from "./context/AuthContext";
 import CourseForm from "./components/courses/CourseForm";
 import LoginPage from "./pages/LoginPage";
+import { logout } from "./api/auth";
 import CourseList from "./components/courses/CourseList";
 import CourseDetailPage from "./pages/CourseDetailPage";
 
@@ -17,8 +18,28 @@ function App() {
   // Increasing this number tells CourseList to fetch the latest courses.
   const [courseListVersion, setCourseListVersion] = useState(0);
 
-  // Wait for session restoration before deciding whether to show login or courses.
-  const { user, isRestoring } = useAuth();
+  const { user, isRestoring, clearSession } = useAuth();
+
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+  const [logoutError, setLogoutError] = useState<string | null>(null);
+
+  async function handleLogout() {
+   setIsLoggingOut(true);
+   setLogoutError(null);
+
+  try {
+    await logout();
+    clearSession();
+  } catch (error) {
+    setLogoutError(
+      error instanceof Error ? error.message : "Logout failed",
+    );
+  } finally {
+    setIsLoggingOut(false);
+  }
+}
+
 
   useEffect(() => {
     let cancelled = false;
@@ -65,6 +86,10 @@ function App() {
       ) : user ? (
         <>
           <p>Signed in as {user.email}</p>
+          <button type="button" onClick={handleLogout} disabled={isLoggingOut}>
+            {isLoggingOut ? "Logging out..." : "Log out"}
+          </button>
+          {logoutError && <p role="alert">{logoutError}</p>}
           {/* Signed-in users get a dashboard at / and a detail page for each course. */}
           <Routes>
             <Route path="/" element={
