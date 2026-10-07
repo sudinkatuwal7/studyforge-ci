@@ -1,0 +1,27 @@
+[1mdiff --git a/README.md b/README.md[m
+[1mindex 5965298..e94dab8 100644[m
+[1m--- a/README.md[m
+[1m+++ b/README.md[m
+[36m@@ -478,6 +478,10 @@[m [mpull-request targets. The branch called `dev` in team discussions is named[m
+ | `docs/git-workflow.md` | Branch and pull-request workflow |[m
+ [m
+ [m
+[32m+[m[32m## Sprint 1 Burn-Up Chart[m
+[32m+[m
+[32m+[m[32m![Sprint 1 Burn-Up Chart](images/sprint1-burnup.png)[m
+[32m+[m
+ # Contributions[m
+ [m
+ **Aashish:** Developed the Courses features, including the course creation form, backend API, database model, dashboard course list, and tests. Set up the repository skeleton and development environment after discussing the structure with the team, and integrated Courses with authentication.[m
+[36m@@ -532,7 +536,10 @@[m [mpull-request targets. The branch called `dev` in team discussions is named[m
+ - Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-95[m
+ - Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/35[m
+ [m
+[31m-**Sanish Shrestha:** Sanish developed the document processing and knowledge-storage foundation for StudyForge. My work included asynchronous PDF processing with Celery and Redis, page-aware PDF text extraction, PostgreSQL/pgvector/Redis local infrastructure, the Chunk data model and vector migration, and the chunking/embedding pipeline.[m
+[32m+[m[32m**Sanish Shrestha:** Sanish developed the document processing and knowledge-storage foundation for StudyForge. My[m[41m [m
+[32m+[m[32mwork included asynchronous PDF processing with Celery and Redis, page-aware PDF text extraction, PostgreSQL/[m
+[32m+[m[32mpgvector/Redis local infrastructure, the Chunk data model and vector migration, and the chunking/embedding[m[41m [m
+[32m+[m[32mpipeline.[m
+ [m
+ **Jira Task SCRUM-11: Task - Implement Celery task for parsing and status transitions**[m
+ [m
