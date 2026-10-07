@@ -659,7 +659,6 @@ document content retrieval that feeds it, the frontend panel that displays the
 result, and the test suite covering the whole workflow. The complete slice was
 merged into `development` in
 [pull request #47](https://bitbucket.org/mth115_super/studyforge/pull-requests/47).
-**Sudin Katuwal:** Developed the document upload and status features, including the API contract, Document/Job models and migrations, protected PDF upload and status endpoints, backend upload tests, and the frontend upload/status interface integrated into course pages.
 
 **Jira Task SCRUM-68: Task - Design Study Guide Data Flow and API**
 
@@ -699,6 +698,8 @@ merged into `development` in
   that notices.
 - Show when a study guide was generated and allow a deliberate regenerate, so a
   saved guide is distinguishable from a fresh one.
+
+  **Sudin Katuwal:** Developed the document upload and status features, including the API contract, Document/Job models and migrations, protected PDF upload and status endpoints, backend upload tests, and the frontend upload/status interface integrated into course pages.
 
 **Jira Task SCRUM-8: Document API and Status Contract**
 
