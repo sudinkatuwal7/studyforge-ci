@@ -606,6 +606,11 @@ pipeline.
 - Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-18
 - Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/33
 
+## Next Steps — Sprint 2
+For Sprint 2, Sanish will extend the document processing and knowledge pipeline so uploaded PDFs can be used for question answering. The work will focus on improving document chunking, reliably storing processed document content, managing vector embeddings with pgvector, and implementing similarity-based retrieval of relevant chunks.
+This will support a chat-style feature where a student can ask questions about uploaded course materials and StudyForge can retrieve relevant document sections as context for the AI response. Sanish will also help integrate this backend functionality with the frontend as Sprint 2 places a larger focus on UI, design, and the overall user experience.
+
+
 **Gaurav Paneru:** Built the study guide generation feature end to end. My work
 included the API contract, the swappable LLM client with output validation, the
 document content retrieval that feeds it, the frontend panel that displays the
