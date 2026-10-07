@@ -536,90 +536,43 @@ pull-request targets. The branch called `dev` in team discussions is named
 - Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-95
 - Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/35
 
-## Sprint 1 Contributions — Nischal Rimal
+**Nischal:** Developed the authentication features for StudyForge, including the email-based user model, backend registration and JWT endpoints, frontend login and session management, protected API requests, logout, and authentication tests.
 
-### Completed Jira tasks
+**Jira Task SCRUM-56: Task - Design authentication flow**
 
- 
-| Jira task | Work delivered | Branch / Bitbucket PR |
-|---|---|---|
-| [SCRUM-56 — Design authentication flow](https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-56) |
- Established the email-based custom user model and registration flow
- . 
-| [`feature/user-authentication-SCRUM-56-design-auth-flow`]
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-56
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/6
 
-(https://bitbucket.org/mth115_super/studyforge/src/166784f39cceb07e84504bc8029d755208833379/?at=feature%2Fuser-authentication-SCRUM-56-design-auth-flow)·
+**Jira Task SCRUM-57: Task - Backend registration and login**
 
- [PR #6] (https://bitbucket.org/mth115_super/studyforge/pull-requests/6) |
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-57
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/19
 
-| [SCRUM-57 — Backend registration and login](https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-57) |
+**Jira Task SCRUM-63: Task - Implement JWT authentication and frontend**
 
- Added the email-based user manager and backend registration/login foundation.
-  |
- [`feature/user-authentication-SCRUM-57-backend-registration-login`]
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-63
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/15
 
-  (https://bitbucket.org/mth115_super/studyforge/src/7bd37c07df9d67b9482a24506380546446179dfd/?at=feature%2Fuser-authentication-SCRUM-57-backend-registration-login)· 
-  
-  [PR #19](https://bitbucket.org/mth115_super/studyforge/pull-requests/19) |
+**Jira Task SCRUM-94: Task - Build the frontend login flow**
 
-| [SCRUM-63 — Implement JWT authentication and frontend] (https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-63) | 
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-94
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/30
 
-Added JWT configuration and backend authentication endpoints, plus the frontend login client. | 
+**Jira Task SCRUM-58: Task - Implement logout and protected API access**
 
-[`feature/user-authentication-SCRUM-63-Implement-JWT-Authentication-and-Frontend`]
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-58
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/32
 
-(https://bitbucket.org/mth115_super/studyforge/src/b0cd18c73ee9b6cfb14062178b0efb368396d431/?at=feature%2Fuser-authentication-SCRUM-63-Implement-JWT-Authentication-and-Frontend) · 
+**Jira Task SCRUM-67: Task - Add authentication tests and handle JWT edge cases**
 
-[PR #15](https://bitbucket.org/mth115_super/studyforge/pull-requests/15) |
-
-| SCRUM-94 — Frontend login (https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-94) | 
-
-Built the login screen, in-memory auth context, bearer-token API support, and refresh-cookie session restoration. | 
-
-[`feature/user-authentication-SCRUM-94-frontend-login`]
-
-https://bitbucket.org/mth115_super/studyforge/src/f308eb3dcbff6df6eaf3822ea3820e69a59e21a9/?at=feature%2Fuser-authentication-SCRUM-94-frontend-login· 
-
-[PR #30](https://bitbucket.org/mth115_super/studyforge/pull-requests/30) |
-
-| [SCRUM-58 — Logout and protected API access](https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-58) | 
-
-Added logout and protected-request defaults in the frontend.
-
- | [`feature/user-authentication-SCRUM-58-logout-protected-api-access`]
- 
- (https://bitbucket.org/mth115_super/studyforge/src/1a26fad3642d3522df6e8b04f43f42021d126aaa/?at=feature%2Fuser-authentication-SCRUM-58-logout-protected-api-access) · 
- 
- [PR #32](https://bitbucket.org/mth115_super/studyforge/pull-requests/32) |
-
-| [SCRUM-67 — Authentication tests and JWT edge cases](https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-67| )
-
-Added registration, login, and protected-access tests; handled expired/replayed refresh tokens and requests that need token refresh. |
-
- [`feature/user-authentication-SCRUM-67-auth-jwt-tests`]
- 
- (https://bitbucket.org/mth115_super/studyforge/src/673cc1194967335cd7818420de05dea20dd7ac00/?at=feature%2Fuser-authentication-SCRUM-67-auth-jwt-tests )· 
- 
- [PR #37] (https://bitbucket.org/mth115_super/studyforge/pull-requests/37) |
-
-The authentication domain was then merged into `development` by [PR #44]
-
-(https://bitbucket.org/mth115_super/studyforge/pull-requests/44). 
-
-Examples of merged implementation and test files include [`AuthContext.tsx`](frontend/src/context/AuthContext.tsx), [`client.ts`](frontend/src/api/client.ts), [`views.py`](backend/apps/users/views.py), and the [user authentication tests](backend/tests/users/).
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-67
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/37
 
 ### Next sprint steps
 
 - Coordinate the auth API contract with course and document features, then fix any integration issues found in the shared demo flow.
 - Add or refine frontend authentication tests for login, logout, restored sessions, and token refresh, and keep the backend auth edge-case tests current.
 - Improve the authentication screens' visual polish and usability with consistent spacing, clearer form labels, responsive layouts, and helpful loading and error states; gather teammate feedback during the demo and turn it into follow-up UI fixes.
-
-### Individual retrospective contribution
-
-**What went well:** I delivered the authentication flow across the backend and frontend in task-sized branches, and merged it into the shared `development` branch. The work now includes registration/login, protected requests, logout, session restoration, token refresh, and focused auth tests.
-
-**What I will improve and how the team can see it:** I will raise cross-domain API dependencies earlier and post a brief integration status when an auth change affects another feature. The team can track this through Jira task comments and the pull request checklist before each task is merged.
-
 **Sanish Shrestha:** Sanish developed the document processing and knowledge-storage foundation for StudyForge. My 
 work included asynchronous PDF processing with Celery and Redis, page-aware PDF text extraction, PostgreSQL/
 pgvector/Redis local infrastructure, the Chunk data model and vector migration, and the chunking/embedding 
