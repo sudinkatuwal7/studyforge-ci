@@ -476,3 +476,58 @@ pull-request targets. The branch called `dev` in team discussions is named
 | `docs/database-schema.md` | Intended data relationships |
 | `docs/frontend-guidelines.md` | Frontend folder and API conventions |
 | `docs/git-workflow.md` | Branch and pull-request workflow |
+
+
+# Contributions
+
+**Aashish:** Developed the Courses features, including the course creation form, backend API, database model, dashboard course list, and tests. Set up the repository skeleton and development environment after discussing the structure with the team, and integrated Courses with authentication.
+
+**Jira Task SCRUM-29: Task - Design the create-course form layout**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-29
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/18
+
+**Jira Task SCRUM-30: Task - Create the Django Course model**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-30
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/4
+
+**Jira Task SCRUM-31: Task - Create and run the Course database migration**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-31
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/10
+
+**Jira Task SCRUM-32: Task - Create the Course serializer**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-32
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/13
+
+**Jira Task SCRUM-33: Task - Build the authenticated create-course API endpoint**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-33
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/21
+
+**Jira Task SCRUM-34: Task - Display the student’s course list on the dashboard**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-34
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/29
+
+**Jira Task SCRUM-35: Task - Write backend tests for course creation and ownership**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-35
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/38
+
+**Jira Task SCRUM-36: Task - Write frontend tests for course-form validation**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-36
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/40
+
+**Jira Task SCRUM-92: Task - Initialize StudyForge Repository and Development Environment**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-92
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/2
+
+**Jira Task SCRUM-95: Task - Connect course creation and dashboard to authentication and add course selection**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-95
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/35
