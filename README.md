@@ -569,3 +569,48 @@ pipeline.
 - Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-18
 - Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/33
 
+**Gaurav Paneru:** Built the study guide generation feature end to end. My work
+included the API contract, the swappable LLM client with output validation, the
+document content retrieval that feeds it, the frontend panel that displays the
+result, and the test suite covering the whole workflow. The complete slice was
+merged into `development` in
+[pull request #47](https://bitbucket.org/mth115_super/studyforge/pull-requests/47).
+
+**Jira Task SCRUM-68: Task - Design Study Guide Data Flow and API**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-68
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/23
+
+**Jira Task SCRUM-69: Task - Implement Selected Document Content Retrieval**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-69
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/26
+
+**Jira Task SCRUM-70: Task - Implement LLM Study Guide Generation**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-70
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/11
+
+**Jira Task SCRUM-71: Task - Build Study Guide Selection and Display Interface**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-71
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/45
+
+**Jira Task SCRUM-72: Task - Test Study Guide Generation Workflow**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-72
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/46
+
+**Next steps for Sprint 2 (Gaurav)**
+
+- Wire `authenticatedFetch` into the feature API modules. It implements a
+  401-refresh-and-retry but no feature code calls it, so every feature stops
+  working 15 minutes after login until the page is reloaded.
+- Use the stored embeddings. Every chunk carries a 768-dimension vector that
+  nothing reads yet; page-cited question answering is what it unlocks, and that
+  is also the prerequisite for quizzes and flashcards.
+- Fail honestly on scanned PDFs. A document with no extractable text currently
+  reaches READY with zero chunks; the study guide endpoint is the only place
+  that notices.
+- Show when a study guide was generated and allow a deliberate regenerate, so a
+  saved guide is distinguishable from a fresh one.
