@@ -536,6 +536,90 @@ pull-request targets. The branch called `dev` in team discussions is named
 - Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-95
 - Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/35
 
+## Sprint 1 Contributions — Nischal Rimal
+
+### Completed Jira tasks
+
+ 
+| Jira task | Work delivered | Branch / Bitbucket PR |
+|---|---|---|
+| [SCRUM-56 — Design authentication flow](https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-56) |
+ Established the email-based custom user model and registration flow
+ . 
+| [`feature/user-authentication-SCRUM-56-design-auth-flow`]
+
+(https://bitbucket.org/mth115_super/studyforge/src/166784f39cceb07e84504bc8029d755208833379/?at=feature%2Fuser-authentication-SCRUM-56-design-auth-flow)·
+
+ [PR #6] (https://bitbucket.org/mth115_super/studyforge/pull-requests/6) |
+
+| [SCRUM-57 — Backend registration and login](https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-57) |
+
+ Added the email-based user manager and backend registration/login foundation.
+  |
+ [`feature/user-authentication-SCRUM-57-backend-registration-login`]
+
+  (https://bitbucket.org/mth115_super/studyforge/src/7bd37c07df9d67b9482a24506380546446179dfd/?at=feature%2Fuser-authentication-SCRUM-57-backend-registration-login)· 
+  
+  [PR #19](https://bitbucket.org/mth115_super/studyforge/pull-requests/19) |
+
+| [SCRUM-63 — Implement JWT authentication and frontend] (https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-63) | 
+
+Added JWT configuration and backend authentication endpoints, plus the frontend login client. | 
+
+[`feature/user-authentication-SCRUM-63-Implement-JWT-Authentication-and-Frontend`]
+
+(https://bitbucket.org/mth115_super/studyforge/src/b0cd18c73ee9b6cfb14062178b0efb368396d431/?at=feature%2Fuser-authentication-SCRUM-63-Implement-JWT-Authentication-and-Frontend) · 
+
+[PR #15](https://bitbucket.org/mth115_super/studyforge/pull-requests/15) |
+
+| SCRUM-94 — Frontend login (https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-94) | 
+
+Built the login screen, in-memory auth context, bearer-token API support, and refresh-cookie session restoration. | 
+
+[`feature/user-authentication-SCRUM-94-frontend-login`]
+
+https://bitbucket.org/mth115_super/studyforge/src/f308eb3dcbff6df6eaf3822ea3820e69a59e21a9/?at=feature%2Fuser-authentication-SCRUM-94-frontend-login· 
+
+[PR #30](https://bitbucket.org/mth115_super/studyforge/pull-requests/30) |
+
+| [SCRUM-58 — Logout and protected API access](https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-58) | 
+
+Added logout and protected-request defaults in the frontend.
+
+ | [`feature/user-authentication-SCRUM-58-logout-protected-api-access`]
+ 
+ (https://bitbucket.org/mth115_super/studyforge/src/1a26fad3642d3522df6e8b04f43f42021d126aaa/?at=feature%2Fuser-authentication-SCRUM-58-logout-protected-api-access) · 
+ 
+ [PR #32](https://bitbucket.org/mth115_super/studyforge/pull-requests/32) |
+
+| [SCRUM-67 — Authentication tests and JWT edge cases](https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-67| )
+
+Added registration, login, and protected-access tests; handled expired/replayed refresh tokens and requests that need token refresh. |
+
+ [`feature/user-authentication-SCRUM-67-auth-jwt-tests`]
+ 
+ (https://bitbucket.org/mth115_super/studyforge/src/673cc1194967335cd7818420de05dea20dd7ac00/?at=feature%2Fuser-authentication-SCRUM-67-auth-jwt-tests )· 
+ 
+ [PR #37] (https://bitbucket.org/mth115_super/studyforge/pull-requests/37) |
+
+The authentication domain was then merged into `development` by [PR #44]
+
+(https://bitbucket.org/mth115_super/studyforge/pull-requests/44). 
+
+Examples of merged implementation and test files include [`AuthContext.tsx`](frontend/src/context/AuthContext.tsx), [`client.ts`](frontend/src/api/client.ts), [`views.py`](backend/apps/users/views.py), and the [user authentication tests](backend/tests/users/).
+
+### Next sprint steps
+
+- Coordinate the auth API contract with course and document features, then fix any integration issues found in the shared demo flow.
+- Add or refine frontend authentication tests for login, logout, restored sessions, and token refresh, and keep the backend auth edge-case tests current.
+- Improve the authentication screens' visual polish and usability with consistent spacing, clearer form labels, responsive layouts, and helpful loading and error states; gather teammate feedback during the demo and turn it into follow-up UI fixes.
+
+### Individual retrospective contribution
+
+**What went well:** I delivered the authentication flow across the backend and frontend in task-sized branches, and merged it into the shared `development` branch. The work now includes registration/login, protected requests, logout, session restoration, token refresh, and focused auth tests.
+
+**What I will improve and how the team can see it:** I will raise cross-domain API dependencies earlier and post a brief integration status when an auth change affects another feature. The team can track this through Jira task comments and the pull request checklist before each task is merged.
+
 **Sanish Shrestha:** Sanish developed the document processing and knowledge-storage foundation for StudyForge. My 
 work included asynchronous PDF processing with Celery and Redis, page-aware PDF text extraction, PostgreSQL/
 pgvector/Redis local infrastructure, the Chunk data model and vector migration, and the chunking/embedding 
@@ -575,6 +659,7 @@ document content retrieval that feeds it, the frontend panel that displays the
 result, and the test suite covering the whole workflow. The complete slice was
 merged into `development` in
 [pull request #47](https://bitbucket.org/mth115_super/studyforge/pull-requests/47).
+**Sudin Katuwal:** Developed the document upload and status features, including the API contract, Document/Job models and migrations, protected PDF upload and status endpoints, backend upload tests, and the frontend upload/status interface integrated into course pages.
 
 **Jira Task SCRUM-68: Task - Design Study Guide Data Flow and API**
 
@@ -614,3 +699,56 @@ merged into `development` in
   that notices.
 - Show when a study guide was generated and allow a deliberate regenerate, so a
   saved guide is distinguishable from a fresh one.
+
+**Jira Task SCRUM-8: Document API and Status Contract**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-8
+- Branch: `feature/SCRUM-8-document-api-status-contract`
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/7
+- Commit Link: https://bitbucket.org/mth115_super/studyforge/commits/4e7604b168ee4e39b9a07381a6df2df3a2a87eb0
+- Status: Completed and integrated into `development`.
+- Contribution: Defined the PDF upload and document-status API contract, including request/response formats, the 20 MiB upload limit, ownership checks, status transitions, safe errors, and the processing handoff.
+
+**Jira Task SCRUM-9: Document/Job Models and Migrations**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-9
+- Branch: `feature/SCRUM-9-document-model-migration`
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/12
+- Commit Link: https://bitbucket.org/mth115_super/studyforge/commits/332d0701d0e0ec745529f5230a8ad2a35d26bfff
+- Status: Completed; the integrated commit above is in `development`.
+- Contribution: Added the Document and Job models, database migrations, status constraints and indexes, owner/course relationships, and model tests for persistence and data integrity.
+
+**Jira Task SCRUM-10: Protected PDF Upload and Status API**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-10
+- Branch: `feature/SCRUM-10-pdf-upload-api`
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/16
+- Commit Link: https://bitbucket.org/mth115_super/studyforge/commits/208bf0b0ed9b20f1001f773c8b27bde0a116b8b5
+- Status: Completed; the integrated commit above is in `development`.
+- Contribution: Implemented authenticated, owner-protected PDF upload and document-status retrieval, PDF validation, private file storage, and dispatch to the shared processing worker after the database transaction commits.
+
+**Jira Task SCRUM-12: Upload Tests**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-12
+- Branch: `feature/SCRUM-12-upload-tests`
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/22
+- Commit Link: https://bitbucket.org/mth115_super/studyforge/commits/f15f3bb9e06917d1d96339f0b3127b3a6b11601c
+- Status: Completed and integrated into `development`.
+- Contribution: Added backend tests for PDF validation and size limits, authentication, ownership, document statuses, and storage/database/dispatch failures. Configured pytest fixtures and fixed empty multipart requests being classified incorrectly.
+
+**Jira Task SCRUM-14: Frontend Upload and Status UI**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-14
+- Branch: `feature/SCRUM-14-upload-status-ui`
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/42
+- Commit Link: https://bitbucket.org/mth115_super/studyforge/commits/b4f33407b663f1f20533043e5977a8bfcd0047db
+- Status: UI implementation completed and integrated into `development` through the document domain's [PR #43](https://bitbucket.org/mth115_super/studyforge/pull-requests/43).
+- Contribution: Built and integrated the course-page PDF uploader with client-side validation, authenticated multipart requests, status polling, failure recovery, and cleanup of stale requests. Added frontend component and integration tests.
+- Verification note: The [upload UI integration notes](docs/scrum-14-upload-ui.md#checks) record that final live verification of the integrated course page through to `READY` remains pending Gemini worker configuration.
+
+**Sudin Katuwal - Next Sprint Plans (Planned Work):**
+
+- Add persistent course-material browsing so students can see previously uploaded documents when they revisit a course.
+- Add document rename and delete actions with ownership checks and deletion confirmation.
+- Add authenticated, owner-only access to original PDFs for viewing or downloading.
+- Improve the materials/upload interface using the team's shared Momentum design direction, including clearer layout, document actions, and upload/status feedback.
