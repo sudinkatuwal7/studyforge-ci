@@ -478,6 +478,10 @@ pull-request targets. The branch called `dev` in team discussions is named
 | `docs/git-workflow.md` | Branch and pull-request workflow |
 
 
+## Sprint 1 Burn-Up Chart
+
+![Sprint 1 Burn-Up Chart](images/sprint1-burnup.png)
+
 # Contributions
 
 **Aashish:** Developed the Courses features, including the course creation form, backend API, database model, dashboard course list, and tests. Set up the repository skeleton and development environment after discussing the structure with the team, and integrated Courses with authentication.
@@ -532,7 +536,10 @@ pull-request targets. The branch called `dev` in team discussions is named
 - Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-95
 - Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/35
 
-**Sanish Shrestha:** Sanish developed the document processing and knowledge-storage foundation for StudyForge. My work included asynchronous PDF processing with Celery and Redis, page-aware PDF text extraction, PostgreSQL/pgvector/Redis local infrastructure, the Chunk data model and vector migration, and the chunking/embedding pipeline.
+**Sanish Shrestha:** Sanish developed the document processing and knowledge-storage foundation for StudyForge. My 
+work included asynchronous PDF processing with Celery and Redis, page-aware PDF text extraction, PostgreSQL/
+pgvector/Redis local infrastructure, the Chunk data model and vector migration, and the chunking/embedding 
+pipeline.
 
 **Jira Task SCRUM-11: Task - Implement Celery task for parsing and status transitions**
 
