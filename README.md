@@ -531,3 +531,34 @@ pull-request targets. The branch called `dev` in team discussions is named
 
 - Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-95
 - Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/35
+
+**Sanish Shrestha:** Sanish developed the document processing and knowledge-storage foundation for StudyForge. My work included asynchronous PDF processing with Celery and Redis, page-aware PDF text extraction, PostgreSQL/pgvector/Redis local infrastructure, the Chunk data model and vector migration, and the chunking/embedding pipeline.
+
+**Jira Task SCRUM-11: Task - Implement Celery task for parsing and status transitions**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-11
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/5
+
+
+**Jira Task SCRUM-13: Task - Implement PDF text extraction with page numbers**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-13
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/9
+
+
+**Jira Task SCRUM-15: Task - Set up PostgreSQL, pgvector, and Redis with Docker Compose**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-15
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/14
+
+
+**Jira Task SCRUM-17: Task - Design Chunk model and pgvector migration**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-17
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/24
+
+**Jira Task SCRUM-18: Task - Implement chunking and embedding pipeline**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-18
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/33
+
