@@ -476,3 +476,233 @@ pull-request targets. The branch called `dev` in team discussions is named
 | `docs/database-schema.md` | Intended data relationships |
 | `docs/frontend-guidelines.md` | Frontend folder and API conventions |
 | `docs/git-workflow.md` | Branch and pull-request workflow |
+
+
+## Sprint 1 Burn-Up Chart
+
+![Sprint 1 Burn-Up Chart](images/sprint1-burnup.png)
+
+# Contributions
+
+**Aashish:** Developed the Courses features, including the course creation form, backend API, database model, dashboard course list, and tests. Set up the repository skeleton and development environment after discussing the structure with the team, and integrated Courses with authentication.
+
+**Jira Task SCRUM-29: Task - Design the create-course form layout**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-29
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/18
+
+**Jira Task SCRUM-30: Task - Create the Django Course model**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-30
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/4
+
+**Jira Task SCRUM-31: Task - Create and run the Course database migration**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-31
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/10
+
+**Jira Task SCRUM-32: Task - Create the Course serializer**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-32
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/13
+
+**Jira Task SCRUM-33: Task - Build the authenticated create-course API endpoint**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-33
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/21
+
+**Jira Task SCRUM-34: Task - Display the student’s course list on the dashboard**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-34
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/29
+
+**Jira Task SCRUM-35: Task - Write backend tests for course creation and ownership**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-35
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/38
+
+**Jira Task SCRUM-36: Task - Write frontend tests for course-form validation**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-36
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/40
+
+**Jira Task SCRUM-92: Task - Initialize StudyForge Repository and Development Environment**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-92
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/2
+
+**Jira Task SCRUM-95: Task - Connect course creation and dashboard to authentication and add course selection**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-95
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/35
+
+**Nischal:** Developed the authentication features for StudyForge, including the email-based user model, backend registration and JWT endpoints, frontend login and session management, protected API requests, logout, and authentication tests.
+
+**Jira Task SCRUM-56: Task - Design authentication flow**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-56
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/6
+
+**Jira Task SCRUM-57: Task - Backend registration and login**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-57
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/19
+
+**Jira Task SCRUM-63: Task - Implement JWT authentication and frontend**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-63
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/15
+
+**Jira Task SCRUM-94: Task - Build the frontend login flow**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-94
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/30
+
+**Jira Task SCRUM-58: Task - Implement logout and protected API access**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-58
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/32
+
+**Jira Task SCRUM-67: Task - Add authentication tests and handle JWT edge cases**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-67
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/37
+
+### Next sprint steps
+
+- Coordinate the auth API contract with course and document features, then fix any integration issues found in the shared demo flow.
+- Add or refine frontend authentication tests for login, logout, restored sessions, and token refresh, and keep the backend auth edge-case tests current.
+- Improve the authentication screens' visual polish and usability with consistent spacing, clearer form labels, responsive layouts, and helpful loading and error states; gather teammate feedback during the demo and turn it into follow-up UI fixes.
+**Sanish Shrestha:** Sanish developed the document processing and knowledge-storage foundation for StudyForge. My 
+work included asynchronous PDF processing with Celery and Redis, page-aware PDF text extraction, PostgreSQL/
+pgvector/Redis local infrastructure, the Chunk data model and vector migration, and the chunking/embedding 
+pipeline.
+
+**Jira Task SCRUM-11: Task - Implement Celery task for parsing and status transitions**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-11
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/5
+
+
+**Jira Task SCRUM-13: Task - Implement PDF text extraction with page numbers**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-13
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/9
+
+
+**Jira Task SCRUM-15: Task - Set up PostgreSQL, pgvector, and Redis with Docker Compose**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-15
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/14
+
+
+**Jira Task SCRUM-17: Task - Design Chunk model and pgvector migration**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-17
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/24
+
+**Jira Task SCRUM-18: Task - Implement chunking and embedding pipeline**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-18
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/33
+
+**Gaurav Paneru:** Built the study guide generation feature end to end. My work
+included the API contract, the swappable LLM client with output validation, the
+document content retrieval that feeds it, the frontend panel that displays the
+result, and the test suite covering the whole workflow. The complete slice was
+merged into `development` in
+[pull request #47](https://bitbucket.org/mth115_super/studyforge/pull-requests/47).
+
+**Jira Task SCRUM-68: Task - Design Study Guide Data Flow and API**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-68
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/23
+
+**Jira Task SCRUM-69: Task - Implement Selected Document Content Retrieval**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-69
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/26
+
+**Jira Task SCRUM-70: Task - Implement LLM Study Guide Generation**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-70
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/11
+
+**Jira Task SCRUM-71: Task - Build Study Guide Selection and Display Interface**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-71
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/45
+
+**Jira Task SCRUM-72: Task - Test Study Guide Generation Workflow**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-72
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/46
+
+**Next steps for Sprint 2 (Gaurav)**
+
+- Wire `authenticatedFetch` into the feature API modules. It implements a
+  401-refresh-and-retry but no feature code calls it, so every feature stops
+  working 15 minutes after login until the page is reloaded.
+- Use the stored embeddings. Every chunk carries a 768-dimension vector that
+  nothing reads yet; page-cited question answering is what it unlocks, and that
+  is also the prerequisite for quizzes and flashcards.
+- Fail honestly on scanned PDFs. A document with no extractable text currently
+  reaches READY with zero chunks; the study guide endpoint is the only place
+  that notices.
+- Show when a study guide was generated and allow a deliberate regenerate, so a
+  saved guide is distinguishable from a fresh one.
+
+  **Sudin Katuwal:** Developed the document upload and status features, including the API contract, Document/Job models and migrations, protected PDF upload and status endpoints, backend upload tests, and the frontend upload/status interface integrated into course pages.
+
+**Jira Task SCRUM-8: Document API and Status Contract**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-8
+- Branch: `feature/SCRUM-8-document-api-status-contract`
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/7
+- Commit Link: https://bitbucket.org/mth115_super/studyforge/commits/4e7604b168ee4e39b9a07381a6df2df3a2a87eb0
+- Status: Completed and integrated into `development`.
+- Contribution: Defined the PDF upload and document-status API contract, including request/response formats, the 20 MiB upload limit, ownership checks, status transitions, safe errors, and the processing handoff.
+
+**Jira Task SCRUM-9: Document/Job Models and Migrations**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-9
+- Branch: `feature/SCRUM-9-document-model-migration`
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/12
+- Commit Link: https://bitbucket.org/mth115_super/studyforge/commits/332d0701d0e0ec745529f5230a8ad2a35d26bfff
+- Status: Completed; the integrated commit above is in `development`.
+- Contribution: Added the Document and Job models, database migrations, status constraints and indexes, owner/course relationships, and model tests for persistence and data integrity.
+
+**Jira Task SCRUM-10: Protected PDF Upload and Status API**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-10
+- Branch: `feature/SCRUM-10-pdf-upload-api`
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/16
+- Commit Link: https://bitbucket.org/mth115_super/studyforge/commits/208bf0b0ed9b20f1001f773c8b27bde0a116b8b5
+- Status: Completed; the integrated commit above is in `development`.
+- Contribution: Implemented authenticated, owner-protected PDF upload and document-status retrieval, PDF validation, private file storage, and dispatch to the shared processing worker after the database transaction commits.
+
+**Jira Task SCRUM-12: Upload Tests**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-12
+- Branch: `feature/SCRUM-12-upload-tests`
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/22
+- Commit Link: https://bitbucket.org/mth115_super/studyforge/commits/f15f3bb9e06917d1d96339f0b3127b3a6b11601c
+- Status: Completed and integrated into `development`.
+- Contribution: Added backend tests for PDF validation and size limits, authentication, ownership, document statuses, and storage/database/dispatch failures. Configured pytest fixtures and fixed empty multipart requests being classified incorrectly.
+
+**Jira Task SCRUM-14: Frontend Upload and Status UI**
+
+- Jira Link: https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-14
+- Branch: `feature/SCRUM-14-upload-status-ui`
+- Pull Request Link: https://bitbucket.org/mth115_super/studyforge/pull-requests/42
+- Commit Link: https://bitbucket.org/mth115_super/studyforge/commits/b4f33407b663f1f20533043e5977a8bfcd0047db
+- Status: UI implementation completed and integrated into `development` through the document domain's [PR #43](https://bitbucket.org/mth115_super/studyforge/pull-requests/43).
+- Contribution: Built and integrated the course-page PDF uploader with client-side validation, authenticated multipart requests, status polling, failure recovery, and cleanup of stale requests. Added frontend component and integration tests.
+- Verification note: The [upload UI integration notes](docs/scrum-14-upload-ui.md#checks) record that final live verification of the integrated course page through to `READY` remains pending Gemini worker configuration.
+
+**Sudin Katuwal - Next Sprint Plans (Planned Work):**
+
+- Add persistent course-material browsing so students can see previously uploaded documents when they revisit a course.
+- Add document rename and delete actions with ownership checks and deletion confirmation.
+- Add authenticated, owner-only access to original PDFs for viewing or downloading.
+- Improve the materials/upload interface using the team's shared Momentum design direction, including clearer layout, document actions, and upload/status feedback.
