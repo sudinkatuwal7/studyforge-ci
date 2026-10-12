@@ -1,5 +1,3 @@
-from unittest import skipIf
-
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
@@ -8,10 +6,7 @@ from apps.documents.models import Document
 from apps.notes.models import StudyGuide
 from apps.notes.services import EmptyDocumentError, generate_study_guide
 
-try:
-    from apps.knowledge.models import Chunk
-except ImportError:  # pragma: no cover
-    Chunk = None
+from apps.knowledge.models import Chunk
 
 
 class GenerateStudyGuideTests(TestCase):
@@ -47,7 +42,6 @@ class GenerateStudyGuideTests(TestCase):
         generate_study_guide(self.document, text="Second pass, longer text.")
         self.assertEqual(StudyGuide.objects.filter(document=self.document).count(), 1)
 
-    @skipIf(Chunk is None, "Needs the Chunk model from the knowledge app")
     def test_the_document_text_reaches_the_model(self):
         """The end-to-end check. The fake model reports how many words it was
         handed, which is the only way to prove the real chunk text travelled

@@ -1,0 +1,14 @@
+#!/bin/sh
+set -eu
+cd "$(git rev-parse --show-toplevel)"
+
+# Git for Windows runs hooks with its bundled sh. Prefer the project Python 3.12.
+if [ -n "${STUDYFORGE_PYTHON:-}" ]; then
+    exec "$STUDYFORGE_PYTHON" scripts/check.py
+elif [ -x backend/venv/Scripts/python.exe ]; then
+    exec backend/venv/Scripts/python.exe scripts/check.py
+elif [ -x backend/venv/bin/python ]; then
+    exec backend/venv/bin/python scripts/check.py
+else
+    exec python scripts/check.py
+fi
