@@ -8,6 +8,11 @@ StudyForge is an AI-powered study platform designed to help college students tra
 
 This repository is the shared starting point for a 5-person team: a runnable Django backend, a runnable React frontend, and the architecture contracts the team will implement through Jira tasks.
 
+Automated checks: see [Testing and Bitbucket CI](docs/testing.md) for the shared
+Windows/Linux runner, disposable database setup, optional pre-push hook, and
+required Cloud settings. Sprint 2 coding tasks must include the
+[AI development reports](docs/ai-dev-reports/README.md) in their final commit.
+
 ## Table of Contents
 
 - [Description](#description)
@@ -289,14 +294,14 @@ SCRUM-10 integration checks with `python manage.py test apps.documents`.
 
 ### Backend tests (SCRUM-12)
 
-Activate `backend/venv`, export the `POSTGRES_*` variables described above, and
-keep local PostgreSQL running. Its user needs permission to create the separate
-`test_<POSTGRES_DB>` database, which Django removes after the run.
+Activate the Python 3.12 `backend/venv` and start Docker Desktop. The shared runner
+creates its own disposable PostgreSQL/pgvector database and temporary storage;
+it does not use your development database or `.env`.
 
 ```bash
 # From the repository root:
 python -m pip install -r backend/requirements-dev.txt
-python -m pytest backend/tests/documents backend/apps/documents -q
+python scripts/check.py --component backend --suite documents
 ```
 
 This runs the SCRUM-12 cases plus existing document model and smoke tests.

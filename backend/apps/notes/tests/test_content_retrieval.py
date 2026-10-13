@@ -1,5 +1,3 @@
-from unittest import skipIf
-
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
@@ -8,13 +6,9 @@ from apps.documents.models import Document
 from apps.notes.selectors import get_ordered_chunks
 from apps.notes.services import EmptyDocumentError, generate_study_guide
 
-try:
-    from apps.knowledge.models import Chunk
-except ImportError:  # pragma: no cover
-    Chunk = None
+from apps.knowledge.models import Chunk
 
 
-@skipIf(Chunk is None, "Needs the Chunk model from SCRUM-17 (not merged yet)")
 class ContentRetrievalTests(TestCase):
     def setUp(self):
         self.user = get_user_model().objects.create_user(

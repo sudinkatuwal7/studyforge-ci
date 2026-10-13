@@ -1,17 +1,10 @@
-from unittest import skipIf
-
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
 from apps.courses.models import Course
 from apps.documents.models import Document
 
-try:
-    from apps.knowledge.models import Chunk
-except ImportError:  # pragma: no cover
-    # SCRUM-17 has not merged to development yet. Tests that need real
-    # chunk rows skip until it does; the rest still run.
-    Chunk = None
+from apps.knowledge.models import Chunk
 
 
 class StudyGuideEndpointTests(APITestCase):
@@ -36,7 +29,6 @@ class StudyGuideEndpointTests(APITestCase):
         )
         self.url = f"/api/v1/documents/{self.document.pk}/study-guide/"
 
-    @skipIf(Chunk is None, "Needs the Chunk model from SCRUM-17 (not merged yet)")
     def test_ready_document_returns_structured_response(self):
         Chunk.objects.create(
             owner=self.user,
@@ -55,7 +47,6 @@ class StudyGuideEndpointTests(APITestCase):
         self.assertTrue(body["key_concepts"])
         self.assertTrue(body["summary"])
 
-    @skipIf(Chunk is None, "Needs the Chunk model from SCRUM-17 (not merged yet)")
     def test_ready_document_with_no_chunks_returns_409(self):
         """READY but empty: a scanned PDF, or extraction that found nothing.
         Distinct from DOCUMENT_NOT_READY, which means 'come back later'."""
@@ -98,8 +89,7 @@ class StudyGuideEndpointTests(APITestCase):
         self.assertEqual(response.json()["code"], "DOCUMENT_NOT_READY")
 
     def test_unauthenticated_request_is_rejected(self):
-        """The project's DRF default is AllowAny, so this endpoint's
-        permission_classes are the only thing keeping it private."""
+        """The endpoint must reject requests without an authenticated user."""
         self.client.force_authenticate(user=None)
 
         response = self.client.post(self.url)

@@ -1,0 +1,63 @@
+# No AI credentials or application database variables are needed by these checks.
+definitions:
+  caches:
+    npm-downloads:
+      key:
+        files:
+          - frontend/package-lock.json
+      path: ~/.npm
+  services:
+    postgres:
+      image: pgvector/pgvector:pg16
+      variables:
+        POSTGRES_DB: postgres
+        POSTGRES_USER: studyforge_ci
+        POSTGRES_PASSWORD: disposable-ci-only
+  steps:
+    - step: &backend
+        name: Backend tests and migrations
+        image: python:3.12-bookworm
+        caches:
+          - pip
+        services:
+          - postgres
+        script:
+          - python -m pip install -r backend/requirements-dev.txt
+          - python -m pip check
+          - export CI_POSTGRES_HOST=127.0.0.1 CI_POSTGRES_PORT=5432 CI_POSTGRES_USER=studyforge_ci CI_POSTGRES_PASSWORD=disposable-ci-only
+          - export NOTES_LLM_BACKEND=fake
+          - unset OPENAI_API_KEY GEMINI_API_KEY GOOGLE_API_KEY GOOGLE_APPLICATION_CREDENTIALS
+          - python scripts/check.py --component backend --database service
+        artifacts:
+          - test-results/**
+    - step: &frontend
+        name: Frontend tests, Oxlint, and build
+        image: node:24.19.0-bookworm
+        caches:
+          - npm-downloads
+        script:
+          - cd frontend
+          - node --version
+          - npm ci
+          - export VITE_API_BASE_URL=http://api.test/api/v1
+          - npm run lint
+          - npm run test:ci
+          - npm run build
+        artifacts:
+          - frontend/test-results/**
+
+pipelines:
+  pull-requests:
+    "**":
+      - parallel:
+          - step: *backend
+          - step: *frontend
+  branches:
+    development:
+      - parallel:
+          - step: *backend
+          - step: *frontend
+    main:
+      - parallel:
+          - step: *backend
+          - step: *frontend

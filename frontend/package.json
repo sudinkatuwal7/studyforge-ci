@@ -8,6 +8,7 @@
     "build": "tsc -b && vite build",
     "lint": "oxlint",
     "test": "vitest run",
+    "test:ci": "vitest run --reporter=default --reporter=junit --outputFile=test-results/frontend.xml",
     "test:watch": "vitest",
     "preview": "vite preview"
   },
