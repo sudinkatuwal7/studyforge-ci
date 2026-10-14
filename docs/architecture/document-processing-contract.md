@@ -243,7 +243,10 @@ This checklist applies to the integrated Sprint 2 processing service, not to SCR
 - [ ] Docker Compose starts the agreed components using the existing PostgreSQL/Redis infrastructure and the isolated processing database; startup/health checks and existing-volume setup work without data deletion.
 - [ ] Relevant upload/status, ownership, processing, internal-interface, database-isolation, study-guide, and end-to-end tests pass, with results recorded during implementation.
 
-## 11. Current implementation gaps and risks
+## 11. Implementation gaps and risks at the inspection baseline
+
+This table describes the original implementation baseline. The SCRUM-97
+foundation delivery is recorded separately in section 13.
 
 | Current implementation | Proposed change or integration risk |
 |---|---|
@@ -278,3 +281,22 @@ Architecture approval does not resolve the following decisions. No values or add
 6. **SCRUM-106 scope and compatibility:** supported formats, upload limits/validation, extraction ownership, and preservation of the existing PDF contract.
 
 Record the agreed values and owners here as these decisions are resolved, before implementing the dependent interfaces or switching processing traffic. The end-to-end checklist remains pending; this approval update changes documentation only.
+
+## 13. SCRUM-97 foundation delivery
+
+The SCRUM-97 foundation is **complete locally and team-approved**. It includes
+the independent service scaffold, configuration, execution database and migration,
+restricted database role, health/readiness probes, opt-in Compose setup, and
+verification and handoff instructions. See the
+[service guide and completion checklist](../../services/document-processing/README.md)
+and [verification report](../ai-dev-reports/SCRUM-97-chat-report.md).
+
+Verification passed: nine service tests, isolated Compose startup, repeat
+provisioning, application-table access denial, restart persistence, dependency
+outage behavior, and the existing backend suite of 219 tests and 36 subtests.
+
+The existing PDF pipeline remains active. Section 10's end-to-end integration
+checklist and section 12's unresolved decisions remain open; SCRUM-99/100/108,
+Django dispatch/callback integration, and SCRUM-106 are not completed by SCRUM-97.
+Commit, push, pull request, merge, and Jira workflow updates have not been
+performed as part of this local delivery.
