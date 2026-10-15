@@ -288,8 +288,7 @@ The SCRUM-97 foundation is **complete locally and team-approved**. It includes
 the independent service scaffold, configuration, execution database and migration,
 restricted database role, health/readiness probes, opt-in Compose setup, and
 verification and handoff instructions. See the
-[service guide and completion checklist](../../services/document-processing/README.md)
-and [verification report](../ai-dev-reports/SCRUM-97-chat-report.md).
+[service guide, recorded verification, and completion checklist](../../services/document-processing/README.md).
 
 Verification passed: nine service tests, isolated Compose startup, repeat
 provisioning, application-table access denial, restart persistence, dependency

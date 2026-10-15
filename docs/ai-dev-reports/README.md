@@ -39,5 +39,5 @@ the relevant service or testing documentation. Do not automatically create the
 former `SCRUM-<task>-chat-report.md` and `SCRUM-<task>-curiosity-report.md` summary
 pair. Those summaries are not the professor's transcript-and-grade format.
 
-The existing `pre-sprint-bitbucket-ci-*` files are historical development notes,
-not coursework transcript templates or requirements for future branches.
+Earlier `pre-sprint-bitbucket-ci-*` summaries were development notes, not
+coursework transcript templates or requirements for future branches.

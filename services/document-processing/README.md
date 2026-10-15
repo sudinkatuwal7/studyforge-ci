@@ -160,10 +160,43 @@ No end-to-end independent processing acceptance is claimed by these foundation
 checks. Authentication, secure PDF access, worker behavior, callbacks, and cutover
 still require integration and the contract's end-to-end acceptance checklist.
 
+### Recorded foundation verification — October 14, 2026
+
+These results were recorded during the original SCRUM-97 implementation and
+are retained here from the former development summaries. They are historical
+results, not new test runs performed during the reporting-documentation cleanup.
+
+| Command or action | Recorded result |
+|---|---|
+| Service `manage.py makemigrations executions --no-header` | Created the initial migration. The initial local database-history check warned that no configured service database was available; subsequent Docker checks applied and checked the migration successfully. |
+| Service `manage.py check` | Passed. |
+| `python services/document-processing/check.py` | Passed: Compose build/startup, repeat provisioning, migrations/drift, nine service tests, denied SELECT on an application-owned table, restricted role attributes, absence of administrator credentials in the runtime, restart persistence, and actual Redis-outage behavior. Disposable containers, network, and volume were removed. |
+| `backend/venv/Scripts/python.exe scripts/check.py --component backend` | System checks, migration drift, and fresh migrations passed; 219 tests and 36 subtests passed using disposable PostgreSQL and fake AI. |
+| Python compilation, README relative links, and whitespace checks | Passed. |
+
+The application-table probe directly verified denied reads; it did not separately
+exercise denied writes. Restart checks verified persisted execution records,
+not recovery of running jobs. During the Redis outage, liveness remained 200
+and readiness returned 503. No browser testing, paid AI calls, production
+hardening, or independent end-to-end processing was verified.
+
+### Foundation design findings
+
+- The existing worker uses application models and shared private storage, so
+  moving its module alone would not establish the agreed service boundary.
+- A separate logical database and restricted role reuse PostgreSQL while giving
+  the service its own migrations; they do not isolate the underlying server.
+- Explicit repeatable provisioning supports existing volumes. A second run
+  preserved application sentinel data; ownership and management-marker checks
+  prevent taking over unrelated database or role names.
+- Unique job identifiers and plain document identifiers support independent
+  execution records. They do not implement worker claims, retries, or callback
+  idempotency, which remain integration work.
+
 ## SCRUM-97 completion checklist
 
-These items cover the foundation scope only. Results come from the verification
-run recorded in the [task report](../../docs/ai-dev-reports/SCRUM-97-chat-report.md).
+These items cover the foundation scope only. Results come from the historical
+verification recorded above.
 
 - [x] Independent service configuration, dependencies, image, and entry point.
 - [x] Separate logical PostgreSQL database and restricted service role.
