@@ -192,7 +192,8 @@ Dependency downloads require network access; application tests do not require
 external services except their disposable database. Container tags and unpinned
 Python transitive dependencies can change: record and review upgrades separately.
 
-Sprint 2 coding task branches must follow the [AI development report instructions](ai-dev-reports/README.md).
+For coursework AI reports, follow the [professor's reporting workflow](ai-dev-reports/README.md).
+Coding branches do not require an additional pair of AI-generated summary reports.
 
 The initial baseline, executed validation results, and remaining findings are in
 [ci-validation.md](ci-validation.md).

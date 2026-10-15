@@ -1,38 +1,43 @@
-# Sprint 2 AI development reports
+# AI coursework reports
 
-Every Sprint 2 coding task branch must include both reports in its final commit:
+Use the professor's curiosity-report and grading workflow when a coursework
+report is requested. This directory does not impose an additional requirement
+to generate reports for every coding branch or commit.
 
-- `docs/ai-dev-reports/SCRUM-<actual-task-number>-chat-report.md`
-- `docs/ai-dev-reports/SCRUM-<actual-task-number>-curiosity-report.md`
+## Report and grade
 
-Replace the placeholder with the real Jira task ID; never invent one. Reports
-belong to the same task as the code and should be reviewed with the code. Do not
-include secrets, personal information, tokens, or unredacted environment files.
+| File | Purpose |
+|---|---|
+| `curiosity-report-<lastname>-<assignment>-<YYYY-MM-DD>.md` | Chronological student/AI transcript and evidence appendix, produced from the actual working session. |
+| `curiosity-grade-<lastname>-<assignment>-<YYYY-MM-DD>.md` | Separate assessment of that report using the professor's grading instructions. |
 
-## Chat-report contents
+For example, Sudin's SCRUM-97 files for October 14, 2026 use the suffix
+`Katuwal-SCRUM-97-2026-10-14`. A generated grade is not a claim that the professor
+has reviewed or awarded a final course grade.
 
-Record the task ID, branch, date, developer, AI tool/model when known, and goal.
-Keep a chronological log of meaningful prompts, constraints, recommendations,
-accepted/rejected suggestions, human decisions, and resulting files. Summaries
-must be labeled as summaries rather than verbatim transcripts. Include actual
-test commands/results, failures and follow-up work. Distinguish assistant claims
-from outcomes verified by a person or an executed check.
+Follow the [report prompt](../../.github/prompts/curiosity-report.prompt.md)
+and its [full instructions](../../.github/skills/curiosity-report/SKILL.md).
+Invoke the report workflow in the session where the work occurred, with the
+student name, ID, and assignment. The supplied prompt writes to the workspace
+root; existing coursework reports are stored here. Follow the professor's
+submission instructions for the final location.
 
-## Curiosity-report contents
+Preserve the exact required headings, chronological `STUDENT`/`AI` turns, and
+the student's questions. Redact secrets as instructed. Do not invent missing
+exchanges, test results, personal reflections, or approvals. A review-session
+transcript documents that review session; it is not a substitute for a missing
+implementation-session transcript. Do not rewrite an exported transcript to
+improve its grade or remove references to files that existed during the session.
 
-Record questions explored, hypotheses, evidence or documentation consulted,
-experiments performed, results, what you learned, and remaining uncertainties.
-Explain at least the technical decisions that influenced the implementation.
-Do not fabricate experiments, outcomes, or personal reflections for another author.
+Grading is a separate step using the professor's grading workflow and the actual
+report as input. Do not generate or change grades automatically during coding.
 
-## Final review
+## Coding documentation
 
-Before the authorized final commit, verify that both filenames use the correct
-Jira ID, reports match the final implementation, commands/results are accurate,
-and sensitive content is removed. The developer supplies their own reflections
-and confirms human review. This is a documented requirement, not an automated
-claim that every commit already satisfies it.
+Keep setup instructions, implementation decisions, and verified test results in
+the relevant service or testing documentation. Do not automatically create the
+former `SCRUM-<task>-chat-report.md` and `SCRUM-<task>-curiosity-report.md` summary
+pair. Those summaries are not the professor's transcript-and-grade format.
 
-The initial CI branch is pre-sprint work without an assigned Jira ID. Its files
-use `pre-sprint-bitbucket-ci-*` names explicitly; they do not establish an exception
-for Sprint 2 coding tasks.
+The existing `pre-sprint-bitbucket-ci-*` files are historical development notes,
+not coursework transcript templates or requirements for future branches.
