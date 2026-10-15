@@ -1,0 +1,54 @@
+# Opt-in foundation: combine with docker-compose.yml. No worker consumes jobs yet.
+x-processing-image: &processing-image
+  image: ${PROCESSING_IMAGE:-studyforge-document-processing:local}
+  build: ./services/document-processing
+
+x-processing-environment: &processing-environment
+  PROCESSING_SECRET_KEY: ${PROCESSING_SECRET_KEY:-local-processing-only-change-before-deployment}
+  PROCESSING_DB_NAME: ${PROCESSING_DB_NAME:-studyforge_processing}
+  PROCESSING_DB_USER: ${PROCESSING_DB_USER:-studyforge_processing}
+  PROCESSING_DB_PASSWORD: ${PROCESSING_DB_PASSWORD:-processing_local_dev}
+  PROCESSING_DB_HOST: db
+  PROCESSING_DB_PORT: "5432"
+  PROCESSING_REDIS_URL: redis://redis:6379/0
+  PROCESSING_ALLOWED_HOSTS: localhost,127.0.0.1,document-processing
+
+services:
+  processing-db-init:
+    <<: *processing-image
+    environment:
+      <<: *processing-environment
+      PROCESSING_DB_ADMIN_USER: ${POSTGRES_USER:-studyforge}
+      PROCESSING_DB_ADMIN_PASSWORD: ${POSTGRES_PASSWORD:-studyforge_dev}
+      PROCESSING_APPLICATION_DB: ${POSTGRES_DB:-studyforge}
+    command: ["python", "provision_database.py"]
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+
+  processing-migrate:
+    <<: *processing-image
+    environment: *processing-environment
+    command: ["python", "manage.py", "migrate", "--noinput"]
+    depends_on:
+      processing-db-init:
+        condition: service_completed_successfully
+    restart: "no"
+
+  document-processing:
+    <<: *processing-image
+    environment: *processing-environment
+    ports:
+      - "127.0.0.1:${PROCESSING_HTTP_PORT:-8001}:8001"
+    depends_on:
+      processing-migrate:
+        condition: service_completed_successfully
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8001/ready/', timeout=8).close()"]
+      interval: 10s
+      timeout: 10s
+      start_period: 10s
+      retries: 5
