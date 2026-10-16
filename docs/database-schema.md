@@ -131,6 +131,39 @@ python manage.py test apps.documents
 
 Verified locally with Python 3.12.12, Django 6.1.1, and PostgreSQL 16.15: system checks passed, no migration drift remained, all initial migrations applied, and all seven schema tests passed on PostgreSQL.
 
+## SCRUM-38: Quiz and Question schema
+
+Defined in `apps.quizzes.models`. Persistence only: quiz generation, hiding correct answers before submission, and scoring belong to SCRUM-42 and SCRUM-51. Quizzes stay in the main Django backend (see the [processing contract](architecture/document-processing-contract.md)), so `Quiz.course` is an ordinary FK.
+
+```text
+User 1:N Quiz N:1 Course
+Quiz 1:N Question
+```
+
+### Quiz
+
+| Field | Storage and default |
+|---|---|
+| `owner` | Required FK to `settings.AUTH_USER_MODEL`, `CASCADE`, reverse name `quizzes`. |
+| `course` | Required FK to `courses.Course`, `CASCADE`, reverse name `quizzes`. |
+| `title` | Required `CharField(255)`. |
+| `created_at` / `updated_at` | Set automatically on create / every save. |
+
+`Quiz.owner_id` must equal `Quiz.course.owner_id`. `full_clean()` enforces it; callers that skip validation must preserve it, as with Document.
+
+### Question
+
+| Field | Storage and default |
+|---|---|
+| `quiz` | Required FK to Quiz, `CASCADE`, reverse name `questions`. |
+| `position` | `PositiveSmallIntegerField`, 1-based display order. Unique per quiz and checked `>= 1` in the database. Default ordering. |
+| `text` | Required question text. |
+| `options` | `JSONField` list of at least two non-empty strings, in display order. |
+| `correct_option_index` | 0-based index into `options`; exactly one correct answer per question. |
+| `explanation` | `TextField`, may be blank. |
+
+The `options` shape and the index range are validated by `full_clean()`, not by database constraints. Neither `save()` nor DRF's `ModelSerializer` calls `Model.clean()`, so SCRUM-42 must call `full_clean()` on each Quiz and Question before saving (or repeat these checks in the serializer's `validate()`). Source documents are not linked yet; that is deferred to SCRUM-42 pending SCRUM-98.
+
 ## Migration rules
 
 - Database changes must use Django migrations.

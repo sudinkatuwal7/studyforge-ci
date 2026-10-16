@@ -52,7 +52,7 @@ npm.cmd --prefix frontend run test:watch
 | --- | --- | --- |
 | Identity/Courses | `backend/tests/users`, `backend/apps/courses` | Identity claims, token lifecycle, course ownership API |
 | Documents | `backend/tests/documents`, `backend/apps/documents` | Private upload storage, authorization, processing handoff and status |
-| AI Learning | `backend/apps/processing`, `backend/apps/knowledge`, `backend/apps/notes` | Content retrieval, chunk/vector persistence, generation contracts |
+| AI Learning | `backend/apps/processing`, `backend/apps/knowledge`, `backend/apps/notes`, `backend/apps/quizzes` | Content retrieval, chunk/vector persistence, generation contracts |
 
 Processing currently spans document and AI concerns. These selections are not
 separately deployable services: tests still initialize all installed Django apps.

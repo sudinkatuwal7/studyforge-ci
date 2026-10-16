@@ -16,7 +16,7 @@ SUITES = {
     "all": ["backend/apps", "backend/tests"],
     "identity-courses": ["backend/tests/users", "backend/apps/courses"],
     "documents": ["backend/tests/documents", "backend/apps/documents"],
-    "ai-learning": ["backend/apps/processing", "backend/apps/knowledge", "backend/apps/notes"],
+    "ai-learning": ["backend/apps/processing", "backend/apps/knowledge", "backend/apps/notes", "backend/apps/quizzes"],
 }
 
 
