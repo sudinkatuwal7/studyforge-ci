@@ -6,18 +6,18 @@ import DocumentStatus from "./DocumentStatus";
 import "./documents.css";
 import StudyGuidePanel from "../notes/StudyGuidePanel";
 
-type Props = { courseId: number };
+type Props = { courseId: number; onDocumentSaved?: (document: TrackedDocument) => void };
 
-export default function DocumentUpload({ courseId }: Props) {
+export default function DocumentUpload({ courseId, onDocumentSaved }: Props) {
   const { accessToken, user } = useAuth();
   if (!Number.isSafeInteger(courseId) || courseId <= 0) return <p role="alert">Choose a course before uploading a PDF.</p>;
   if (!user) return <p role="alert">Sign in to upload a PDF.</p>;
 
   // Changing course or account discards stale UI and cancels its outstanding requests.
-  return <UploadForm key={`${user.id}:${courseId}`} courseId={courseId} accessToken={accessToken} />;
+  return <UploadForm key={`${user.id}:${courseId}`} courseId={courseId} accessToken={accessToken} onDocumentSaved={onDocumentSaved} />;
 }
 
-function UploadForm({ courseId, accessToken }: Props & { accessToken: string | null }) {
+function UploadForm({ courseId, accessToken, onDocumentSaved }: Props & { accessToken: string | null }) {
   const inputId = useId();
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState("");
@@ -46,6 +46,7 @@ function UploadForm({ courseId, accessToken }: Props & { accessToken: string | n
       if (controller.signal.aborted) return;
       if (document.course_id !== courseId) throw new Error("Unexpected course in upload response.");
       setTracked({ id: document.id, name: document.name, snapshot: document });
+      onDocumentSaved?.({ id: document.id, name: document.name, snapshot: document });
     } catch (cause) {
       if (controller.signal.aborted) return;
       if (cause instanceof DocumentRequestError) {
@@ -57,6 +58,7 @@ function UploadForm({ courseId, accessToken }: Props & { accessToken: string | n
         } else if (cause.status === 503 && cause.documentId) {
           setError(cause.message);
           setTracked({ id: cause.documentId, name: file.name, snapshot: null });
+          onDocumentSaved?.({ id: cause.documentId, name: file.name, snapshot: null });
         } else if (cause.status >= 500 && cause.code !== "UPLOAD_UNAVAILABLE") {
           setError("The upload could not be confirmed. It may already have been saved. Check your course before uploading this file again.");
         } else {
@@ -91,8 +93,10 @@ function UploadForm({ courseId, accessToken }: Props & { accessToken: string | n
       </form>
       {error && <p id={`${inputId}-error`} className="document-error" role="alert">{error}</p>}
       {tracked && <>
-        <DocumentStatus key={tracked.id} tracked={tracked} courseId={courseId} accessToken={accessToken} />
-        <StudyGuidePanel documentId={tracked.id} documentName={tracked.name} accessToken={accessToken} />
+        {!onDocumentSaved && <>
+          <DocumentStatus key={tracked.id} tracked={tracked} courseId={courseId} accessToken={accessToken} />
+          <StudyGuidePanel documentId={tracked.id} documentName={tracked.name} accessToken={accessToken} />
+        </>}
         <button type="button" onClick={() => {
           setTracked(null);
           setFile(null);

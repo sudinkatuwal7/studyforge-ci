@@ -17,3 +17,10 @@
 .document-upload .document-error { color: #b91c1c; }
 .document-status { margin: 1rem 0; padding-top: .5rem; border-top: 1px solid #d1d5db; }
 .document-status h3 { margin: .75rem 0; }
+.material-list { list-style: none; padding: 0; display: grid; gap: 1rem; }
+.material-item { border: 1px solid #64748b; border-radius: .5rem; padding: 1rem; overflow-wrap: anywhere; }
+.material-item input { max-width: 100%; box-sizing: border-box; }
+.course-materials .document-error { color: #b91c1c; }
+.material-actions { display: flex; gap: .75rem; margin: .75rem 0; }
+.material-delete { color: #b91c1c; background: #fef2f2; border: 1px solid currentColor; }
+.material-date { font-size: .875rem; }
