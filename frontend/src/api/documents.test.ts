@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { DocumentRequestError, getDocument, MAX_PDF_BYTES, uploadDocument, validatePdf } from "./documents";
+import { deleteDocument, DocumentRequestError, getDocument, listDocuments, MAX_PDF_BYTES, renameDocument, uploadDocument, validatePdf } from "./documents";
 
 const document = {
   id: 12, course_id: 7, name: "Lecture.pdf", status: "PENDING",
@@ -9,6 +9,40 @@ const document = {
 afterEach(() => vi.unstubAllGlobals());
 
 describe("document API", () => {
+  it("lists uncached materials with authentication and validates each response", async () => {
+    const fetch = vi.fn().mockResolvedValue(Response.json([document]));
+    vi.stubGlobal("fetch", fetch);
+    const signal = new AbortController().signal;
+    expect(await listDocuments(7, "token", signal)).toEqual([document]);
+    const [url, options] = fetch.mock.calls[0];
+    expect(url).toBe("http://api.test/api/v1/courses/7/documents/");
+    expect(options).toMatchObject({ signal, cache: "no-store" });
+    expect(new Headers(options.headers).get("Authorization")).toBe("Bearer token");
+    fetch.mockResolvedValue(Response.json([{ ...document, status: "UNKNOWN" }]));
+    await expect(listDocuments(7, "token", signal)).rejects.toThrow("invalid document response");
+  });
+
+  it("patches only the display name and accepts an empty 204 delete response", async () => {
+    const fetch = vi.fn().mockResolvedValueOnce(Response.json({ ...document, name: "Renamed" }))
+      .mockResolvedValueOnce(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetch);
+    const signal = new AbortController().signal;
+    expect((await renameDocument(12, "Renamed", "token", signal)).name).toBe("Renamed");
+    expect(fetch.mock.calls[0][0]).toBe("http://api.test/api/v1/documents/12/");
+    expect(fetch.mock.calls[0][1]).toMatchObject({ method: "PATCH", body: JSON.stringify({ name: "Renamed" }), signal });
+    expect(new Headers(fetch.mock.calls[0][1].headers).get("Content-Type")).toBe("application/json");
+    await deleteDocument(12, "token", signal);
+    expect(fetch.mock.calls[1][1]).toMatchObject({ method: "DELETE", signal });
+    expect(new Headers(fetch.mock.calls[1][1].headers).get("Authorization")).toBe("Bearer token");
+  });
+
+  it("preserves safe deletion errors without exposing HTML or retrying", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response("<html>private path</html>", { status: 503 }));
+    vi.stubGlobal("fetch", fetch);
+    await expect(deleteDocument(12, "token", new AbortController().signal)).rejects.toThrow("The request could not be completed.");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("sends exactly one multipart file, with auth and browser-controlled content type", async () => {
     const fetch = vi.fn().mockResolvedValue(Response.json(document, { status: 201 }));
     vi.stubGlobal("fetch", fetch);

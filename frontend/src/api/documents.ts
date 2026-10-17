@@ -31,7 +31,10 @@ export class DocumentRequestError extends Error {
 async function readDocument(response: Response): Promise<StudyDocument> {
   const body: unknown = await response.json().catch(() => null);
   if (!response.ok) throw new DocumentRequestError(response.status, body);
+  return parseDocument(body);
+}
 
+function parseDocument(body: unknown): StudyDocument {
   if (!isObject(body) || !Number.isSafeInteger(body.id) || Number(body.id) <= 0 ||
     !Number.isSafeInteger(body.course_id) || Number(body.course_id) <= 0 ||
     typeof body.name !== "string" || !body.name ||
@@ -60,4 +63,24 @@ export async function uploadDocument(courseId: number, file: File, accessToken: 
 
 export async function getDocument(documentId: number, accessToken: string, signal: AbortSignal) {
   return readDocument(await request(`/documents/${documentId}/`, { signal, cache: "no-store" }, accessToken));
+}
+
+export async function listDocuments(courseId: number, accessToken: string, signal: AbortSignal) {
+  const response = await request(`/courses/${courseId}/documents/`, { signal, cache: "no-store" }, accessToken);
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) throw new DocumentRequestError(response.status, body);
+  if (!Array.isArray(body)) throw new Error("The server returned an invalid material list.");
+  return body.map(parseDocument);
+}
+
+export async function renameDocument(documentId: number, name: string, accessToken: string, signal: AbortSignal) {
+  return readDocument(await request(`/documents/${documentId}/`, {
+    method: "PATCH", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }), signal,
+  }, accessToken));
+}
+
+export async function deleteDocument(documentId: number, accessToken: string, signal: AbortSignal) {
+  const response = await request(`/documents/${documentId}/`, { method: "DELETE", signal }, accessToken);
+  if (!response.ok) throw new DocumentRequestError(response.status, await response.json().catch(() => null));
+  if (response.status !== 204) throw new Error("Deletion could not be confirmed. Refresh the material list.");
 }
