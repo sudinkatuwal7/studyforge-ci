@@ -58,12 +58,16 @@ class DocumentUploadSmokeTests(TransactionTestCase):
     def test_creation_snapshot_is_committed_before_handoff_and_get_reads_current_state(self):
         content = self.pdf()
 
-        def fast_worker(document_id):
+        def fast_worker(job_id, document_id, source_sha256):
             self.assertFalse(connection.in_atomic_block)
             document = Document.objects.get(pk=document_id)
             self.assertEqual(document.status, Document.Status.PENDING)
             self.assertEqual(document.owner_id, self.course.owner_id)
-            self.assertEqual(document.jobs.get().status, Job.Status.QUEUED)
+            job = document.jobs.get()
+            self.assertEqual(job.status, Job.Status.QUEUED)
+            self.assertEqual((job_id, document_id, source_sha256), (
+                job.pk, document.pk, document.sha256
+            ))
             document.status = Document.Status.PROCESSING
             document.save(update_fields=["status"])
 
@@ -75,7 +79,8 @@ class DocumentUploadSmokeTests(TransactionTestCase):
         self.assertEqual(response.data["created_at"], response.data["updated_at"])
         self.assertIsNone(response.data["error"])
         document = Document.objects.get(pk=response.data["id"])
-        dispatch.assert_called_once_with(document.pk)
+        job = document.jobs.get()
+        dispatch.assert_called_once_with(job.pk, document.pk, document.sha256)
         self.assertEqual(document.sha256, hashlib.sha256(content).hexdigest())
         self.assertEqual(document.title, "lecture.PDF")
         with document.file.open("rb") as stored:

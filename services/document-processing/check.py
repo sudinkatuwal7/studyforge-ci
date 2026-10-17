@@ -24,6 +24,12 @@ def main():
         PROCESSING_DB_NAME="studyforge_processing_check", PROCESSING_DB_USER="studyforge_processing_check",
         PROCESSING_DB_PASSWORD="disposable-service-only", PROCESSING_HTTP_PORT="0",
         PROCESSING_SECRET_KEY="disposable-service-check-only",
+        PROCESSING_SERVICE_TOKEN="disposable-service-token-only",
+        PROCESSING_DJANGO_API_URL="http://127.0.0.1:9",
+        GEMINI_API_KEY="",
+        EMBEDDING_MODEL="gemini-embedding-2",
+        EMBEDDING_DIMENSION="768",
+        EMBEDDING_BATCH_SIZE="16",
         PROCESSING_IMAGE="studyforge-document-processing-check:local",
     )
     with tempfile.TemporaryDirectory(prefix="scrum97-") as temporary:
@@ -47,16 +53,129 @@ def main():
         def service_python(code):
             return run("exec", "-T", "document-processing", "python", "-c", code, capture=True).strip()
 
+        def verify_workers_ready():
+            ping_command = [
+                *compose,
+                "exec",
+                "-T",
+                "processing-worker-1",
+                "celery",
+                "-A",
+                "processing_service.celery:app",
+                "inspect",
+                "ping",
+                "--timeout=2",
+            ]
+            expected_workers = ("processing-worker-1@", "processing-worker-2@")
+            for attempt in range(20):
+                result = subprocess.run(
+                    ping_command,
+                    cwd=ROOT,
+                    env=env,
+                    check=False,
+                    text=True,
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.STDOUT,
+                    timeout=10,
+                )
+                if result.returncode == 0 and all(
+                    worker in result.stdout for worker in expected_workers
+                ):
+                    registered_command = [
+                        *compose,
+                        "exec",
+                        "-T",
+                        "processing-worker-1",
+                        "celery",
+                        "-A",
+                        "processing_service.celery:app",
+                        "inspect",
+                        "registered",
+                        "--timeout=2",
+                    ]
+                    registered = subprocess.run(
+                        registered_command,
+                        cwd=ROOT,
+                        env=env,
+                        check=False,
+                        text=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        timeout=10,
+                    )
+                    task_name = "processing_service.tasks.process_document_task"
+                    if registered.returncode != 0 or registered.stdout.count(task_name) < 2:
+                        raise RuntimeError(
+                            "The document task was not registered by both workers. "
+                            f"Output: {registered.stdout}"
+                        )
+                    queues_command = [
+                        *compose,
+                        "exec",
+                        "-T",
+                        "processing-worker-1",
+                        "celery",
+                        "-A",
+                        "processing_service.celery:app",
+                        "inspect",
+                        "active_queues",
+                        "--timeout=2",
+                    ]
+                    queues = subprocess.run(
+                        queues_command,
+                        cwd=ROOT,
+                        env=env,
+                        check=False,
+                        text=True,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.STDOUT,
+                        timeout=10,
+                    )
+                    queue_name = "document-processing"
+                    if queues.returncode != 0 or queues.stdout.count(queue_name) < 2:
+                        raise RuntimeError(
+                            "Both workers must subscribe to the document-processing queue. "
+                            f"Output: {queues.stdout}"
+                        )
+                    print(
+                        "[check] Both Celery workers respond, register the document task, "
+                        "and consume the isolated queue: PASS",
+                        flush=True,
+                    )
+                    return
+                time.sleep(1)
+            raise RuntimeError(
+                "Both processing workers did not respond to Celery ping. "
+                f"Last output: {result.stdout}"
+            )
+
         try:
             run("config", "--quiet")
             run("up", "-d", "--wait", "--wait-timeout", "120", "db", "redis")
             sql("CREATE TABLE scrum97_isolation_probe (id integer PRIMARY KEY); INSERT INTO scrum97_isolation_probe VALUES (97);")
-            run("up", "-d", "--build", "--wait", "--wait-timeout", "120", "document-processing")
+            run(
+                "up", "-d", "--build", "--wait", "--wait-timeout", "120",
+                "document-processing", "processing-worker-1", "processing-worker-2",
+            )
+            verify_workers_ready()
+            for worker in ("processing-worker-1", "processing-worker-2"):
+                run(
+                    "exec", "-T", worker, "python", "manage.py", "test",
+                    "processing_service.tests", "--noinput",
+                )
+                print(
+                    f"[check] Extraction/chunking tests in {worker}: PASS",
+                    flush=True,
+                )
             run("run", "--rm", "--no-deps", "processing-db-init")
             assert sql("SELECT id FROM scrum97_isolation_probe") == "97"
             print("[check] Repeat provisioning preserves application data: PASS", flush=True)
 
             run("exec", "-T", "document-processing", "python", "manage.py", "check")
+            run(
+                "exec", "-T", "document-processing", "python", "manage.py", "test",
+                "processing_service.tests", "--noinput",
+            )
             run("exec", "-T", "document-processing", "python", "manage.py", "makemigrations", "--check", "--dry-run")
             sql("CREATE DATABASE test_studyforge_processing_check OWNER studyforge_processing_check;")
             run("exec", "-T", "document-processing", "python", "manage.py", "test", "executions", "--keepdb", "--noinput", "-v", "2")

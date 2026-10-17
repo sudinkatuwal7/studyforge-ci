@@ -1,4 +1,4 @@
-# Opt-in foundation: combine with docker-compose.yml. No worker consumes jobs yet.
+# Opt-in foundation: combine with docker-compose.yml.
 x-processing-image: &processing-image
   image: ${PROCESSING_IMAGE:-studyforge-document-processing:local}
   build: ./services/document-processing
@@ -12,6 +12,25 @@ x-processing-environment: &processing-environment
   PROCESSING_DB_PORT: "5432"
   PROCESSING_REDIS_URL: redis://redis:6379/0
   PROCESSING_ALLOWED_HOSTS: localhost,127.0.0.1,document-processing
+
+x-processing-worker-environment: &processing-worker-environment
+  <<: *processing-environment
+  PROCESSING_DJANGO_API_URL: ${PROCESSING_DJANGO_API_URL:-http://host.docker.internal:8000}
+  PROCESSING_SERVICE_TOKEN: ${PROCESSING_SERVICE_TOKEN:-}
+  GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+  EMBEDDING_MODEL: ${EMBEDDING_MODEL:-gemini-embedding-2}
+  EMBEDDING_DIMENSION: ${EMBEDDING_DIMENSION:-768}
+  EMBEDDING_BATCH_SIZE: ${EMBEDDING_BATCH_SIZE:-16}
+
+x-processing-worker: &processing-worker
+  <<: *processing-image
+  environment: *processing-worker-environment
+  depends_on:
+    processing-migrate:
+      condition: service_completed_successfully
+    redis:
+      condition: service_healthy
+  restart: unless-stopped
 
 services:
   processing-db-init:
@@ -52,3 +71,11 @@ services:
       timeout: 10s
       start_period: 10s
       retries: 5
+
+  processing-worker-1:
+    <<: *processing-worker
+    command: ["celery", "-A", "processing_service.celery:app", "worker", "--loglevel=INFO", "--queues=document-processing", "--hostname=processing-worker-1@%h"]
+
+  processing-worker-2:
+    <<: *processing-worker
+    command: ["celery", "-A", "processing_service.celery:app", "worker", "--loglevel=INFO", "--queues=document-processing", "--hostname=processing-worker-2@%h"]

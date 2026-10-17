@@ -62,7 +62,7 @@ class TestUploadFailuresAndHandoff:
 
 
     def test_dispatch_observes_committed_rows_from_another_connection(self, upload, dispatch):
-        def handoff(document_id):
+        def handoff(job_id, document_id, source_sha256):
             other_connection = connections["default"].copy(alias="handoff-observer")
             try:
                 with other_connection.cursor() as cursor:
@@ -75,11 +75,13 @@ class TestUploadFailuresAndHandoff:
         dispatch.side_effect = handoff
         response = upload()
         assert response.status_code == 201, response.content
-        dispatch.assert_called_once_with(response.json()["id"])
+        document = Document.objects.get(pk=response.json()["id"])
+        job = document.jobs.get()
+        dispatch.assert_called_once_with(job.pk, document.pk, document.sha256)
 
 
     def test_fast_worker_does_not_change_creation_snapshot(self, upload, dispatch, owner_client):
-        def handoff(document_id):
+        def handoff(job_id, document_id, source_sha256):
             document = Document.objects.get(pk=document_id)
             document.status = "PROCESSING"
             document.save(update_fields=["status"])
@@ -109,7 +111,8 @@ class TestUploadFailuresAndHandoff:
         assert document.file.storage.exists(document.file.name)
         assert document.jobs.get().status == job_status
         assert document.jobs.get().attempts == 0
-        dispatch.assert_called_once_with(document.pk)
+        job = document.jobs.get()
+        dispatch.assert_called_once_with(job.pk, document.pk, document.sha256)
         detail = owner_client.get(f"/api/v1/documents/{document.pk}/")
         assert detail.status_code == 200
         assert detail.json()["status"] == status
@@ -129,7 +132,7 @@ class TestUploadFailuresAndHandoff:
         state, upload, dispatch, assert_error, owner_client
     ):
         saved = {}
-        def handoff(document_id):
+        def handoff(job_id, document_id, source_sha256):
             document = Document.objects.get(pk=document_id)
             document.status = state
             document.error_code = "PROCESSING_FAILED" if state == "FAILED" else None
@@ -148,7 +151,7 @@ class TestUploadFailuresAndHandoff:
 
 
     def test_failure_report_cannot_overwrite_a_document_already_processing(self, upload, dispatch, assert_error):
-        def handoff(document_id):
+        def handoff(job_id, document_id, source_sha256):
             Document.objects.filter(pk=document_id).update(status="PROCESSING")
             raise DispatchFailed
         dispatch.side_effect = handoff
@@ -168,12 +171,14 @@ def publisher(monkeypatch):
     return app
 
 
-def test_publisher_sends_only_document_id_without_retries(publisher):
-    dispatch_document(42)
+def test_publisher_sends_job_document_and_digest_to_processing_queue_without_retries(publisher):
+    digest = "a" * 64
+    dispatch_document(17, 42, digest)
     publisher.connection_for_write.return_value.ensure_connection.assert_called_once_with(max_retries=0)
     publisher.send_task.assert_called_once_with(
-        "apps.processing.tasks.process_document_task",
-        args=[42],
+        "processing_service.tasks.process_document_task",
+        args=[17, 42, digest],
+        queue="document-processing",
         producer=publisher.amqp.Producer.return_value,
         retry=False,
         ignore_result=True,
@@ -185,7 +190,7 @@ def test_publisher_sends_only_document_id_without_retries(publisher):
 def test_connection_failure_is_definite_and_never_publishes(publisher):
     publisher.connection_for_write.return_value.ensure_connection.side_effect = OSError("connection refused")
     with pytest.raises(DispatchFailed):
-        dispatch_document(42)
+        dispatch_document(17, 42, "a" * 64)
     publisher.send_task.assert_not_called()
     publisher.close.assert_called_once()
 
@@ -194,12 +199,12 @@ def test_connection_failure_is_definite_and_never_publishes(publisher):
 def test_send_failure_is_uncertain_and_not_retried(publisher, failure):
     publisher.send_task.side_effect = failure("connection lost")
     with pytest.raises(DispatchUnconfirmed):
-        dispatch_document(42)
+        dispatch_document(17, 42, "a" * 64)
     assert publisher.send_task.call_count == 1
 
 
 def test_cleanup_failure_does_not_change_successful_publication(publisher, caplog):
     publisher.connection_for_write.return_value.release.side_effect = OSError("close failed")
-    dispatch_document(42)
+    dispatch_document(17, 42, "a" * 64)
     assert publisher.send_task.call_count == 1
     assert "Could not close the document task publisher" in caplog.text

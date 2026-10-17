@@ -36,3 +36,17 @@ DATABASES = {
     }
 }
 PROCESSING_REDIS_URL = os.environ.get("PROCESSING_REDIS_URL", "redis://127.0.0.1:6379/0")
+PROCESSING_DJANGO_API_URL = os.environ.get("PROCESSING_DJANGO_API_URL", "")
+PROCESSING_SERVICE_TOKEN = os.environ.get("PROCESSING_SERVICE_TOKEN", "")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "gemini-embedding-2")
+EMBEDDING_DIMENSION = int(os.environ.get("EMBEDDING_DIMENSION", "768"))
+EMBEDDING_BATCH_SIZE = int(os.environ.get("EMBEDDING_BATCH_SIZE", "16"))
+CELERY_BROKER_URL = PROCESSING_REDIS_URL
+CELERY_TASK_IGNORE_RESULT = True
+CELERY_BROKER_CONNECTION_RETRY_ON_STARTUP = True
+CELERY_TASK_ROUTES = {
+    "processing_service.tasks.process_document_task": {
+        "queue": "document-processing",
+    },
+}

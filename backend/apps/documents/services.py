@@ -35,7 +35,7 @@ def store_and_dispatch(*, course, upload, title, sha256):
         raise DocumentAPIError("UPLOAD_UNAVAILABLE", 503) from exc
 
     try:
-        dispatch_document(document.pk)
+        dispatch_document(job.pk, document.pk, document.sha256)
     except DispatchFailed as exc:
         try:
             with transaction.atomic():

@@ -43,13 +43,17 @@ def _run_task(task, document_id):
 
 
 class TaskRetryTests(unittest.TestCase):
-    def test_real_celery_task_is_registered_under_the_publisher_name(self):
+    def test_real_celery_task_is_registered_under_its_legacy_name(self):
         from apps.documents.dispatch import PROCESS_DOCUMENT_TASK
         from config.celery import app
 
         self.assertIsInstance(process_document_task._get_current_object(), Task)
-        self.assertEqual(process_document_task.name, PROCESS_DOCUMENT_TASK)
-        self.assertIn(PROCESS_DOCUMENT_TASK, app.tasks)
+        self.assertEqual(
+            process_document_task.name,
+            "apps.processing.tasks.process_document_task",
+        )
+        self.assertIn(process_document_task.name, app.tasks)
+        self.assertNotEqual(process_document_task.name, PROCESS_DOCUMENT_TASK)
 
     def test_task_max_retries_is_bounded(self):
         self.assertEqual(process_document_task.max_retries, TASK_MAX_RETRIES)

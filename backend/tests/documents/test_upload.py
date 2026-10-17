@@ -40,13 +40,16 @@ class TestUpload:
         monkeypatch.setattr(PageObject, "extract_text", no_extraction)
 
         observed = []
-        def handoff(document_id):
+        def handoff(job_id, document_id, source_sha256):
             assert not connection.in_atomic_block
             document = Document.objects.get(pk=document_id)
             assert document.status == "PENDING"
             job = document.jobs.get()
             assert (job.type, job.status, job.attempts, job.run_after) == (
                 "DOCUMENT_PROCESSING", "QUEUED", 0, None
+            )
+            assert (job_id, document_id, source_sha256) == (
+                job.pk, document.pk, document.sha256
             )
             observed.append(document_id)
         dispatch.side_effect = handoff
@@ -74,7 +77,8 @@ class TestUpload:
         with document.file.open("rb") as stored:
             assert stored.read() == data
         assert len(list(media_root.rglob("*.pdf"))) == 1
-        dispatch.assert_called_once_with(document.pk)
+        job = document.jobs.get()
+        dispatch.assert_called_once_with(job.pk, document.pk, document.sha256)
         assert observed == [document.pk]
 
 

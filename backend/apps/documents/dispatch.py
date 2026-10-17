@@ -1,11 +1,12 @@
-"""Publish a document ID to Person 4's task; no worker code lives here."""
+"""Publish a document processing job to the standalone worker queue."""
 
 import logging
 
 from celery import Celery
 
 
-PROCESS_DOCUMENT_TASK = "apps.processing.tasks.process_document_task"
+PROCESS_DOCUMENT_TASK = "processing_service.tasks.process_document_task"
+PROCESS_DOCUMENT_QUEUE = "document-processing"
 logger = logging.getLogger(__name__)
 
 
@@ -17,7 +18,7 @@ class DispatchUnconfirmed(Exception):
     """Publication was attempted but its outcome is unknown."""
 
 
-def dispatch_document(document_id):
+def dispatch_document(job_id, document_id, source_sha256):
     app = Celery("studyforge-upload", set_as_current=False)
     app.config_from_object("django.conf:settings", namespace="CELERY")
     connection = None
@@ -33,7 +34,8 @@ def dispatch_document(document_id):
         try:
             app.send_task(
                 PROCESS_DOCUMENT_TASK,
-                args=[document_id],
+                args=[job_id, document_id, source_sha256],
+                queue=PROCESS_DOCUMENT_QUEUE,
                 producer=producer,
                 retry=False,
                 ignore_result=True,

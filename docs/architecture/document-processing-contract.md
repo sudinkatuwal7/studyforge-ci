@@ -85,7 +85,8 @@ Separate logical databases still share PostgreSQL server availability and resour
 
 Django validates and stores the upload, creates Document and application Job records, commits the transaction, and then publishes a task through the existing Redis/Celery infrastructure.
 
-The agreed task envelope contains the following fields; its exact wire format remains open:
+The architecture's illustrative task envelope contains the following fields;
+its exact wire format remains open:
 
 | Field | Meaning |
 |---|---|
@@ -105,19 +106,33 @@ Illustrative payload only; exact encoding, version representation, task signatur
 }
 ```
 
-The existing task accepts only `document_id`. Introducing this envelope is an internal integration change, not existing behavior. Old and new workers must not consume incompatible messages during migration. Task naming, routing, and cutover must be agreed before dispatch changes.
+The current Django publisher sends `job_id`, `document_id`, and
+`source_sha256` as positional arguments to
+`processing_service.tasks.process_document_task` on the
+`document-processing` queue; the queue message does not yet carry
+`schema_version`. This is an internal integration change. Old and new workers
+must not consume incompatible messages during migration.
 
 ### 5.2 Internal Django endpoints
 
-**These interfaces are part of the agreed architecture, not existing implemented endpoints.** Exact API schemas and authentication details still require agreement. All three are hosted by Django and called by the processing service.
+These interfaces are part of the agreed architecture. All are hosted by Django
+and called by the processing service; implementation status and remaining schema
+decisions are noted below.
 
 | Method and planned path | Intended behavior |
 |---|---|
-| `GET /internal/v1/jobs/{job_id}/document` | Authenticate the service, authorize the job, resolve its Document, and return the private source PDF. |
-| `POST /internal/v1/jobs/{job_id}/status` | Accept an authorized, correlated execution update and apply an allowed application Job/Document transition. A status-only callback cannot independently mark a document `READY`. |
-| `POST /internal/v1/jobs/{job_id}/result` | Validate a correlated result, atomically persist application results, and set the successful application Job/Document state. |
+| `GET /internal/v1/jobs/{job_id}/document/` | Authenticate the service, authorize the job, resolve its Document, and return the private source PDF. **Implemented:** shared bearer token; PDF stream includes document ID and source SHA-256 headers. |
+| `POST /internal/v1/jobs/{job_id}/result/` | **Implemented:** authenticate, validate the versioned status/result envelope and source correlation, then atomically persist chunks/page count and Job/Document state. The same endpoint accepts `RUNNING`, `SUCCEEDED`, and `FAILED`. |
 
-Exact request/response schemas, HTTP status codes, headers, content types, payload limits, timeouts, and authentication format are unresolved. Result data must represent page count and ordered page-aware chunks with their embeddings; agree validation and ordering rules that preserve current 768-dimensional storage and study-guide reading order.
+The standalone task verifies the returned document ID and source hash and checks
+the PDF body digest before processing. The shared `PROCESSING_SERVICE_TOKEN`
+must be set independently in Django and the processing workers. Internal
+endpoints return 503 if Django has no token configured and 401 for invalid
+credentials. Result callbacks require `schema_version: 1`, matching `job_id`,
+`document_id`, and `source_sha256`, and an attempt number. Success payloads
+include page count, scan indicator, and page-aware chunks with finite
+768-dimensional embeddings. The receiver rejects payloads over 2 MiB. Use
+HTTPS or equivalently protected private transport outside local development.
 
 ### 5.3 End-to-end flow
 
@@ -125,9 +140,9 @@ Exact request/response schemas, HTTP status codes, headers, content types, paylo
 2. Django publishes the processing message. The browser retains the existing upload response and polls Django's existing status endpoint.
 3. The worker validates the message and claims or resumes the correlated execution record without creating another logical run for a duplicate delivery.
 4. The worker retrieves the PDF from the authenticated internal Django endpoint and verifies the source hash before processing.
-5. The worker reports processing status, extracts text, performs page-aware chunking, and generates embeddings.
-6. The worker delivers results to Django. Django validates the current job/source and atomically replaces chunks, persists page count and embeddings, updates the application Job, and marks Document `READY`.
-7. The worker records successful delivery only after Django confirms persistence. Failure and uncertain-response handling follow section 6.
+5. The worker posts `RUNNING`, extracts text, performs page-aware chunking, and generates embeddings.
+6. The worker posts `SUCCEEDED` with the results or `FAILED` with a safe error code. Django validates the current job/source and atomically replaces chunks, persists page count and embeddings, updates the application Job, and marks Document `READY`.
+7. Repeated terminal callbacks are acknowledged without duplicate chunks or status regression. Callback delivery uses the task's bounded Celery retry policy; the service does not yet durably stage results for recovery after prolonged Django outages.
 
 ## 6. Status, security, and reliability requirements
 
@@ -142,7 +157,7 @@ PENDING -> FAILED      (definite upload-side dispatch failure)
 
 Django remains the source of truth for public status. `READY` is set only after processing results have been successfully persisted in the application database. Result replacement, relevant application Job updates, and the `READY` transition must share one application transaction. A partial result must not appear as ready to downstream features.
 
-Proposed application Job mapping is `QUEUED -> RUNNING -> SUCCEEDED or FAILED`; exact retry and attempt synchronization requires approval. Internal delivery/execution states must not introduce new public Document status values.
+Application Job mapping is `QUEUED -> RUNNING -> SUCCEEDED or FAILED`. Django tracks the greatest callback attempt number received. Internal delivery/execution states do not introduce new public Document status values.
 
 ### 6.2 Authentication and authorization
 
@@ -159,7 +174,8 @@ Proposed application Job mapping is `QUEUED -> RUNNING -> SUCCEEDED or FAILED`; 
 - Enforce one logical service execution per application Job. Duplicate or concurrent deliveries must not produce duplicate committed results or parallel ownership of the same execution.
 - Reusing a job ID with conflicting document/source data must be rejected rather than silently overwriting the previous execution.
 - Repeated result delivery after a lost HTTP response must recognize an already committed result without inserting duplicate chunks or regressing status.
-- Validate callbacks against the current authorized run/source. Reject or safely ignore stale callbacks from superseded runs and out-of-order updates that would regress a terminal state.
+- Validate callbacks against the current authorized run/source. The Django receiver rejects source mismatches, ignores callbacks for an older Job ID when a newer Job exists for that document, ignores callbacks from an older attempt, and does not regress terminal Job states.
+- The result receiver uses one bounded callback (2 MiB maximum). Larger results fail explicitly; durable batched staging is not implemented.
 - A new intentional processing run requires its own application Job. The rule for identifying the current run and resolving concurrent runs must be agreed.
 - A deleted or unavailable document must not be recreated by a late callback. Agree cancellation and execution-record retention behavior.
 
@@ -234,10 +250,10 @@ This checklist applies to the integrated Sprint 2 processing service, not to SCR
 - [ ] Django commits Document and application Job before dispatching the agreed correlated processing message.
 - [ ] The independent worker starts without application-model imports or access to application tables and securely retrieves the correct PDF through Django.
 - [ ] The worker verifies the source hash and performs extraction, page-aware chunking, and embedding generation.
-- [ ] Django validates and atomically persists results, including ordered chunks, embeddings, page count, and application Job state.
-- [ ] Document reaches `READY` only after successful persistence, and the existing status API exposes the result correctly.
+- [x] Django validates and atomically persists results, including ordered chunks, embeddings, page count, and application Job state.
+- [x] Document reaches `READY` only after successful persistence, and the existing status API exposes the result correctly.
 - [ ] Study-guide content retrieval and generation continue working from persisted application chunks.
-- [ ] Unauthorized users/services and mismatched job/document requests are rejected; private PDFs and other users' resource existence are not disclosed through public APIs.
+- [x] Unauthorized processing-service callbacks and mismatched job/document/source requests are rejected without state changes.
 - [ ] Duplicate/concurrent jobs, repeated results, stale callbacks, and conflicting source identities are handled without duplicate committed results or status regression.
 - [ ] Definite and uncertain dispatch failures, processing failures, delivery failures, worker crashes, and recovery paths are exercised with safe public errors.
 - [ ] Docker Compose starts the agreed components using the existing PostgreSQL/Redis infrastructure and the isolated processing database; startup/health checks and existing-volume setup work without data deletion.
@@ -250,11 +266,11 @@ foundation delivery is recorded separately in section 13.
 
 | Current implementation | Proposed change or integration risk |
 |---|---|
-| Worker imports application models and opens shared storage | Replace these dependencies with execution-database access and authenticated internal PDF/result interfaces. Packaging the current worker alone would retain the coupling. |
+| Legacy worker imports application models and opens shared storage; standalone worker now uses execution-service code and authenticated PDF retrieval | Result callbacks, execution lifecycle, and cutover remain. Packaging the legacy worker alone would retain the coupling. |
 | Task accepts one positional document ID | New versioned job envelope requires coordinated publisher/consumer changes. |
 | Worker does not advance application Job records | Agree execution-to-application Job synchronization rather than introducing two competing status authorities. |
 | Worker directly commits chunks and `READY` | Move application writes into the Django result receiver while preserving their atomicity. |
-| Internal endpoints and service authentication are absent | SCRUM-99/100/108 and confirmed Django integration ownership are prerequisites for cutover. |
+| Authenticated internal PDF retrieval and a standalone extraction/chunking/embedding task exist; status/result callbacks and publisher cutover are absent | Result delivery, execution lifecycle, and coordinated dispatch/cutover remain prerequisites for production processing. |
 | Compose starts only PostgreSQL and Redis | Service runtime/configuration and separate logical database provisioning are new work. |
 | Existing study guides depend on application chunks | Preserve content ordering and ownership; moving chunk storage would require a separate contract beyond this architecture. |
 | Current public upload accepts PDF only | SCRUM-106 must follow a stable PDF integration and agree multi-format compatibility with worker and public API owners. |
@@ -271,13 +287,15 @@ Sudin Katuwal confirmed that his teammates agreed to the contract and requested 
 | Nischal Rimal | Approved, as reported by Sudin | Team agreement recorded October 14, 2026. |
 | Sanish Shrestha | Approved, as reported by Sudin | Team agreement recorded October 14, 2026. |
 
-Architecture approval does not resolve the following decisions. No values or additional owners have been inferred from the confirmation:
+Architecture approval did not originally resolve the following decisions. Local
+implementation now records some of those choices in section 14; unimplemented
+items remain open.
 
 1. **Queue and task names:** routing, message version representation/signature, and old/new worker cutover.
-2. **Internal authentication mechanism:** credentials, operation permissions, job scoping, transport protection, and rotation.
-3. **Exact internal API schemas:** request/response fields, HTTP behavior, chunk ordering, source/result validation, embedding dimensions, and payload limits.
-4. **Retry and recovery policy:** retry bounds, acknowledgement/claim behavior, duplicate and stale updates, durable result retention, reconciliation, and deleted-document handling.
-5. **Django dispatch and callback integration ownership:** explicitly assign dispatch adaptation, internal callback handling, and atomic result persistence; confirm application Job synchronization.
+2. **Internal authentication mechanism:** shared bearer token is implemented for PDF retrieval and result callbacks; production transport protection and token rotation remain open.
+3. **Exact internal API schemas:** local callback schema, validation, and 2 MiB limit are recorded in section 14; other request/response details remain open.
+4. **Retry and recovery policy:** task retries and duplicate/stale callback handling are implemented locally; durable result retention, execution claims, reconciliation, and deleted-document handling remain open.
+5. **Django dispatch and callback integration ownership:** local dispatch, callback handling, atomic result persistence, and application Job synchronization are implemented as recorded in section 14. Team ownership confirmation remains separate.
 6. **SCRUM-106 scope and compatibility:** supported formats, upload limits/validation, extraction ownership, and preservation of the existing PDF contract.
 
 Record the agreed values and owners here as these decisions are resolved, before implementing the dependent interfaces or switching processing traffic. The end-to-end checklist remains pending; this approval update changes documentation only.
@@ -294,8 +312,40 @@ Verification passed: nine service tests, isolated Compose startup, repeat
 provisioning, application-table access denial, restart persistence, dependency
 outage behavior, and the existing backend suite of 219 tests and 36 subtests.
 
-The existing PDF pipeline remains active. Section 10's end-to-end integration
-checklist and section 12's unresolved decisions remain open; SCRUM-99/100/108,
-Django dispatch/callback integration, and SCRUM-106 are not completed by SCRUM-97.
-Commit, push, pull request, merge, and Jira workflow updates have not been
-performed as part of this local delivery.
+The original SCRUM-97 scope did not include the integrated worker path. The
+subsequent local SCRUM-108 integration state and its remaining gaps are recorded
+in section 14. Commit, push, pull request, merge, and Jira workflow updates have
+not been performed as part of this local delivery.
+
+## 14. Local dispatch and result callback integration
+
+As of October 16, 2026, Django's upload path publishes the standalone task with
+`job_id`, `document_id`, and `source_sha256` to `document-processing`. The
+workers post a versioned JSON envelope to
+`POST /internal/v1/jobs/{job_id}/result/`, authenticated with the shared bearer
+token:
+
+- `RUNNING` transitions the application Job to `RUNNING` and Document to
+  `PROCESSING`, recording the greatest attempt number observed.
+- `SUCCEEDED` includes `page_count`, `likely_scanned`, and ordered chunks with
+  page number, content, and a finite 768-value embedding. Django validates all
+  fields and atomically replaces the Document's chunks, sets `page_count`,
+  Job `SUCCEEDED`, and Document `READY`.
+- `FAILED` accepts only the safe `PROCESSING_FAILED` code and sets the
+  application Job/Document to `FAILED`.
+
+Callbacks are limited to 2 MiB, reject mismatched job/document/source identity,
+ignore callbacks for older jobs or attempts, and acknowledge
+repeated terminal callbacks without rewriting chunks or regressing state.
+Focused backend document tests passed with 122 tests and 22 subtests; the
+disposable service Compose verification passed with 39 service tests in each
+worker and confirmed both workers register and consume the task queue.
+
+This is not yet production cutover approval. The service Execution model is not
+yet used to claim tasks or durably stage results. A prolonged Django outage,
+an oversized single-callback result, or worker crash can therefore leave an
+application Job in `PROCESSING`; recovery/reconciliation and retry cost
+behavior still need work and end-to-end failure testing. The shared token also
+requires protected transport and rotation outside local development. The
+legacy worker implementation remains in the repository but upload dispatch now
+targets the standalone task.

@@ -11,7 +11,7 @@ SECRET_KEY = "django-insecure-studyforge-local-development-only"
 
 DEBUG = True
 
-ALLOWED_HOSTS = ["localhost", "127.0.0.1"]
+ALLOWED_HOSTS = ["localhost", "127.0.0.1", "host.docker.internal"]
 
 INSTALLED_APPS = [
     "django.contrib.admin",
@@ -120,6 +120,7 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "gemini-embedding-2")
 EMBEDDING_DIMENSION = int(os.environ.get("EMBEDDING_DIMENSION", "768"))
 EMBEDDING_BATCH_SIZE = int(os.environ.get("EMBEDDING_BATCH_SIZE", "16"))
+PROCESSING_SERVICE_TOKEN = os.environ.get("PROCESSING_SERVICE_TOKEN", "")
 
 CELERY_BROKER_CONNECTION_TIMEOUT = 3
 CELERY_BROKER_TRANSPORT_OPTIONS = {
