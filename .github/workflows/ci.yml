@@ -1,0 +1,119 @@
+name: StudyForge CI
+
+on:
+  push:
+    branches:
+      - development
+      - main
+      - "feature/**"
+      - "chore/**"
+
+  pull_request:
+    branches:
+      - development
+      - main
+
+jobs:
+  backend:
+    name: Backend tests and migrations
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: pgvector/pgvector:pg16
+        env:
+          POSTGRES_DB: postgres
+          POSTGRES_USER: studyforge_ci
+          POSTGRES_PASSWORD: disposable-ci-only
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U studyforge_ci -d postgres"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    env:
+      CI_POSTGRES_HOST: 127.0.0.1
+      CI_POSTGRES_PORT: 5432
+      CI_POSTGRES_USER: studyforge_ci
+      CI_POSTGRES_PASSWORD: disposable-ci-only
+      NOTES_LLM_BACKEND: fake
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements-dev.txt
+
+      - name: Install backend dependencies
+        run: python -m pip install -r backend/requirements-dev.txt
+
+      - name: Check Python dependencies
+        run: python -m pip check
+
+      - name: Run backend checks
+        env:
+          OPENAI_API_KEY: ""
+          GEMINI_API_KEY: ""
+          GOOGLE_API_KEY: ""
+          GOOGLE_APPLICATION_CREDENTIALS: ""
+        run: python scripts/check.py --component backend --database service
+
+      - name: Upload backend test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-test-results
+          path: test-results/**
+          if-no-files-found: ignore
+
+  frontend:
+    name: Frontend tests, Oxlint, and build
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: frontend
+
+    env:
+      VITE_API_BASE_URL: http://api.test/api/v1
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "24.19.0"
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Show Node version
+        run: node --version
+
+      - name: Install frontend dependencies
+        run: npm ci
+
+      - name: Run lint
+        run: npm run lint
+
+      - name: Run frontend tests
+        run: npm run test:ci
+
+      - name: Build frontend
+        run: npm run build
+
+      - name: Upload frontend test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: frontend-test-results
+          path: frontend/test-results/**
+          if-no-files-found: ignore
