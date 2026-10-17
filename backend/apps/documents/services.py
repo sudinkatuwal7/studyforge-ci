@@ -1,9 +1,10 @@
-"""Store an upload atomically, then hand off the committed document."""
+"""Document storage, processing handoff, and synchronous material deletion."""
 
 import logging
 from uuid import uuid4
 
 from django.db import transaction
+from django.http import Http404
 from django.utils import timezone
 
 from apps.documents.dispatch import DispatchFailed, DispatchUnconfirmed, dispatch_document
@@ -13,6 +14,37 @@ from apps.documents.serializers import DocumentSerializer
 
 
 logger = logging.getLogger(__name__)
+
+
+def locked_material(document_id, owner):
+    # SCRUM-118 locks the Document before its Job. Use that same order.
+    document = Document.objects.select_for_update(of=("self",)).filter(
+        pk=document_id, course__owner=owner
+    ).first()
+    if document is None:
+        raise Http404
+    return document
+
+
+def delete_material(document_id, owner):
+    try:
+        with transaction.atomic(durable=True):
+            document = locked_material(document_id, owner)
+            storage, name = document.file.storage, document.file.name
+            document.delete()
+            # SQL failures occur before removing the file; storage failures roll
+            # back the cascades. Filesystem deletion cannot be rolled back if the
+            # subsequent database commit fails (see the API contract).
+            if name:
+                try:
+                    storage.delete(name)
+                except FileNotFoundError:
+                    pass
+    except Http404:
+        raise
+    except Exception as exc:
+        logger.exception("Could not delete document %s.", document_id)
+        raise DocumentAPIError("MATERIAL_UNAVAILABLE", 503) from exc
 
 
 def store_and_dispatch(*, course, upload, title, sha256):
