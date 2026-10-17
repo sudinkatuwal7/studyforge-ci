@@ -25,7 +25,7 @@ definitions:
           - python -m pip install -r backend/requirements-dev.txt
           - python -m pip check
           - export CI_POSTGRES_HOST=127.0.0.1 CI_POSTGRES_PORT=5432 CI_POSTGRES_USER=studyforge_ci CI_POSTGRES_PASSWORD=disposable-ci-only
-          - export NOTES_LLM_BACKEND=fake
+          - export NOTES_LLM_BACKEND=fake QUIZ_LLM_BACKEND=fake
           - unset OPENAI_API_KEY GEMINI_API_KEY GOOGLE_API_KEY GOOGLE_APPLICATION_CREDENTIALS
           - python scripts/check.py --component backend --database service
         artifacts:
