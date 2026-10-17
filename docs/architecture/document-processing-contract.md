@@ -1,6 +1,10 @@
 # StudyForge — Sprint 2 Document Processing Service Contract v1.0
 
-Status: **APPROVED — Architecture agreed; implementation decisions remain open**
+Status: **APPROVED — Architecture and SCRUM-118 integration contract agreed; recovery decisions remain open**
+
+The SCRUM-118 clarification supplied by Sanish on October 17, 2026 is recorded
+in section 15. It supersedes earlier open ownership questions and the original
+HTTP 200 handling of stale/terminal callbacks described in section 14.
 
 Approval recorded: **October 14, 2026**, based on Sudin Katuwal's confirmation of team agreement.
 
@@ -174,7 +178,7 @@ Application Job mapping is `QUEUED -> RUNNING -> SUCCEEDED or FAILED`. Django tr
 - Enforce one logical service execution per application Job. Duplicate or concurrent deliveries must not produce duplicate committed results or parallel ownership of the same execution.
 - Reusing a job ID with conflicting document/source data must be rejected rather than silently overwriting the previous execution.
 - Repeated result delivery after a lost HTTP response must recognize an already committed result without inserting duplicate chunks or regressing status.
-- Validate callbacks against the current authorized run/source. The Django receiver rejects source mismatches, ignores callbacks for an older Job ID when a newer Job exists for that document, ignores callbacks from an older attempt, and does not regress terminal Job states.
+- Validate callbacks against the current authorized run/source. The Django receiver rejects source mismatches, older jobs, older attempts, and conflicting terminal callbacks with HTTP 409. Only an identical terminal callback for the current job and attempt receives an idempotent acknowledgement.
 - The result receiver uses one bounded callback (2 MiB maximum). Larger results fail explicitly; durable batched staging is not implemented.
 - A new intentional processing run requires its own application Job. The rule for identifying the current run and resolving concurrent runs must be agreed.
 - A deleted or unavailable document must not be recreated by a late callback. Agree cancellation and execution-record retention behavior.
@@ -214,25 +218,22 @@ Current Compose defines only database and Redis services; it does not already st
 
 ## 9. Team responsibilities and open integration ownership
 
-The ticket-level responsibilities below reflect team agreement reported by Sudin on October 14, 2026. This records architecture-level agreement, not verified Jira completion or changes to Jira acceptance criteria. The explicitly unconfirmed integration assignments remain open.
+The ticket-level responsibilities below include Sanish's October 17 clarification
+relayed by Sudin. This records agreed ownership, not verified Jira completion.
 
 | Ticket | Owner | Responsibility and boundary |
 |---|---|---|
 | SCRUM-97 | Sudin Katuwal | Independent service scaffold, execution database, configuration, health check, and Docker Compose foundation. Agree the execution schema with Sanish; do not implement worker extraction or teammate authorization work here. |
-| SCRUM-99 | Nischal Rimal | Internal service authentication, authorization, and proposed Django-side integration. The specific integration responsibilities below still need confirmation. |
-| SCRUM-100 | Sanish Shrestha | Secure internal PDF retrieval, coordinated with Nischal's authentication/authorization mechanism. |
+| SCRUM-99 | Nischal Rimal | Shared service authentication and authorization; verification is centralized under `backend/apps/identity/service_auth.py` using the existing `PROCESSING_SERVICE_TOKEN`. |
+| SCRUM-100 | Sanish Shrestha | PDF-fetch client and source integrity checks, using the existing authenticated document endpoint. |
 | SCRUM-108 | Sanish Shrestha | Independent worker execution, extraction/chunking/embedding, execution attempts/retries, and status/result delivery. Reuse the agreed SCRUM-97 foundation. |
+| SCRUM-118 | Sudin Katuwal | Django-side job lifecycle, callback validation, and atomic result persistence. Extend SCRUM-108's merged dispatch and handlers rather than introducing duplicate components. |
 | SCRUM-106 | Sudin Katuwal | Multi-format upload and extraction after the existing PDF pipeline is stable. Supported formats, validation, extraction ownership, and compatibility require separate agreement. |
 
-The following responsibilities remain explicitly **unconfirmed**:
-
-| Integration responsibility | Confirmation required |
-|---|---|
-| Django dispatch integration | Who changes publication to the agreed task envelope/queue and manages compatibility and cutover? |
-| Internal callback handling | Who implements Django status/result receivers, job correlation, and stale/duplicate callback handling? |
-| Atomic result persistence | Who validates and persists chunks/embeddings/page count with application Job and Document transitions in one transaction? |
-
-SCRUM-99's proposed integration scope does not automatically assign all three items to Nischal. Confirm them with Nischal and Sanish before coding. Coordinate application knowledge changes with the existing knowledge owner and verify study-guide consumers remain compatible.
+Dispatch and both internal routes already exist in merged SCRUM-108. SCRUM-118
+extends those handlers and owns callback correlation, lifecycle, and persistence.
+SCRUM-99 retains shared authentication ownership. Worker retry changes remain
+with SCRUM-108 and fetch/integrity changes remain with SCRUM-100.
 
 Potential duplication to avoid:
 
@@ -295,7 +296,7 @@ items remain open.
 2. **Internal authentication mechanism:** shared bearer token is implemented for PDF retrieval and result callbacks; production transport protection and token rotation remain open.
 3. **Exact internal API schemas:** local callback schema, validation, and 2 MiB limit are recorded in section 14; other request/response details remain open.
 4. **Retry and recovery policy:** task retries and duplicate/stale callback handling are implemented locally; durable result retention, execution claims, reconciliation, and deleted-document handling remain open.
-5. **Django dispatch and callback integration ownership:** local dispatch, callback handling, atomic result persistence, and application Job synchronization are implemented as recorded in section 14. Team ownership confirmation remains separate.
+5. **Django dispatch and callback integration ownership:** resolved by the SCRUM-118 clarification; see sections 9 and 15.
 6. **SCRUM-106 scope and compatibility:** supported formats, upload limits/validation, extraction ownership, and preservation of the existing PDF contract.
 
 Record the agreed values and owners here as these decisions are resolved, before implementing the dependent interfaces or switching processing traffic. The end-to-end checklist remains pending; this approval update changes documentation only.
@@ -349,3 +350,106 @@ behavior still need work and end-to-end failure testing. The shared token also
 requires protected transport and rotation outside local development. The
 legacy worker implementation remains in the repository but upload dispatch now
 targets the standalone task.
+
+## 15. SCRUM-118 callback contract
+
+Sanish's clarification supplied by Sudin on October 17, 2026 confirms the ownership
+in section 9 and the following contract. SCRUM-118 builds on the merged
+SCRUM-108 implementation, retaining the task arguments, queue, and both routes:
+
+- `GET /internal/v1/jobs/{job_id}/document/`
+- `POST /internal/v1/jobs/{job_id}/result/`
+
+Both handlers use `authorize_processing_service` from
+`backend/apps/identity/service_auth.py`. The existing bearer header and
+`PROCESSING_SERVICE_TOKEN` remain unchanged. An absent server token returns 503;
+missing or invalid caller credentials return 401. Shared authentication remains
+owned by SCRUM-99; this change moves the existing verification into that module.
+
+### Attempts, lifecycle, and terminal receipts
+
+The callback JSON retains its positive integer `attempt`. One logical job retains
+its `job_id` across processing retries. A new processing attempt advances the
+number; resending a callback retains its original attempt. Django records the
+greatest accepted attempt, never increments it on receipt, and rejects older
+attempts. Repeated `RUNNING` callbacks do not increment attempts. As in the merged
+implementation, a terminal callback may arrive directly from `QUEUED`; receiving
+a prior `RUNNING` callback is not required for safe persistence.
+
+Callbacks lock Document then Job so callbacks for the same document serialize
+and use the same lock order as dispatch-failure handling. A newer Job primary key
+supersedes every older Job for that document. Stale/conflicting requests make no
+changes to chunks, attempts, or public status.
+
+Accepted terminal callbacks store a SHA-256 receipt of their complete validated
+JSON, serialized with sorted object keys and consistent separators. JSON whitespace
+and object key order do not affect equality; attempt, status, identity, page count,
+scan indicator, ordered chunks, and embeddings do. The receipt, result replacement,
+and Job/Document transitions commit in one transaction. Exact redelivery returns
+`{"status":"duplicate"}` without rewriting chunks or timestamps.
+
+Apply `documents.0002_job_terminal_callback_sha256` before serving updated code.
+Existing jobs retain their states and attempts. Historical terminal jobs have no
+receipt, so their callbacks receive `terminal_conflict`; equality cannot safely be
+inferred from status or reconstructed from rounded stored vectors. No existing
+job is reopened and no data is backfilled speculatively.
+
+### Responses and validation
+
+| HTTP | Body | Meaning |
+|---|---|---|
+| 200 | `{"status":"applied"}` | Valid callback persisted. |
+| 200 | `{"status":"duplicate"}` | Identical terminal callback already persisted for the current job/attempt. |
+| 409 | `{"error":"stale_job"}` | A newer Job exists for the document. |
+| 409 | `{"error":"stale_attempt"}` | A newer attempt was accepted. |
+| 409 | `{"error":"terminal_conflict"}` | Terminal job; callback is not provably identical. |
+| 409 | `{"error":"source_mismatch"}` | Document/source does not match the Job. |
+| 404 | `{"error":"job_not_found"}` | Job was deleted or does not exist. |
+| 400 | `{"error":"empty_extracted_content"}` | Empty chunk list cannot become READY. |
+| 400 | `{"error":"<validation_code>"}` | Invalid envelope, chunk, or embedding; no state changes. |
+| 413 | `{"error":"callback_too_large"}` | Callback exceeds 2 MiB. |
+| 415 | `{"error":"unsupported_content_type"}` | Callback is not JSON. |
+| 503 | `{"error":"result_unavailable"}` | Database operation failed and rolled back; delivery may retry. |
+
+The 2 MiB UTF-8 body limit and 1,000-character chunk limit remain inclusive.
+Blank chunk content, invalid page references, wrong vector dimensions, and
+non-finite vector values are rejected. Owner identity always comes from Document.
+The existing SCRUM-108 result client treats 400/409/413 as permanent failures.
+On empty or oversized success results, its task submits the safe `FAILED` callback
+with `PROCESSING_FAILED`, allowing Django to persist a controlled failure without
+a processing retry. An unsuccessful delivery of that failure remains a worker
+recovery concern.
+
+### Worker dependency and validation boundary
+
+SCRUM-108 still uses a single Celery retry counter for processing and callback
+delivery. Delivery failure currently reruns the task with an incremented attempt;
+it does not redeliver the saved callback at its original attempt. The Django
+receiver now supports the agreed redelivery semantics, but durable result staging
+and separate delivery retries require a SCRUM-108 follow-up. No worker retry or
+PDF-fetch implementation is changed by SCRUM-118.
+
+Backend contract tests exercise strict validation, limits, concurrent delivery,
+receipt equality, and rollback. Worker integration tests run the existing task,
+PDF parser, source-integrity client, and result client against Django's actual
+handlers and PostgreSQL. HTTP transport, broker publication, and paid embeddings
+are replaced in these tests; they do not claim live Redis delivery or crash recovery.
+
+### Local verification on October 17, 2026
+
+Based on fetched `origin/development` at `4b51c2b` (merged SCRUM-108):
+
+- `backend/venv/Scripts/python.exe scripts/check.py --component backend`:
+  **321 tests and 79 subtests passed** against a disposable pgvector/PostgreSQL
+  database. Django system checks, migration drift, and fresh migrations passed.
+- `backend/venv/Scripts/python.exe services/document-processing/manage.py test processing_service.tests --noinput`:
+  **41 tests passed**, using disposable service settings, an in-memory broker,
+  and mocked external calls. No real provider keys or application database were used.
+- The five worker/Django integration cases cover successful upload through READY,
+  duplicate result delivery, empty extraction, superseded work, oversized output,
+  and redelivery of the original attempt after a persistence outage.
+- `git diff --check` passed.
+
+This completes the local Django scope of SCRUM-118. Joint live-worker validation,
+SCRUM-108's separate delivery retry implementation, and the existing recovery
+decisions remain distinct from these automated checks.

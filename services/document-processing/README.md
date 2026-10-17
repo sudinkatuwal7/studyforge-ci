@@ -66,12 +66,20 @@ use Celery retries. The worker posts authenticated `RUNNING`, `SUCCEEDED`, and
 `FAILED` callbacks to
 `POST /internal/v1/jobs/{job_id}/result/`. Django validates correlation and
 768-dimensional vectors, then atomically stores chunks and page count and
-updates the application Job/Document. Repeated terminal callbacks are
-idempotent, and callbacks for older jobs or attempts are ignored. One callback is limited
-to 2 MiB; larger results fail explicitly rather than being partially persisted.
+updates the application Job/Document. Identical terminal callbacks for the current
+job and attempt are idempotent. Older jobs/attempts and conflicting terminal
+callbacks receive HTTP 409, which the existing client classifies as permanent.
+One callback is limited to 2 MiB and each chunk to 1,000 characters. Empty success
+results receive HTTP 400; the existing task then reports `PROCESSING_FAILED`.
+Oversized results fail permanently rather than being partially persisted.
 Callback delivery uses bounded Celery retries, but results are not durably
 staged in the service database, so a prolonged Django outage can leave a job
 in `PROCESSING` for later reconciliation.
+
+SCRUM-118 preserves these task and route interfaces. Its Django migration adds a
+terminal-callback receipt for exact duplicate validation; apply backend migrations
+before starting the updated backend. See the
+[agreed callback contract and SCRUM-108 retry follow-up](../../docs/architecture/document-processing-contract.md#15-scrum-118-callback-contract).
 
 ```text
 GET http://127.0.0.1:8001/health/
