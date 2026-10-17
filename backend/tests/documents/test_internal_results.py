@@ -140,8 +140,8 @@ class InternalJobResultViewTests(TestCase):
             "attempt": 1,
         })
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"status": "stale"})
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json(), {"error": "stale_attempt"})
         self.job.refresh_from_db()
         self.document.refresh_from_db()
         self.assertEqual(self.job.status, Job.Status.RUNNING)
@@ -254,12 +254,134 @@ class InternalJobResultViewTests(TestCase):
         self.assertEqual(self.job.status, Job.Status.QUEUED)
         self.assertEqual(self.document.status, Document.Status.PENDING)
 
-    def test_old_job_result_is_ignored_when_a_newer_run_exists(self):
+    def test_old_job_result_is_rejected_when_a_newer_run_exists(self):
         newer_job = Job.objects.create(document=self.document)
 
         response = self.callback("SUCCEEDED", **self.success_payload())
 
-        self.assertEqual(response.status_code, 200)
-        self.assertEqual(response.json(), {"status": "stale"})
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json(), {"error": "stale_job"})
         self.assertFalse(Chunk.objects.exists())
         self.assertEqual(Job.objects.get(pk=newer_job.pk).status, Job.Status.QUEUED)
+
+    def test_new_attempt_advances_same_job_and_running_redelivery_does_not_increment(self):
+        for attempt in (1, 1, 2, 2):
+            self.assertEqual(self.callback("RUNNING", attempt=attempt).status_code, 200)
+            self.job.refresh_from_db()
+            self.assertEqual(self.job.attempts, attempt)
+        self.assertEqual(Job.objects.filter(document=self.document).count(), 1)
+
+    def test_terminal_duplicate_does_not_rewrite_results_or_timestamp(self):
+        payload = self.success_payload()
+        self.callback("SUCCEEDED", **payload)
+        self.document.refresh_from_db()
+        updated_at = self.document.updated_at
+        chunk_id = Chunk.objects.get(document=self.document).pk
+        response = self.callback("SUCCEEDED", **payload)
+        self.assertEqual(response.json(), {"status": "duplicate"})
+        self.document.refresh_from_db()
+        self.assertEqual(self.document.updated_at, updated_at)
+        self.assertEqual(Chunk.objects.get(document=self.document).pk, chunk_id)
+
+    def test_changed_terminal_success_is_not_a_duplicate(self):
+        original = self.success_payload()
+        self.callback("SUCCEEDED", **original)
+        for field in ("content", "embedding", "page_number", "page_count", "likely_scanned", "attempt"):
+            changed = self.success_payload()
+            if field == "content":
+                changed["chunks"][0][field] = "Different text"
+            elif field == "embedding":
+                changed["chunks"][0][field][0] = 0.75
+            elif field == "page_number":
+                changed["chunks"][0][field] = 1
+            elif field == "page_count":
+                changed[field] = 3
+            elif field == "likely_scanned":
+                changed[field] = True
+            else:
+                changed[field] = 2
+            with self.subTest(field=field):
+                response = self.callback("SUCCEEDED", **changed)
+                self.assertEqual(response.status_code, 409)
+                self.assertEqual(response.json(), {"error": "terminal_conflict"})
+        self.job.refresh_from_db()
+        self.assertEqual(self.job.attempts, 1)
+        self.assertEqual(Chunk.objects.get(document=self.document).content, original["chunks"][0]["content"])
+
+    def test_failed_duplicate_is_acknowledged_but_terminal_state_cannot_change(self):
+        self.callback("FAILED", error_code="PROCESSING_FAILED")
+        duplicate = self.callback("FAILED", error_code="PROCESSING_FAILED")
+        self.assertEqual(duplicate.json(), {"status": "duplicate"})
+        for status, fields in (
+            ("RUNNING", {}),
+            ("SUCCEEDED", self.success_payload()),
+            ("FAILED", {"attempt": 2, "error_code": "PROCESSING_FAILED"}),
+        ):
+            with self.subTest(status=status):
+                response = self.callback(status, **fields)
+                self.assertEqual(response.status_code, 409)
+        self.document.refresh_from_db()
+        self.assertEqual(self.document.status, Document.Status.FAILED)
+        self.assertFalse(Chunk.objects.exists())
+
+    def test_success_cannot_be_changed_to_failed_or_running(self):
+        self.callback("SUCCEEDED", **self.success_payload())
+        self.assertEqual(self.callback("FAILED", error_code="PROCESSING_FAILED").status_code, 409)
+        self.assertEqual(self.callback("RUNNING", attempt=2).status_code, 409)
+        self.document.refresh_from_db()
+        self.assertEqual(self.document.status, Document.Status.READY)
+
+    def test_terminal_job_without_receipt_is_not_assumed_identical(self):
+        self.job.status = Job.Status.FAILED
+        self.job.save()
+        response = self.callback("FAILED", error_code="PROCESSING_FAILED")
+        self.assertEqual(response.status_code, 409)
+
+    def test_duplicate_for_superseded_job_is_rejected(self):
+        payload = self.success_payload()
+        self.callback("SUCCEEDED", **payload)
+        Job.objects.create(document=self.document)
+        response = self.callback("SUCCEEDED", **payload)
+        self.assertEqual(response.status_code, 409)
+        self.assertEqual(response.json(), {"error": "stale_job"})
+
+    def test_empty_success_is_rejected_before_any_state_change(self):
+        response = self.callback("SUCCEEDED", **{**self.success_payload(), "chunks": []})
+        self.assertEqual(response.status_code, 400)
+        self.assertEqual(response.json(), {"error": "empty_extracted_content"})
+        self.job.refresh_from_db()
+        self.document.refresh_from_db()
+        self.assertEqual(self.job.status, Job.Status.QUEUED)
+        self.assertEqual(self.job.terminal_callback_sha256, "")
+        self.assertEqual(self.document.status, Document.Status.PENDING)
+
+    def test_chunk_limit_is_inclusive(self):
+        payload = self.success_payload()
+        payload["chunks"][0]["content"] = "x" * 1001
+        self.assertEqual(self.callback("SUCCEEDED", **payload).status_code, 400)
+        payload["chunks"][0]["content"] = "x" * 1000
+        self.assertEqual(self.callback("SUCCEEDED", **payload).status_code, 200)
+
+    def test_receipt_and_existing_chunks_survive_failed_replacement(self):
+        existing = Chunk.objects.create(
+            document=self.document, owner=self.owner, page_number=1,
+            content="Previous content", embedding=[0.5] * 768,
+        )
+        with patch("apps.documents.result_callbacks.Document.save", side_effect=DatabaseError("offline")):
+            response = self.callback("SUCCEEDED", **self.success_payload())
+        self.assertEqual(response.status_code, 503)
+        self.job.refresh_from_db()
+        self.assertEqual(self.job.status, Job.Status.QUEUED)
+        self.assertEqual(self.job.terminal_callback_sha256, "")
+        self.assertEqual(Chunk.objects.get(document=self.document).pk, existing.pk)
+        self.assertEqual(self.callback("SUCCEEDED", **self.success_payload()).status_code, 200)
+
+    def test_deleted_job_returns_not_found(self):
+        self.document.delete()
+        # Keep the URL identity, since Django clears the deleted instance's PK.
+        response = self.callback("RUNNING", document_id=1)
+        self.assertEqual(response.status_code, 404)
+
+    def test_missing_service_token_fails_closed_for_results(self):
+        with override_settings(PROCESSING_SERVICE_TOKEN=""):
+            self.assertEqual(self.callback("RUNNING").status_code, 503)
