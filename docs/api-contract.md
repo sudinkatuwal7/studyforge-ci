@@ -391,3 +391,67 @@ If an API contract changes later, update all of the following:
 - backend serializer / response logic
 - frontend TypeScript type
 - affected tests
+
+## Future RAG query contract (schema only)
+
+This is a future contract for page-cited question answering. It defines JSON
+validation only; this repository does not yet expose a RAG route, perform
+similarity retrieval, or generate answers.
+
+The future request selects the source documents explicitly:
+
+```json
+{
+  "question": "What causes a page fault?",
+  "document_ids": [42, 57]
+}
+```
+
+`question` is a nonblank string up to 2,000 characters. `document_ids` is a
+nonempty, duplicate-free list of at most 20 positive integer Document IDs.
+
+Future retrieval returns structured evidence, preserving the stored Chunk ID,
+Document ID, and one-based PDF page number:
+
+```json
+{
+  "chunk_id": 901,
+  "document_id": 42,
+  "page_number": 2,
+  "content": "A page fault occurs when the requested page is not in RAM.",
+  "score": 0.8842
+}
+```
+
+A supported answer requires at least one citation:
+
+```json
+{
+  "status": "ANSWERED",
+  "answer": "A page fault occurs when a requested page is not in RAM.",
+  "citations": [
+    {
+      "chunk_id": 901,
+      "document_id": 42,
+      "page_number": 2,
+      "excerpt": "requested page is not in RAM"
+    }
+  ]
+}
+```
+
+An empty citation list means the response must explicitly abstain:
+
+```json
+{
+  "status": "INSUFFICIENT_CONTEXT",
+  "answer": null,
+  "citations": []
+}
+```
+
+Before an answer is returned, each citation must identify a Chunk owned by the
+authenticated user and belonging to one of the request's owner-authorized
+Document IDs. Its stored document and page number must match the citation, and
+the cited excerpt must occur verbatim in that Chunk. `ANSWERED` with no citations, or
+`INSUFFICIENT_CONTEXT` with answer text or citations, is invalid.
