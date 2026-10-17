@@ -1,17 +1,25 @@
 :root {
-  font-family: system-ui, -apple-system, sans-serif;
-  color: #111827;
-  background: #f9fafb;
+  --cream: #faf8f4;
+  --navy: #26334d;
+  --lavender: #e9e3fa;
+  --sage: #dceee3;
+  --peach: #ffe5d4;
+  --periwinkle: #7387e8;
+  --muted: #5c6a84;
+  font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  color: var(--navy);
+  background: var(--cream);
+  line-height: 1.45;
 }
 
 body {
   margin: 0;
 }
 
-/* Keep the page content centered with room around the edges. */
-main {
+/* Signed-out pages stay a single centered column. The dashboard uses its own shell. */
+.auth-layout {
   box-sizing: border-box;
-  max-width: 72rem;
+  max-width: 32rem;
   margin: 0 auto;
   padding: 3rem 1.5rem;
   display: flex;
@@ -24,7 +32,11 @@ h1 {
 
 p {
   margin: 0;
-  color: #4b5563;
+  color: var(--muted);
+}
+
+h1, h2, h3, strong {
+  color: var(--navy);
 }
 
 .health {
@@ -70,46 +82,64 @@ form {
 .course-card {
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  align-items: flex-start;
+  gap: 0.65rem;
   box-sizing: border-box;
   height: 100%;
-  padding: 1.5rem;
-  border: 1px solid #d1d5db;
-  border-top: 0.4rem solid #334155;
-  border-radius: 0.5rem;
+  padding: 1.25rem;
+  border: 1px solid #efeae3;
+  border-radius: 1.15rem;
   background: white;
   color: inherit;
   text-decoration: none;
   overflow-wrap: anywhere;
+  box-shadow: 0 8px 24px #26334d0a;
 }
 
 .course-card:hover {
-  border-color: #2563eb;
-  box-shadow: 0 2px 8px #00000012;
+  border-color: #d9d3ea;
+  box-shadow: 0 10px 28px #26334d14;
 }
 
+.course-icon {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 0.8rem;
+  color: var(--navy);
+}
+
+.course-icon svg {
+  width: 1.35rem;
+  height: 1.35rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.course-icon-lavender { background: var(--lavender); color: #5b4d91; }
+.course-icon-sage { background: var(--sage); color: #3d6b52; }
+.course-icon-peach { background: var(--peach); color: #9a5b3c; }
+.course-icon-blue { background: #e4e8fb; color: var(--periwinkle); }
+
 a {
-  color: #1d4ed8;
+  color: var(--periwinkle);
 }
 
 /* Show keyboard users which link, field, or button is selected. */
-a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible {
-  outline: 3px solid #2563eb;
+a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 3px solid var(--periwinkle);
   outline-offset: 3px;
 }
 
 .course-card-action {
   margin-top: auto;
-  padding-top: 0.75rem;
-  color: #1d4ed8;
-}
-
-/* On wider screens, put the course list and create form next to each other. */
-.dashboard {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(14rem, 20rem);
-  align-items: start;
-  gap: 2rem;
+  padding-top: 0.35rem;
+  color: var(--periwinkle);
+  font-weight: 600;
 }
 
 /* Space the opened course and its materials area below the app header. */
@@ -125,23 +155,36 @@ a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visib
 .course-materials {
   margin-top: 2rem;
   padding: 1.5rem;
-  border: 1px solid #d1d5db;
-  border-radius: 0.5rem;
+  border: 1px solid #efeae3;
+  border-radius: 1.15rem;
   background: white;
+  box-shadow: 0 8px 24px #26334d0a;
 }
 
 .course-materials h3 {
   margin-top: 0;
 }
 
-input, textarea, button {
+input:not([type="checkbox"]), textarea, select, button {
   box-sizing: border-box;
   font: inherit;
-  padding: 0.65rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid #e4ddd4;
+  border-radius: 0.75rem;
+  background: white;
+  color: var(--navy);
+}
+
+input[type="checkbox"] {
+  accent-color: var(--periwinkle);
 }
 
 button {
   cursor: pointer;
+  background: var(--periwinkle);
+  border-color: var(--periwinkle);
+  color: white;
+  font-weight: 600;
 }
 
 button:disabled {
@@ -151,9 +194,8 @@ button:disabled {
 
 /* Stack the list and form vertically on smaller screens. */
 @media (max-width: 48rem) {
-  .dashboard {
-    grid-template-columns: 1fr;
-    gap: 0;
+  .auth-layout {
+    padding: 2rem 1rem;
   }
 }
 

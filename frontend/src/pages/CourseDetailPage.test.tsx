@@ -29,6 +29,7 @@ it("opens the selected course, uploads with its ID and session, and displays the
     if (path === "/api/v1/courses/") return Response.json([
       { ...course, id: 7, name: "Biology" }, course,
     ]);
+    if (path === "/api/v1/todos/") return Response.json([]);
     if (path === `/api/v1/courses/${course.id}/`) return Response.json(course);
     if (path === `/api/v1/courses/${course.id}/documents/` && options?.method === "POST") {
       return Response.json(document, { status: 201 });

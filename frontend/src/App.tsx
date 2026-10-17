@@ -2,11 +2,13 @@ import { useEffect, useState } from "react";
 import { Link, Route, Routes } from "react-router-dom";
 import { getHealth } from "./api/health";
 import  { useAuth } from "./context/AuthContext";
-import CourseForm from "./components/courses/CourseForm";
+import AppShell from "./components/dashboard/AppShell";
 import LoginPage from "./pages/LoginPage";
 import { logout } from "./api/auth";
 import CourseList from "./components/courses/CourseList";
 import CourseDetailPage from "./pages/CourseDetailPage";
+import DashboardPage from "./pages/DashboardPage";
+import "./styles/dashboard.css";
 
 type HealthState =
   | { status: "checking" }
@@ -71,50 +73,60 @@ function App() {
     };
   }, []);
 
-  return (
-    <main>
-      <h1>StudyForge</h1>
-      <p className={`health health-${health.status}`}>
-        {health.status === "checking" && "Checking backend..."}
-        {health.status === "ok" && "Backend connected."}
-        {health.status === "error" && `Backend unavailable. ${health.message}`}
-      </p>
-    
-      {/* Keep the requested URL during login so a direct course link opens afterward. */}
-      {isRestoring ? (
+  const healthMessage = (
+    <p className={`health health-${health.status}`}>
+      {health.status === "checking" && "Checking backend..."}
+      {health.status === "ok" && "Backend connected."}
+      {health.status === "error" && `Backend unavailable. ${health.message}`}
+    </p>
+  );
+
+  // Keep the requested URL during login so a direct course link opens afterward.
+  if (isRestoring) {
+    return (
+      <main className="auth-layout">
+        <h1>StudyForge</h1>
+        {healthMessage}
         <p>Checking your session...</p>
-      ) : user ? (
-        <>
-          <p>Signed in as {user.email}</p>
-          <button type="button" onClick={handleLogout} disabled={isLoggingOut}>
-            {isLoggingOut ? "Logging out..." : "Log out"}
-          </button>
-          {logoutError && <p role="alert">{logoutError}</p>}
-          {/* Signed-in users get a dashboard at / and a detail page for each course. */}
-          <Routes>
-            <Route path="/" element={
-              <div className="dashboard">
-                <CourseList refreshKey={courseListVersion} />
-                {/* A successful save triggers the list refresh through this callback. */}
-                <CourseForm onCreated={() => setCourseListVersion((version) => version + 1)} />
-              </div>
-            } />
-            <Route path="/courses/:courseId" element={<CourseDetailPage />} />
-            <Route path="*" element={
-              <section className="course-detail">
-                <h2>Page not found</h2>
-                <Link to="/">Return to my courses</Link>
-              </section>
-            } />
-          </Routes>
-        </>
-      ) : (
-        <>
-          <LoginPage />
-          <CourseList refreshKey={courseListVersion} />
-        </>
-      )}
-    </main>
+      </main>
+    );
+  }
+
+  if (!user) {
+    return (
+      <main className="auth-layout">
+        <h1>StudyForge</h1>
+        {healthMessage}
+        <LoginPage />
+        <CourseList refreshKey={courseListVersion} />
+      </main>
+    );
+  }
+
+  return (
+    <AppShell
+      email={user.email}
+      health={health}
+      isLoggingOut={isLoggingOut}
+      logoutError={logoutError}
+      onLogout={handleLogout}
+    >
+      <Routes>
+        <Route path="/" element={
+          <DashboardPage
+            refreshKey={courseListVersion}
+            onCourseCreated={() => setCourseListVersion((version) => version + 1)}
+          />
+        } />
+        <Route path="/courses/:courseId" element={<CourseDetailPage />} />
+        <Route path="*" element={
+          <section className="course-detail">
+            <h2>Page not found</h2>
+            <Link to="/">Return to my courses</Link>
+          </section>
+        } />
+      </Routes>
+    </AppShell>
   );
 }
 

@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import App from "../../App";
 import { createCourse, listCourses } from "../../api/courses";
 import { getHealth } from "../../api/health";
+import { listTodos } from "../../api/todos";
 import { useAuth } from "../../context/AuthContext";
 import type { Course } from "../../types/course";
 
@@ -15,6 +16,11 @@ vi.mock("../../api/courses", async (importOriginal) => ({
   listCourses: vi.fn(),
 }));
 vi.mock("../../api/health", () => ({ getHealth: vi.fn() }));
+vi.mock("../../api/todos", () => ({
+  listTodos: vi.fn(),
+  createTodo: vi.fn(),
+  updateTodoCompletion: vi.fn(),
+}));
 vi.mock("../../context/AuthContext", () => ({ useAuth: vi.fn() }));
 
 const accessToken = "test-access-token";
@@ -38,6 +44,7 @@ beforeEach(() => {
   });
   vi.mocked(getHealth).mockResolvedValue({ status: "ok" });
   vi.mocked(listCourses).mockResolvedValue([]);
+  vi.mocked(listTodos).mockResolvedValue([]);
   vi.mocked(createCourse).mockResolvedValue(savedCourse);
 });
 

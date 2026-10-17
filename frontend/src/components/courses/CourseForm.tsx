@@ -46,8 +46,8 @@ function CourseForm({ onCreated }: { onCreated: () => void }) {
   }
 
   return (
-    <form onSubmit={handleSubmit}>
-      <h2>Create a course</h2>
+    <form className="course-form" onSubmit={handleSubmit}>
+      <h2 id="new-course">Create a course</h2>
 
       <label htmlFor="course-name">Course name</label>
       <input
