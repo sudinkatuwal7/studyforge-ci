@@ -2,7 +2,6 @@
 name: curiosity-report
 description: 'Export the CURRENT Copilot chat session into a fixed-structure Markdown report used to assess student curiosity in AI-assisted work. Use when a student needs to hand in a record of how they worked with the AI on an assignment or test: it produces an executive summary, a cleanly-labeled Student/AI transcript, and a best-effort evidence appendix of terminal commands and tool calls run during the session. The report is the INPUT to the separate curiosity-grader agent. Run this IN the same chat session the student did the work in. This skill only EXPORTS and structures the session; it does NOT grade.'
 argument-hint: "your name/ID and the assignment name (e.g. 'Jane Doe, netid jxd123, Project SI')"
-user-invocable: false
 ---
 
 # Curiosity Report Generator (v1)
