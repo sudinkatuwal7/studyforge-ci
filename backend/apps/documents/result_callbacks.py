@@ -1,5 +1,6 @@
 """Validate and atomically apply processing-service callbacks."""
 
+import hashlib
 import json
 import math
 import re
@@ -18,10 +19,14 @@ SOURCE_SHA256_PATTERN = re.compile(r"[0-9a-f]{64}\Z")
 class InvalidCallback(ValueError):
     """The processing callback does not satisfy the internal contract."""
 
+    def __init__(self, code, *, status_code=400):
+        super().__init__(code)
+        self.status_code = status_code
+
 
 def decode_callback(body: bytes) -> dict:
     if len(body) > MAX_CALLBACK_BYTES:
-        raise InvalidCallback("callback_too_large")
+        raise InvalidCallback("callback_too_large", status_code=413)
     try:
         payload = json.loads(body)
     except (UnicodeDecodeError, json.JSONDecodeError) as exc:
@@ -38,25 +43,38 @@ def apply_callback(job_id: int, payload: dict) -> str:
     else:
         chunks = None
 
+    fingerprint = ""
+    if status in {"SUCCEEDED", "FAILED"}:
+        # Canonical key ordering allows JSON formatting changes on redelivery.
+        # Include the attempt, scan indicator, ordered chunks, and all identity fields.
+        fingerprint = hashlib.sha256(
+            json.dumps(payload, sort_keys=True, separators=(",", ":"), allow_nan=False).encode("utf-8")
+        ).hexdigest()
+
     with transaction.atomic():
         try:
-            job = Job.objects.select_for_update().select_related("document").get(pk=job_id)
-        except Job.DoesNotExist as exc:
-            raise InvalidCallback("job_not_found") from exc
+            document_id = Job.objects.values_list("document_id", flat=True).get(pk=job_id)
+            # Serialize every run of a document, locking in the same order as
+            # upload dispatch failure handling: Document first, then Job.
+            document = Document.objects.select_for_update().get(pk=document_id)
+            job = Job.objects.select_for_update().get(pk=job_id)
+        except (Job.DoesNotExist, Document.DoesNotExist) as exc:
+            raise InvalidCallback("job_not_found", status_code=404) from exc
 
-        document = job.document
         if (
             document.pk != payload["document_id"]
             or document.sha256 != payload["source_sha256"]
         ):
-            raise InvalidCallback("source_mismatch")
+            raise InvalidCallback("source_mismatch", status_code=409)
 
         if Job.objects.filter(document_id=document.pk, pk__gt=job.pk).exists():
-            return "stale"
+            raise InvalidCallback("stale_job", status_code=409)
         if payload["attempt"] < job.attempts:
-            return "stale"
+            raise InvalidCallback("stale_attempt", status_code=409)
         if job.status in {Job.Status.SUCCEEDED, Job.Status.FAILED}:
-            return "duplicate" if job.status == status else "terminal"
+            if fingerprint and fingerprint == job.terminal_callback_sha256:
+                return "duplicate"
+            raise InvalidCallback("terminal_conflict", status_code=409)
 
         job.attempts = max(job.attempts, payload["attempt"])
 
@@ -70,9 +88,10 @@ def apply_callback(job_id: int, payload: dict) -> str:
 
         if status == "FAILED":
             job.status = Job.Status.FAILED
+            job.terminal_callback_sha256 = fingerprint
             document.status = Document.Status.FAILED
             document.error_code = Document.ErrorCode.PROCESSING_FAILED
-            job.save(update_fields=["status", "attempts"])
+            job.save(update_fields=["status", "attempts", "terminal_callback_sha256"])
             document.save(update_fields=["status", "error_code"])
             return "applied"
 
@@ -90,10 +109,11 @@ def apply_callback(job_id: int, payload: dict) -> str:
             ]
         )
         job.status = Job.Status.SUCCEEDED
+        job.terminal_callback_sha256 = fingerprint
         document.status = Document.Status.READY
         document.error_code = None
         document.page_count = payload["page_count"]
-        job.save(update_fields=["status", "attempts"])
+        job.save(update_fields=["status", "attempts", "terminal_callback_sha256"])
         document.save(update_fields=["status", "error_code", "page_count"])
         return "applied"
 
@@ -135,6 +155,9 @@ def _validate_envelope(job_id: int, payload: dict) -> str:
 
 
 def _validate_chunks(chunks: list, page_count: int) -> list[tuple[int, str, list[float]]]:
+    if not chunks:
+        # The existing worker treats 400 as permanent and reports FAILED.
+        raise InvalidCallback("empty_extracted_content")
     validated = []
     for chunk in chunks:
         if not isinstance(chunk, dict) or set(chunk) != {"page_number", "content", "embedding"}:

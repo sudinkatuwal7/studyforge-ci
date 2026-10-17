@@ -132,6 +132,8 @@ class Job(models.Model):
     )
     attempts = models.PositiveIntegerField(default=0)
     run_after = models.DateTimeField(null=True, blank=True, default=None)
+    # Receipt of the validated terminal callback; never infer equality from status.
+    terminal_callback_sha256 = models.CharField(max_length=64, blank=True, default="")
 
     class Meta:
         constraints = [
