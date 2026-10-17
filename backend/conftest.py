@@ -7,6 +7,7 @@ import pytest
 @pytest.fixture(autouse=True)
 def offline_ai(monkeypatch):
     monkeypatch.setenv("NOTES_LLM_BACKEND", "fake")
+    monkeypatch.setenv("QUIZ_LLM_BACKEND", "fake")
     for name in ("OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS"):
         monkeypatch.delenv(name, raising=False)
 

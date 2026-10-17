@@ -17,6 +17,13 @@ class Quiz(models.Model):
         related_name="quizzes",
     )
     title = models.CharField(max_length=255)
+    # The materials the quiz was generated from. Deleting a document drops
+    # the link, not the quiz.
+    source_documents = models.ManyToManyField(
+        "documents.Document",
+        related_name="quizzes",
+        blank=True,
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 

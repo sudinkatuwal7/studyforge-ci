@@ -29,7 +29,7 @@ def test_environment():
     ):
         env.pop(key, None)
     env.update(
-        NOTES_LLM_BACKEND="fake", DJANGO_SETTINGS_MODULE="config.test_settings",
+        NOTES_LLM_BACKEND="fake", QUIZ_LLM_BACKEND="fake", DJANGO_SETTINGS_MODULE="config.test_settings",
         DATABASE_ENGINE="postgresql", EMBEDDING_DIMENSION="768",
         EMBEDDING_BATCH_SIZE="16", EMBEDDING_MODEL="gemini-embedding-2",
         VITE_API_BASE_URL="http://api.test/api/v1",
