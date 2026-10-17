@@ -11,5 +11,9 @@ urlpatterns = [
         transaction.non_atomic_requests(DocumentUploadView.as_view()),
         name="document-upload",
     ),
-    path("documents/<str:document_id>/", DocumentDetailView.as_view(), name="document-detail"),
+    path(
+        "documents/<str:document_id>/",
+        transaction.non_atomic_requests(DocumentDetailView.as_view()),
+        name="document-detail",
+    ),
 ]
