@@ -4,6 +4,9 @@ from rest_framework.exceptions import APIException
 
 
 MESSAGES = {
+    "INVALID_MATERIAL_UPDATE": "Provide only the name field as JSON.",
+    "INVALID_NAME": "Use a name of 1 to 255 characters without control characters.",
+    "MATERIAL_UNAVAILABLE": "The material request could not be completed. Please try again later.",
     "AUTHENTICATION_REQUIRED": "Authentication is required.",
     "RESOURCE_NOT_FOUND": "Resource not found.",
     "FILE_REQUIRED": "Choose a PDF to upload.",

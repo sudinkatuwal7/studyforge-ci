@@ -1,9 +1,10 @@
-"""Owner-protected PDF upload and status retrieval."""
+"""Owner-protected PDF upload, material management, and status retrieval."""
 
 from django.core.exceptions import RequestDataTooBig, SuspiciousOperation
-from django.db import DatabaseError
+from django.db import DatabaseError, transaction
 from django.http import Http404
 from rest_framework import exceptions
+from rest_framework.parsers import JSONParser
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.renderers import JSONRenderer
 from rest_framework.response import Response
@@ -14,8 +15,8 @@ from apps.courses.models import Course
 from apps.documents.errors import DocumentAPIError, error_body
 from apps.documents.models import Document
 from apps.documents.parsers import DocumentMultipartParser
-from apps.documents.serializers import DocumentSerializer
-from apps.documents.services import store_and_dispatch
+from apps.documents.serializers import DocumentSerializer, validate_display_name
+from apps.documents.services import delete_material, locked_material, store_and_dispatch
 from apps.documents.validation import validate_pdf
 
 
@@ -63,6 +64,18 @@ class DocumentAPIView(APIView):
 
 
 class DocumentUploadView(DocumentAPIView):
+    def handle_exception(self, exc):
+        if self.request.method == "GET" and isinstance(exc, (DatabaseError, OSError)):
+            return Response(error_body("MATERIAL_UNAVAILABLE"), status=503)
+        return super().handle_exception(exc)
+
+    def get(self, request, course_id):
+        course = Course.objects.filter(pk=resource_id(course_id), owner=request.user).first()
+        if course is None:
+            raise Http404
+        documents = Document.objects.filter(course=course).order_by("-created_at", "-pk")
+        return Response(DocumentSerializer(documents, many=True).data)
+
     def post(self, request, course_id):
         course = Course.objects.filter(pk=resource_id(course_id), owner=request.user).first()
         if course is None:
@@ -91,6 +104,26 @@ class DocumentUploadView(DocumentAPIView):
 
 
 class DocumentDetailView(DocumentAPIView):
+    parser_classes = [JSONParser]
+
+    def handle_exception(self, exc):
+        if isinstance(exc, (DatabaseError, OSError)):
+            return Response(error_body("MATERIAL_UNAVAILABLE"), status=503)
+        if isinstance(exc, (exceptions.ParseError, exceptions.UnsupportedMediaType)):
+            return Response(error_body("INVALID_MATERIAL_UPDATE"), status=400)
+        return super().handle_exception(exc)
+
+    def patch(self, request, document_id):
+        with transaction.atomic():
+            document = locked_material(resource_id(document_id), request.user)
+            document.title = validate_display_name(request.data)
+            document.save(update_fields=["title", "updated_at"])
+            return Response(DocumentSerializer(document).data)
+
+    def delete(self, request, document_id):
+        delete_material(resource_id(document_id), request.user)
+        return Response(status=204)
+
     def get(self, request, document_id):
         document = Document.objects.filter(
             pk=resource_id(document_id), course__owner=request.user

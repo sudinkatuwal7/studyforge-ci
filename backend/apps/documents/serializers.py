@@ -2,8 +2,22 @@
 
 from rest_framework import serializers
 
-from apps.documents.errors import error_body
+from apps.documents.errors import DocumentAPIError, error_body
 from apps.documents.models import Document
+
+
+def validate_display_name(data):
+    if not isinstance(data, dict) or set(data) != {"name"}:
+        raise DocumentAPIError("INVALID_MATERIAL_UPDATE")
+    name = data["name"]
+    if not isinstance(name, str):
+        raise DocumentAPIError("INVALID_NAME")
+    name = name.strip()
+    if not name or len(name) > Document._meta.get_field("title").max_length or any(
+        ord(char) < 32 or ord(char) == 127 for char in name
+    ):
+        raise DocumentAPIError("INVALID_NAME")
+    return name
 
 
 class DocumentSerializer(serializers.ModelSerializer):

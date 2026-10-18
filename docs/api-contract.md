@@ -4,12 +4,15 @@ All StudyForge APIs are versioned under `/api/v1/`.
 
 This file is the source of truth for the working SCRUM-8 API contract, incorporating Person 3's decisions on 2026-09-25. No `contracts/openapi.yaml` exists, and the repository instructions and supplied SCRUM-8 requirements do not require OpenAPI. SCRUM-8 covers the upload and individual document/status contracts below, not their implementation or the course-document listing contract.
 
-Implemented endpoints on the SCRUM-10 branch are:
+Implemented document endpoints (including SCRUM-61 material management) are:
 
 ```text
 GET /api/v1/health/
 POST /api/v1/courses/{id}/documents/
+GET /api/v1/courses/{id}/documents/
 GET /api/v1/documents/{id}/
+PATCH /api/v1/documents/{id}/
+DELETE /api/v1/documents/{id}/
 ```
 
 The health response is:
@@ -30,8 +33,8 @@ Course integration update: `GET /courses/`, `POST /courses/`, and
 `GET /courses/{id}/` are implemented under `/api/v1/`. All require bearer
 authentication and are scoped to the current owner. Course detail returns the same
 fields as course creation/listing. The frontend course page passes the selected
-course ID to `CourseMaterials` for upload integration. Course PATCH/DELETE and
-document collection GET remain planned.
+course ID to `CourseMaterials` for upload and material management. Course
+PATCH/DELETE remain planned. Document collection GET is implemented by SCRUM-61.
 
 ```text
 POST   /api/v1/auth/register/
@@ -44,18 +47,64 @@ GET    /api/v1/courses/{id}/
 PATCH  /api/v1/courses/{id}/
 DELETE /api/v1/courses/{id}/
 
-GET    /api/v1/courses/{id}/documents/
-
 POST   /api/v1/documents/{id}/notes/
 GET    /api/v1/documents/{id}/notes/
 ```
 
-Document rename and delete are deferred to later work; they are not part of Sudin's current Sprint 1 tasks:
+## Course material management (SCRUM-61)
+
+All three operations use the existing student Bearer JWT authentication and
+`Course.owner == request.user` scope. Missing/invalid credentials return
+`401 AUTHENTICATION_REQUIRED`; missing, malformed, or foreign resource IDs return
+the same `404 RESOURCE_NOT_FOUND`. Responses use `Cache-Control: no-store`.
 
 ```text
+GET    /api/v1/courses/{id}/documents/
 PATCH  /api/v1/documents/{id}/
 DELETE /api/v1/documents/{id}/
 ```
+
+- **List:** returns `200` with an array (possibly empty) of the existing seven-field
+  Document representation: `id`, `course_id`, `name`, `status`, `created_at`,
+  `updated_at`, `error`. Ordered by newest creation time, then descending ID for
+  ties. No storage paths, hashes, job history, or service credentials are exposed.
+- **Rename:** accepts JSON containing exactly `{"name": "New display name"}`.
+  Trims surrounding whitespace; requires a string of 1–255 characters without
+  ASCII control characters. Invalid names return `400 INVALID_NAME`; unsupported
+  fields or malformed/non-JSON bodies return `400 INVALID_MATERIAL_UPDATE`.
+  Returns `200` with the updated Document. Only `title` and `updated_at` change;
+  the UUID-backed source filename, hash, identity, processing state, jobs,
+  embeddings, and generated results stay intact.
+- **Delete:** returns an empty `204` only after the database transaction commits.
+  Locks the Document row before cascading deletion, matching SCRUM-118's
+  Document-before-Job lock order. Existing cascades remove application Jobs,
+  Chunks (including their vectors), StudyGuide, and quiz-source join rows.
+  Quiz records/questions, Course, User, other documents and their resources
+  remain. Processing-service Execution rows are not accessed. A callback that
+  commits first is subsequently deleted with the document; one that loses the
+  race, or arrives later, receives `404 job_not_found`. Internal PDF retrieval
+  also returns 404 after deletion. Repeating the public DELETE returns 404.
+
+Deletion executes the database cascades, then calls the existing storage
+backend's `delete` inside the same durable transaction. A missing file counts
+as already removed. Storage exceptions cause database rollback and a safe
+`503 MATERIAL_UNAVAILABLE`; SQL failures before storage deletion leave the file
+untouched. The UI keeps the material on any failed deletion and shows an error.
+
+**Filesystem/database atomicity limitation:** the filesystem does not participate
+in PostgreSQL transactions. If file deletion succeeds but the subsequent commit
+fails (or the process crashes), database rows may remain with a missing source
+file. A storage backend that deletes a file and then raises has the same risk.
+The endpoint does not silently acknowledge failure, but cannot restore removed
+bytes. A later successful DELETE can remove those remaining rows because missing
+files are accepted. No background cleanup, automatic retries, queue, or migration
+is introduced for SCRUM-61.
+
+The course workspace loads persistent materials once, adds newly saved uploads
+to that list, and reuses `DocumentStatus` for each item's processing polling.
+Rename/deletion cancel obsolete polling so late responses cannot restore deleted
+items or revert a display name. Renaming is inline; deletion requires explicit
+confirmation, with duplicate mutations disabled while pending.
 
 ## Document status contract
 
