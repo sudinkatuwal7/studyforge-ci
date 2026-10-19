@@ -20,13 +20,6 @@ class Document(models.Model):
             "Processing dispatch failed",
         )
 
-    current_job = models.ForeignKey(
-        "documents.Job",
-        null=True,
-        blank=True,
-        on_delete=models.SET_NULL,
-        related_name="+",
-    )
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL,
         on_delete=models.CASCADE,
@@ -121,16 +114,6 @@ class Job(models.Model):
         SUCCEEDED = "SUCCEEDED", "Succeeded"
         FAILED = "FAILED", "Failed"
 
-    class Reason(models.TextChoices):
-        SUPERSEDED = "SUPERSEDED", "Superseded"
-        SOURCE_MISSING = "SOURCE_MISSING", "Source missing"
-        DISPATCH_FAILED = "DISPATCH_FAILED", "Dispatch failed"
-        PROCESSING_FAILED = "PROCESSING_FAILED", "Processing failed"
-        TIMED_OUT = "TIMED_OUT", "Timed out"
-
-    TERMINAL_STATUSES = (Status.SUCCEEDED, Status.FAILED)
-    ACTIVE_STATUSES = (Status.QUEUED, Status.RUNNING)
-
     document = models.ForeignKey(
         Document,
         on_delete=models.CASCADE,
@@ -147,16 +130,8 @@ class Job(models.Model):
         default=Status.QUEUED,
         db_index=True,
     )
-    reason = models.CharField(
-        max_length=32,
-        choices=Reason.choices,
-        null=True,
-        blank=True,
-        default=None,
-    )
     attempts = models.PositiveIntegerField(default=0)
     run_after = models.DateTimeField(null=True, blank=True, default=None)
-    created_at = models.DateTimeField(default=timezone.now, editable=False)
     # Receipt of the validated terminal callback; never infer equality from status.
     terminal_callback_sha256 = models.CharField(max_length=64, blank=True, default="")
 
@@ -170,24 +145,4 @@ class Job(models.Model):
                 condition=models.Q(status__in=["QUEUED", "RUNNING", "SUCCEEDED", "FAILED"]),
                 name="job_status_valid",
             ),
-            models.CheckConstraint(
-                condition=models.Q(reason__isnull=True)
-                | models.Q(status__in=["SUCCEEDED", "FAILED"]),
-                name="job_reason_only_when_terminal",
-            ),
-            models.UniqueConstraint(
-                fields=["document"],
-                condition=models.Q(
-                    type="DOCUMENT_PROCESSING",
-                    status__in=["QUEUED", "RUNNING"],
-                ),
-                name="one_active_processing_job_per_document",
-            ),
         ]
-
-    @property
-    def is_active(self):
-        return self.status in self.ACTIVE_STATUSES
-
-    def __str__(self):
-        return f"{self.type} job {self.pk} ({self.status})"
