@@ -1,0 +1,194 @@
+.calendar-month {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  color: var(--navy);
+}
+
+.calendar-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.calendar-nav button {
+  padding: 0.4rem 0.7rem;
+  border: 1px solid var(--periwinkle);
+  border-radius: 0.5rem;
+  background: white;
+  color: var(--navy);
+  font: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.calendar-nav button:focus-visible {
+  outline: 2px solid var(--periwinkle);
+  outline-offset: 2px;
+}
+
+.calendar-month-label {
+  margin: 0;
+  min-width: 8rem;
+  font-weight: 700;
+}
+
+.calendar-weekdays,
+.calendar-week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 0.25rem;
+}
+
+.calendar-weekdays {
+  color: var(--muted);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.calendar-day-button {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.25rem;
+  min-width: 0;
+  min-height: 4.5rem;
+  margin: 0;
+  padding: 0.35rem;
+  border: 2px solid transparent;
+  border-radius: 0.5rem;
+  background: white;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.calendar-day-button:focus-visible {
+  outline: 2px solid var(--periwinkle);
+  outline-offset: 2px;
+}
+
+.calendar-day-selected {
+  border-color: var(--periwinkle);
+  background: var(--lavender);
+}
+
+.calendar-day-outside {
+  opacity: 0.45;
+}
+
+.calendar-day-number {
+  font-size: 0.8rem;
+  font-weight: 600;
+}
+
+.calendar-dots {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+  min-height: 0.5rem;
+}
+
+.calendar-dot {
+  width: 0.45rem;
+  height: 0.45rem;
+  border-radius: 999px;
+}
+
+.calendar-dot-extra {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.calendar-activities {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.calendar-activity {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  padding-left: 0.35rem;
+  border-left: 3px solid;
+  font-size: 0.75rem;
+}
+
+.calendar-activity-completed .calendar-activity-title {
+  text-decoration: line-through;
+}
+
+.calendar-activity-label {
+  color: var(--muted);
+  font-size: 0.65rem;
+}
+
+.calendar-activity-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.calendar-month-compact .calendar-day-button {
+  min-height: 2.75rem;
+}
+
+.calendar-selected {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-top: 0.75rem;
+  padding: 0.75rem;
+  border-radius: 0.5rem;
+  background: white;
+}
+
+.calendar-selected h2 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.calendar-selected .calendar-activity-title {
+  white-space: normal;
+}
+
+.calendar-activity-time {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+/* In-cell titles do not fit seven columns on a phone. Dots stay, and the selected-day list is the readable view. */
+@media (max-width: 48rem) {
+  .calendar-weekdays,
+  .calendar-week {
+    gap: 0.15rem;
+  }
+
+  .calendar-day-button {
+    min-height: 2.75rem;
+    padding: 0.2rem;
+  }
+
+  .calendar-day-button .calendar-activities {
+    display: none;
+  }
+}
+
+.calendar-activity-summary {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
