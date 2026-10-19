@@ -5,7 +5,7 @@ export interface CalendarDay {
   inCurrentMonth: boolean;
 }
 
-function formatCalendarDate(date: Date): string {
+export function formatCalendarDate(date: Date): string {
   // Local calendar parts avoid Date.parse("YYYY-MM-DD"), which is UTC and can land on the previous day.
   const year = date.getFullYear();
   // getMonth() is 0–11, so add 1 before padding to 01–12.
