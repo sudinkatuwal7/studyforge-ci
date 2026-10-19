@@ -76,6 +76,17 @@ def apply_callback(job_id: int, payload: dict) -> str:
                 return "duplicate"
             raise InvalidCallback("terminal_conflict", status_code=409)
 
+        if status == "SUCCEEDED":
+            suffix = "." + document.file.name.rsplit(".", 1)[-1].lower()
+            if suffix == ".docx":
+                if payload["page_count"] is not None:
+                    raise InvalidCallback("invalid_page_count")
+            elif suffix in {".pdf", ".pptx"}:
+                if payload["page_count"] is None:
+                    raise InvalidCallback("invalid_page_count")
+            else:
+                raise InvalidCallback("invalid_source_format")
+
         job.attempts = max(job.attempts, payload["attempt"])
 
         if status == "RUNNING":
@@ -145,7 +156,9 @@ def _validate_envelope(job_id: int, payload: dict) -> str:
     if status == "FAILED" and payload["error_code"] != "PROCESSING_FAILED":
         raise InvalidCallback("invalid_error_code")
     if status == "SUCCEEDED":
-        if type(payload["page_count"]) is not int or payload["page_count"] < 1:
+        if payload["page_count"] is not None and (
+            type(payload["page_count"]) is not int or payload["page_count"] < 1
+        ):
             raise InvalidCallback("invalid_page_count")
         if type(payload["likely_scanned"]) is not bool:
             raise InvalidCallback("invalid_scan_indicator")
@@ -154,7 +167,7 @@ def _validate_envelope(job_id: int, payload: dict) -> str:
     return status
 
 
-def _validate_chunks(chunks: list, page_count: int) -> list[tuple[int, str, list[float]]]:
+def _validate_chunks(chunks: list, page_count: int | None) -> list[tuple[int, str, list[float]]]:
     if not chunks:
         # The existing worker treats 400 as permanent and reports FAILED.
         raise InvalidCallback("empty_extracted_content")
@@ -165,7 +178,7 @@ def _validate_chunks(chunks: list, page_count: int) -> list[tuple[int, str, list
         page_number = chunk["page_number"]
         content = chunk["content"]
         embedding = chunk["embedding"]
-        if type(page_number) is not int or not 1 <= page_number <= page_count:
+        if type(page_number) is not int or not 1 <= page_number <= (page_count or 1):
             raise InvalidCallback("invalid_chunk_page")
         if (
             not isinstance(content, str)
