@@ -48,13 +48,13 @@ def delete_material(document_id, owner):
         raise DocumentAPIError("MATERIAL_UNAVAILABLE", 503) from exc
 
 
-def store_and_dispatch(*, course, upload, title, sha256):
+def store_and_dispatch(*, course, upload, title, sha256, suffix=".pdf"):
     document = Document(owner_id=course.owner_id, course=course, title=title, sha256=sha256)
     try:
         # The view opts out of ATOMIC_REQUESTS; durable=True prevents an accidental
         # outer transaction from allowing dispatch before this row is committed.
         with transaction.atomic(durable=True):
-            document.file.save(f"{uuid4().hex}.pdf", upload, save=False)
+            document.file.save(f"{uuid4().hex}{suffix}", upload, save=False)
             document.save()
             job = Job.objects.create(document=document)
             snapshot = DocumentSerializer(document).data
@@ -63,8 +63,8 @@ def store_and_dispatch(*, course, upload, title, sha256):
             try:
                 document.file.storage.delete(document.file.name)
             except Exception:
-                logger.exception("Failed to clean up an uncommitted PDF upload.")
-        logger.exception("Could not persist PDF upload.")
+                logger.exception("Failed to clean up an uncommitted document upload.")
+        logger.exception("Could not persist document upload.")
         raise DocumentAPIError("UPLOAD_UNAVAILABLE", 503) from exc
 
     try:

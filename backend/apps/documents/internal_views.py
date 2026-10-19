@@ -11,6 +11,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_GET, require_POST
 
 from apps.documents.models import Job
+from apps.documents.validation import FORMATS
 from apps.documents.result_callbacks import (
     InvalidCallback,
     MAX_CALLBACK_BYTES,
@@ -24,7 +25,7 @@ logger = logging.getLogger(__name__)
 
 @method_decorator(require_GET, name="dispatch")
 class InternalJobDocumentView(View):
-    """Stream a job's private PDF only to the configured processing service."""
+    """Stream a job's private source only to the configured processing service."""
 
     def get(self, request, job_id):
         unauthorized = authorize_processing_service(request)
@@ -39,18 +40,21 @@ class InternalJobDocumentView(View):
         document = job.document
         if not document.file:
             return JsonResponse({"error": "not_found"}, status=404)
+        suffix = "." + document.file.name.rsplit(".", 1)[-1].lower()
+        if suffix not in FORMATS:
+            return JsonResponse({"error": "unsupported_source"}, status=415)
 
         try:
             source = document.file.open("rb")
         except OSError:
-            logger.exception("Could not open the source PDF for job %s.", job_id)
+            logger.exception("Could not open the source document for job %s.", job_id)
             return JsonResponse({"error": "source_unavailable"}, status=503)
 
         response = FileResponse(
             source,
             as_attachment=True,
-            filename="source.pdf",
-            content_type="application/pdf",
+            filename=f"source{suffix}",
+            content_type=FORMATS[suffix],
         )
         response["X-Document-ID"] = str(document.pk)
         response["X-Source-SHA256"] = document.sha256
