@@ -33,3 +33,22 @@ class TodoItem(models.Model):
 
     def __str__(self) -> str:
         return self.title
+
+
+class StudySession(models.Model):
+    creation_key = models.UUIDField(default=uuid.uuid4, unique=True, editable=False)
+    title = models.CharField(max_length=200)
+    # Ownership comes from the course's owner, as it does for to-do items.
+    course = models.ForeignKey(
+        Course,
+        on_delete=models.CASCADE,
+        related_name="study_sessions",
+    )
+    date = models.DateField()
+    # Preserve the entered clock time without timezone conversion.
+    time = models.TimeField(blank=True, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    def __str__(self) -> str:
+        return self.title
