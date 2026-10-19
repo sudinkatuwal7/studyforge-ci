@@ -20,6 +20,55 @@ function getCsrfToken(): string | undefined {
   return cookie ? decodeURIComponent(cookie.split("=")[1]) : undefined;
 }
 
+export type AuthFieldErrors = Record<string, string[]>;
+
+// "credentials": wrong email/password. "validation": the server rejected
+// specific fields. "unavailable": network, CSRF, or server-side failure.
+export class AuthError extends Error {
+  readonly kind: "credentials" | "validation" | "unavailable";
+  readonly fieldErrors: AuthFieldErrors;
+
+  constructor(
+    kind: AuthError["kind"],
+    message: string,
+    fieldErrors: AuthFieldErrors = {},
+  ) {
+    super(message);
+    this.name = "AuthError";
+    this.kind = kind;
+    this.fieldErrors = fieldErrors;
+  }
+}
+
+const UNAVAILABLE_MESSAGE =
+  "We couldn't reach StudyForge. Check your connection and try again.";
+const SERVER_ERROR_MESSAGE = "Something went wrong on our side. Please try again.";
+
+// fetch() rejects only when the request never got a response (offline, CORS, server down).
+async function sendAuthRequest(url: string, init?: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch {
+    throw new AuthError("unavailable", UNAVAILABLE_MESSAGE);
+  }
+}
+
+// DRF returns 400 bodies like {"email": ["..."], "password": ["...", "..."]}.
+function toFieldErrors(body: unknown): AuthFieldErrors {
+  if (typeof body !== "object" || body === null) {
+    return {};
+  }
+
+  const errors: AuthFieldErrors = {};
+  for (const [field, value] of Object.entries(body)) {
+    if (Array.isArray(value)) {
+      errors[field] = value.map(String);
+    } else if (typeof value === "string") {
+      errors[field] = [value];
+    }
+  }
+  return errors;
+}
 export async function login(
   email: string,
   password: string,
@@ -28,20 +77,16 @@ export async function login(
     throw new Error("VITE_API_BASE_URL is not configured");
   }
 
-  const csrfResponse = await fetch(`${API_BASE_URL}/auth/csrf/`, {
+  const csrfResponse = await sendAuthRequest(`${API_BASE_URL}/auth/csrf/`, {
     credentials: "include",
   });
 
-  if (!csrfResponse.ok) {
-    throw new Error(`CSRF setup failed: ${csrfResponse.status}`);
-  }
-
-  const csrfToken = getCsrfToken();
+  const csrfToken = csrfResponse.ok ? getCsrfToken() : undefined;
   if (!csrfToken) {
-    throw new Error("CSRF cookie was not set");
+    throw new AuthError("unavailable", SERVER_ERROR_MESSAGE);
   }
 
-  const response = await fetch(`${API_BASE_URL}/auth/token/`, {
+  const response = await sendAuthRequest(`${API_BASE_URL}/auth/token/`, {
     method: "POST",
     credentials: "include",
     headers: {
@@ -51,8 +96,14 @@ export async function login(
     body: JSON.stringify({ email, password }),
   });
 
+  // 400 = missing field, 401 = wrong email or password. Same message for both
+  // so the page never reveals whether an email has an account.
+  if (response.status === 400 || response.status === 401) {
+    throw new AuthError("credentials", "Incorrect email or password.");
+  }
+
   if (!response.ok) {
-    throw new Error(`Login failed: ${response.status}`);
+    throw new AuthError("unavailable", SERVER_ERROR_MESSAGE);
   }
 
   return (await response.json()) as LoginResult;
@@ -133,3 +184,38 @@ export async function logout(): Promise<void> {
   }
 }
 export class RefreshRejectedError extends Error {}
+export type RegisterInput = {
+  email: string;
+  password: string;
+  first_name?: string;
+  last_name?: string;
+};
+
+// Creates the account only. The caller signs in afterwards with login().
+export async function register(input: RegisterInput): Promise<PublicUser> {
+  if (!API_BASE_URL) {
+    throw new Error("VITE_API_BASE_URL is not configured");
+  }
+
+  const response = await sendAuthRequest(`${API_BASE_URL}/auth/register/`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(input),
+  });
+
+  if (response.status === 400) {
+    const body: unknown = await response.json().catch(() => ({}));
+    throw new AuthError(
+      "validation",
+      "Please fix the highlighted fields.",
+      toFieldErrors(body),
+    );
+  }
+
+  if (!response.ok) {
+    throw new AuthError("unavailable", SERVER_ERROR_MESSAGE);
+  }
+
+  const { user } = (await response.json()) as { user: PublicUser };
+  return user;
+}
