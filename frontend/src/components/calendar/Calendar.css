@@ -1,3 +1,8 @@
+.calendar-empty {
+  margin: 0.75rem 0;
+  color: var(--muted);
+}
+
 .calendar-month {
   display: flex;
   flex-direction: column;
@@ -162,6 +167,25 @@
 .calendar-activity-time {
   color: var(--muted);
   font-size: 0.7rem;
+}
+
+.calendar-session-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  align-items: center;
+  margin-top: 0.25rem;
+}
+
+.calendar-session-actions button {
+  padding: 0.2rem 0.45rem;
+  border: 1px solid var(--periwinkle);
+  border-radius: 0.4rem;
+  background: white;
+  color: var(--navy);
+  font: inherit;
+  font-size: 0.75rem;
+  cursor: pointer;
 }
 
 /* In-cell titles do not fit seven columns on a phone. Dots stay, and the selected-day list is the readable view. */

@@ -20,6 +20,7 @@ export interface ColoredActivity {
   key: string;
   title: string;
   courseId: number;
+  sourceId: number;
   color: string;
   source: CalendarEvent["source"];
   sourceLabel: "Task" | "Study session";
@@ -50,6 +51,7 @@ function colorActivity(event: CalendarEvent): ColoredActivity {
     key: event.key,
     title: event.title,
     courseId: event.courseId,
+    sourceId: event.sourceId,
     color: courseColor(event.courseId),
     source: event.source,
     // Text label so the course is not identified by color alone.

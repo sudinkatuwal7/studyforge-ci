@@ -16,6 +16,9 @@ type CalendarMonthProps = {
   events: readonly CalendarEvent[];
   variant?: "compact" | "full";
   today?: Date;
+  highlightDate?: string | null;
+  onEditSession?: (sessionId: number) => void;
+  onDeleteSession?: (sessionId: number) => void;
 };
 
 function formatCalendarDayLabel(date: string): string {
@@ -30,7 +33,21 @@ function formatActivityTime(time: string | null): string | null {
   return time.slice(0, 5);
 }
 
-function ActivityList({ activities }: { activities: readonly ColoredActivity[] }) {
+function ActivityList({
+  activities,
+  pendingDeleteId,
+  onEditSession,
+  onAskDelete,
+  onConfirmDelete,
+  onCancelDelete,
+}: {
+  activities: readonly ColoredActivity[];
+  pendingDeleteId?: number | null;
+  onEditSession?: (sessionId: number) => void;
+  onAskDelete?: (sessionId: number) => void;
+  onConfirmDelete?: (sessionId: number) => void;
+  onCancelDelete?: () => void;
+}) {
   return (
     <ul className="calendar-activities">
       {activities.map((activity) => (
@@ -44,6 +61,26 @@ function ActivityList({ activities }: { activities: readonly ColoredActivity[] }
           {formatActivityTime(activity.time) && (
             <span className="calendar-activity-time">{formatActivityTime(activity.time)}</span>
           )}
+          {activity.source === "session" && onEditSession && onAskDelete && (
+            <span className="calendar-session-actions">
+              <button type="button" onClick={() => onEditSession(activity.sourceId)}>
+                Edit {activity.title}
+              </button>
+              {pendingDeleteId === activity.sourceId ? (
+                <>
+                  <span>Delete this study session?</span>
+                  <button type="button" onClick={() => onConfirmDelete?.(activity.sourceId)}>
+                    Confirm delete {activity.title}
+                  </button>
+                  <button type="button" onClick={onCancelDelete}>Cancel delete</button>
+                </>
+              ) : (
+                <button type="button" onClick={() => onAskDelete(activity.sourceId)}>
+                  Delete {activity.title}
+                </button>
+              )}
+            </span>
+          )}
         </li>
       ))}
     </ul>
@@ -56,6 +93,9 @@ export default function CalendarMonth({
   events,
   variant = "full",
   today,
+  highlightDate = null,
+  onEditSession,
+  onDeleteSession,
 }: CalendarMonthProps) {
   const selectedHeadingId = useId();
   const [visibleYear, setVisibleYear] = useState(year);
@@ -69,6 +109,11 @@ export default function CalendarMonth({
   const weeks = buildMonthGrid(visibleYear, visibleMonth);
   const activitiesByDate = useMemo(() => groupActivitiesByDate(events), [events]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
+  // After a save, show the session's own date without making the student click it.
+  useEffect(() => {
+    if (highlightDate) setSelectedDate(highlightDate);
+  }, [highlightDate]);
 
   function showMonth(offset: number) {
     // Stay put when the move would leave the four-digit year range.
@@ -161,7 +206,17 @@ export default function CalendarMonth({
           <>
             <h2 id={selectedHeadingId}>{formatCalendarDayLabel(visibleDate)}</h2>
             {selectedActivities.length > 0 ? (
-              <ActivityList activities={selectedActivities} />
+              <ActivityList
+                activities={selectedActivities}
+                pendingDeleteId={pendingDeleteId}
+                onEditSession={onEditSession}
+                onAskDelete={onDeleteSession ? setPendingDeleteId : undefined}
+                onConfirmDelete={(sessionId) => {
+                  setPendingDeleteId(null);
+                  onDeleteSession?.(sessionId);
+                }}
+                onCancelDelete={() => setPendingDeleteId(null)}
+              />
             ) : (
               <p>No activities on this day.</p>
             )}

@@ -42,6 +42,9 @@ export default function AppShell({
           <Link className={navClass(onDashboard && hash === "#tasks")} to="/#tasks" aria-current={onDashboard && hash === "#tasks" ? "page" : undefined}>
             <TasksIcon /> Tasks
           </Link>
+          <Link className={navClass(pathname === "/calendar")} to="/calendar" aria-current={pathname === "/calendar" ? "page" : undefined}>
+            <CalendarIcon /> Calendar
+          </Link>
         </nav>
         <button className="nav-link sidebar-logout" type="button" onClick={onLogout} disabled={isLoggingOut}>
           <LogoutIcon />
@@ -51,7 +54,7 @@ export default function AppShell({
 
       <main className="workspace">
         <header className="topbar">
-          <h1>{pathname.startsWith("/courses/") ? "Course" : "Dashboard"}</h1>
+          <h1>{pageTitle(pathname)}</h1>
           <div className="topbar-meta">
             <p className={`health health-${health.status}`}>
               {health.status === "checking" && "Checking backend..."}
@@ -67,6 +70,12 @@ export default function AppShell({
       </main>
     </div>
   );
+}
+
+function pageTitle(pathname: string): string {
+  if (pathname.startsWith("/courses/")) return "Course";
+  if (pathname === "/calendar") return "Calendar";
+  return "Dashboard";
 }
 
 function navClass(isActive: boolean) {
@@ -93,6 +102,15 @@ function CoursesIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M4 6.5h16M4 12h16M4 17.5h10" />
+    </svg>
+  );
+}
+
+function CalendarIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <rect x="4" y="5" width="16" height="15" rx="2" />
+      <path d="M8 3.5v3M16 3.5v3M4 10h16" />
     </svg>
   );
 }
