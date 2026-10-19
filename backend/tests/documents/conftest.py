@@ -12,6 +12,9 @@ import pytest
 from django.core.files.base import ContentFile
 from django.core.files.uploadedfile import SimpleUploadedFile
 from pypdf import PdfWriter
+from docx import Document as WordDocument
+from pptx import Presentation
+from pptx.util import Inches
 from pypdf.generic import DecodedStreamObject, DictionaryObject, NameObject, NumberObject
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken
@@ -132,6 +135,30 @@ def uploaded_pdf(pdf_factory):
         return SimpleUploadedFile(
             name, pdf_factory(kind) if data is None else data, content_type=content_type
         )
+    return make
+
+
+@pytest.fixture
+def office_factory():
+    def make(suffix):
+        stream = BytesIO()
+        if suffix == ".docx":
+            document = WordDocument()
+            document.add_heading("Course outline", level=2)
+            document.add_paragraph("First paragraph")
+            table = document.add_table(rows=1, cols=2)
+            table.cell(0, 0).text = "Concept"
+            table.cell(0, 1).text = "Definition"
+            document.add_paragraph("After table")
+            document.save(stream)
+        else:
+            presentation = Presentation()
+            for title, body in (("Overview", "First slide"), ("Details", "Second slide")):
+                slide = presentation.slides.add_slide(presentation.slide_layouts[5])
+                slide.shapes.title.text = title
+                slide.shapes.add_textbox(Inches(1), Inches(1), Inches(5), Inches(1)).text = body
+            presentation.save(stream)
+        return stream.getvalue()
     return make
 
 
