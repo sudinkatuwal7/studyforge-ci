@@ -24,5 +24,13 @@ def authorize_processing_service(request):
             provided_token.encode("utf-8"), expected_token.encode("utf-8")
         )
     ):
-        return JsonResponse({"error": "unauthorized"}, status=401)
+        # Record the attempt without the supplied credential.
+        logger.warning(
+            "Rejected internal request with invalid service credentials: %s %s",
+            request.method,
+            request.path,
+        )
+        response = JsonResponse({"error": "unauthorized"}, status=401)
+        response["WWW-Authenticate"] = 'Bearer realm="studyforge-internal"'
+        return response
     return None

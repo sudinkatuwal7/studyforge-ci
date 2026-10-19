@@ -11,6 +11,7 @@ from apps.documents.dispatch import DispatchFailed, DispatchUnconfirmed, dispatc
 from apps.documents.errors import DocumentAPIError
 from apps.documents.models import Document, Job
 from apps.documents.serializers import DocumentSerializer
+from apps.identity.ownership import owned_documents
 
 
 logger = logging.getLogger(__name__)
@@ -18,8 +19,8 @@ logger = logging.getLogger(__name__)
 
 def locked_material(document_id, owner):
     # SCRUM-118 locks the Document before its Job. Use that same order.
-    document = Document.objects.select_for_update(of=("self",)).filter(
-        pk=document_id, course__owner=owner
+    document = owned_documents(owner).select_for_update(of=("self",)).filter(
+        pk=document_id
     ).first()
     if document is None:
         raise Http404
