@@ -7,8 +7,14 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from .models import Course, TodoItem
-from .serializers import CourseSerializer, TodoCompletionSerializer, TodoItemSerializer
+from .models import Course, StudySession, TodoItem
+from .serializers import (
+    CourseSerializer,
+    StudySessionCreateSerializer,
+    StudySessionSerializer,
+    TodoCompletionSerializer,
+    TodoItemSerializer,
+)
 
 
 class CourseCreateView(APIView):
@@ -98,3 +104,81 @@ class TodoCompletionView(APIView):
         todo.is_completed = serializer.validated_data["is_completed"]
         todo.save(update_fields=["is_completed"])
         return Response(TodoItemSerializer(todo).data)
+
+
+class StudySessionListCreateView(APIView):
+    # Validate the bearer token and reject requests without an authenticated user.
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        # Derive ownership from the token's user, never a submitted user/course filter.
+        sessions = StudySession.objects.filter(course__owner=request.user).order_by(
+            "date", F("time").asc(nulls_first=True), "id"
+        )
+        return Response(StudySessionSerializer(sessions, many=True).data)
+
+    def post(self, request):
+        # Request context restricts the serializer's course choices to this student.
+        serializer = StudySessionCreateSerializer(
+            data=request.data, context={"request": request}
+        )
+        serializer.is_valid(raise_exception=True)
+        data = serializer.validated_data
+        # The unique creation key prevents duplicate inserts on matching retries.
+        session, created = StudySession.objects.select_related("course").get_or_create(
+            creation_key=data["creation_key"],
+            defaults={
+                "title": data["title"],
+                "course": data["course"],
+                "date": data["date"],
+                "time": data.get("time"),
+            },
+        )
+        if not created and (
+            session.course.owner_id != request.user.pk
+            or session.title != data["title"]
+            or session.course_id != data["course"].pk
+            or session.date != data["date"]
+            or session.time != data.get("time")
+        ):
+            # A collision must not reveal or modify an existing session.
+            return Response(
+                {"detail": "This creation key has already been used for a different session."},
+                status=status.HTTP_409_CONFLICT,
+            )
+        response_status = status.HTTP_201_CREATED if created else status.HTTP_200_OK
+        return Response(StudySessionSerializer(session).data, status=response_status)
+
+
+class StudySessionDetailView(APIView):
+    # Apply authentication to reading, editing, and deleting individual sessions.
+    authentication_classes = [JWTAuthentication]
+    permission_classes = [IsAuthenticated]
+
+    def get_session(self, request, session_id):
+        if not 0 < session_id <= 9223372036854775807:
+            raise Http404
+        # Missing and foreign sessions both return 404 without exposing ownership.
+        return get_object_or_404(
+            StudySession, pk=session_id, course__owner=request.user
+        )
+
+    def get(self, request, session_id):
+        session = self.get_session(request, session_id)
+        return Response(StudySessionSerializer(session).data)
+
+    def patch(self, request, session_id):
+        # Check the existing session first; an owned target course cannot grant access.
+        session = self.get_session(request, session_id)
+        serializer = StudySessionSerializer(
+            session, data=request.data, partial=True, context={"request": request}
+        )
+        serializer.is_valid(raise_exception=True)
+        serializer.save()
+        return Response(serializer.data)
+
+    def delete(self, request, session_id):
+        session = self.get_session(request, session_id)
+        session.delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

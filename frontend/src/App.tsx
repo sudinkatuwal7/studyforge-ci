@@ -7,6 +7,7 @@ import LoginPage from "./pages/LoginPage";
 import { logout } from "./api/auth";
 import CourseList from "./components/courses/CourseList";
 import CourseDetailPage from "./pages/CourseDetailPage";
+import CalendarPage from "./pages/CalendarPage";
 import DashboardPage from "./pages/DashboardPage";
 import "./styles/dashboard.css";
 
@@ -119,6 +120,7 @@ function App() {
           />
         } />
         <Route path="/courses/:courseId" element={<CourseDetailPage />} />
+        <Route path="/calendar" element={<CalendarPage />} />
         <Route path="*" element={
           <section className="course-detail">
             <h2>Page not found</h2>

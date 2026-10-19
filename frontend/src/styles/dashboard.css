@@ -216,6 +216,7 @@
   grid-template-columns: repeat(auto-fit, minmax(min(100%, 14rem), 1fr));
 }
 
+.dashboard-calendar,
 .course-form,
 .todo-panel,
 .upcoming-card {

@@ -383,6 +383,70 @@ This example uses the working SCRUM-8 representation above.
 }
 ```
 
+## Study-session calendar endpoints
+
+Study sessions belong to courses; access follows `session.course.owner`.
+Every endpoint requires a valid Bearer JWT and is restricted to the signed-in
+student. Task records remain available through the existing To-Do endpoints.
+
+| Method | Endpoint | Success |
+|---|---|---|
+| GET | `/api/v1/study-sessions/` | `200`, array of owned sessions |
+| POST | `/api/v1/study-sessions/` | `201`, saved session; `200` for a matching retry |
+| GET | `/api/v1/study-sessions/{id}/` | `200`, owned session |
+| PATCH | `/api/v1/study-sessions/{id}/` | `200`, updated session |
+| DELETE | `/api/v1/study-sessions/{id}/` | `204`, empty body |
+
+Creation input:
+
+```json
+{
+  "creation_key": "550e8400-e29b-41d4-a716-446655440000",
+  "title": "Review recursion",
+  "course": 7,
+  "date": "2026-10-22",
+  "time": "09:30"
+}
+```
+
+- Title, owned course, date, and UUID creation key are required. Titles are
+  trimmed, must be nonblank, and have a maximum length of 200 characters.
+- Time is optional and accepts `HH:MM`, `HH:MM:SS`, or `null`. Empty strings and
+  timezone offsets are rejected. Date/time represent the entered calendar date
+  and clock time without timezone conversion. Past dates are allowed.
+- Responses contain `id`, `title`, `course`, `date`, `time`, `created_at`, and
+  `updated_at`. Dates use `YYYY-MM-DD`; times use `HH:MM:SS` or `null`.
+  The creation key is never returned.
+
+```json
+{
+  "id": 4,
+  "title": "Review recursion",
+  "course": 7,
+  "date": "2026-10-22",
+  "time": "09:30:00",
+  "created_at": "2026-10-18T02:15:00Z",
+  "updated_at": "2026-10-18T02:15:00Z"
+}
+```
+
+- Listing returns all owned sessions, including past ones, ordered by date,
+  untimed entries first, then time and ID. An empty list returns `[]`.
+- PATCH accepts only title, course, date, and time. Omitted fields retain their
+  values; `"time": null` clears the time. Changing courses requires another
+  course owned by the same student. IDs, timestamps, owner, creation keys on
+  updates, and other unsupported input fields are rejected.
+- POST uses the unique creation key to avoid duplicate inserts. A retry with
+  matching stored title, course, date, and time returns the existing session.
+  Reusing a key with different stored details or another student's session
+  returns a generic `409` without exposing or changing that session. If a
+  session has since been edited, the original creation request can conflict;
+  keys are not retained after deletion.
+- Missing, invalid, or expired authentication returns `401`. Invalid input or
+  an unavailable course returns `400` with field errors. Missing, foreign, or
+  out-of-range session IDs return `404` for all detail operations. A repeated
+  deletion returns `404`. PUT is not supported; edits use PATCH.
+
 ## Contract changes
 
 If an API contract changes later, update all of the following:

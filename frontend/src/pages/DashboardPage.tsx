@@ -1,10 +1,19 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
+import { listStudySessions } from "../api/studySessions";
 import { useAuth } from "../context/AuthContext";
+import CalendarMonth from "../components/calendar/CalendarMonth";
+import { formatCalendarDate, getLocalMonth } from "../components/calendar/calendarDates";
+import { buildCalendarEvents, getUpcomingEvents } from "../components/calendar/calendarEvents";
 import CourseForm from "../components/courses/CourseForm";
 import CourseList from "../components/courses/CourseList";
 import TodoPanel from "../components/todos/TodoPanel";
+import type { CalendarEvent } from "../types/calendar";
 import type { Course } from "../types/course";
+import type { StudySession } from "../types/studySession";
 import type { TodoItem } from "../types/todo";
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 export default function DashboardPage({
   refreshKey,
@@ -13,12 +22,32 @@ export default function DashboardPage({
   refreshKey: number;
   onCourseCreated: () => void;
 }) {
-  const { user } = useAuth();
+  const { user, accessToken } = useAuth();
   const [courses, setCourses] = useState<Course[] | null>(null);
   const [todos, setTodos] = useState<TodoItem[] | null>(null);
+  const [sessions, setSessions] = useState<StudySession[] | null>(null);
+  const [sessionError, setSessionError] = useState(false);
   const pending = todos?.filter((todo) => !todo.is_completed).length;
-  const upcoming = todos?.filter((todo) => !todo.is_completed && todo.due_date) ?? [];
+  // TodoPanel replaces this array when a task is added or completed, so the calendar follows that list.
+  const calendarReady = todos !== null || sessions !== null;
+  const upcomingReady = todos !== null && (sessions !== null || sessionError);
+  const events = buildCalendarEvents(todos ?? [], sessions ?? []);
+  const upcoming = getUpcomingEvents(events, formatCalendarDate(new Date()));
   const greeting = user?.first_name ? `Welcome back, ${user.first_name}!` : "Welcome back!";
+
+  useEffect(() => {
+    let cancelled = false;
+    listStudySessions(accessToken)
+      .then((loaded) => {
+        if (!cancelled) setSessions(loaded);
+      })
+      .catch(() => {
+        if (!cancelled) setSessionError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
 
   return (
     <div className="dashboard-page">
@@ -42,7 +71,7 @@ export default function DashboardPage({
         </article>
         <article className="stat-card stat-peach">
           <p>Upcoming</p>
-          <strong>{todos ? upcoming.length : "–"}</strong>
+          <strong>{upcomingReady ? upcoming.length : "–"}</strong>
         </article>
       </section>
 
@@ -57,36 +86,71 @@ export default function DashboardPage({
         </div>
 
         <div className="dashboard-column">
+          <DashboardCalendar events={events} calendarReady={calendarReady} sessionError={sessionError} />
+          <UpcomingActivities events={upcomingReady ? upcoming : null} />
           <TodoPanel refreshKey={refreshKey} onTodos={setTodos} />
-          <section className="upcoming-card" aria-labelledby="upcoming-heading">
-            <h2 id="upcoming-heading">Upcoming</h2>
-            {upcoming.length === 0 ? (
-              <p className="upcoming-empty">Your calendar will appear here</p>
-            ) : (
-              <ul>
-                {upcoming.slice(0, 3).map((todo) => (
-                  <li key={todo.id}>
-                    <strong>{todo.title}</strong>
-                    <span>{formatDueDate(todo.due_date)}</span>
-                  </li>
-                ))}
-              </ul>
-            )}
-          </section>
         </div>
       </div>
     </div>
   );
 }
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+function DashboardCalendar({
+  events,
+  calendarReady,
+  sessionError,
+}: {
+  events: CalendarEvent[];
+  calendarReady: boolean;
+  sessionError: boolean;
+}) {
+  const { year, month } = getLocalMonth();
 
-function formatDueDate(dueDate: string | null): string {
-  if (!dueDate) return "No due date";
-  const [year, month, day] = dueDate.split("-").map(Number);
+  return (
+    <section className="dashboard-calendar" aria-labelledby="dashboard-calendar-heading">
+      <div className="section-heading">
+        <h2 id="dashboard-calendar-heading">Calendar</h2>
+        <Link className="new-link" to="/calendar">Open calendar</Link>
+      </div>
+      {!calendarReady && !sessionError && <p role="status">Loading calendar...</p>}
+      {sessionError && <p className="form-error" role="alert">Could not load study sessions.</p>}
+      {calendarReady && (
+        <CalendarMonth year={year} month={month} events={events} variant="compact" />
+      )}
+    </section>
+  );
+}
+
+function UpcomingActivities({ events }: { events: CalendarEvent[] | null }) {
+  return (
+    <section className="upcoming-card" aria-labelledby="upcoming-heading">
+      <h2 id="upcoming-heading">Upcoming</h2>
+      {events === null && <p role="status">Loading upcoming activities...</p>}
+      {events?.length === 0 && <p className="upcoming-empty">No upcoming activities.</p>}
+      {events && events.length > 0 && (
+        <ul>
+          {events.slice(0, 3).map((event) => (
+            <li key={event.key}>
+              <strong>{event.title}</strong>
+              <span>
+                {event.source === "todo" ? "Task" : "Study session"}
+                {" · "}
+                {formatActivityDate(event)}
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function formatActivityDate(event: CalendarEvent): string {
+  const [year, month, day] = event.date.split("-").map(Number);
   const monthName = MONTHS[month - 1];
-  if (!year || !monthName || !day) return dueDate;
-  return `${monthName} ${day}, ${year}`;
+  const dateLabel = year && monthName && day ? `${monthName} ${day}, ${year}` : event.date;
+  if (!event.time) return dateLabel;
+  return `${dateLabel}, ${event.time.slice(0, 5)}`;
 }
 
 function Panda() {
