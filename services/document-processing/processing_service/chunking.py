@@ -1,11 +1,11 @@
-"""Split extracted PDF pages into overlapping character windows."""
+"""Split normalized document units into overlapping character windows."""
 
 from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
 
-from .pdf_parser import PageText
+from .document_parser import TextUnit
 
 CHUNK_SIZE = 1000
 CHUNK_OVERLAP = 150
@@ -13,14 +13,14 @@ CHUNK_OVERLAP = 150
 
 @dataclass(frozen=True)
 class TextChunk:
-    """A character window originating from a single PDF page."""
+    """A character window originating from one source location."""
 
     page_number: int
     content: str
 
 
 def chunk_pages(
-    pages: Iterable[PageText],
+    pages: Iterable[TextUnit],
     *,
     chunk_size: int = CHUNK_SIZE,
     overlap: int = CHUNK_OVERLAP,
@@ -33,7 +33,7 @@ def chunk_pages(
 
 
 def chunk_page(
-    page: PageText,
+    page: TextUnit,
     *,
     chunk_size: int = CHUNK_SIZE,
     overlap: int = CHUNK_OVERLAP,
