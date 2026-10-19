@@ -494,3 +494,38 @@ Based on fetched `origin/development` at `4b51c2b` (merged SCRUM-108):
 This completes the local Django scope of SCRUM-118. Joint live-worker validation,
 SCRUM-108's separate delivery retry implementation, and the existing recovery
 decisions remain distinct from these automated checks.
+
+## 16. SCRUM-99 shared authentication and course ownership
+
+SCRUM-99 keeps two separate credential boundaries and one ownership rule, all
+under `backend/apps/identity/`:
+
+| Boundary | Credential | Module | Rejection |
+|---|---|---|---|
+| Student document API (`/api/v1/...`) | Access JWT for an active user | DRF `JWTAuthentication` | `401 AUTHENTICATION_REQUIRED`, `WWW-Authenticate: Bearer` |
+| Internal processing API (`/internal/v1/...`) | `PROCESSING_SERVICE_TOKEN` bearer | `service_auth.authorize_processing_service` | `401 {"error":"unauthorized"}`, `WWW-Authenticate: Bearer realm="studyforge-internal"`; unset server token `503 service_unavailable` |
+| Course ownership | Derived from `request.user` only | `ownership.owned_course`, `ownership.owned_documents` | Foreign and missing resources share `404 RESOURCE_NOT_FOUND` |
+
+- Neither credential works across boundaries: the service token is not a JWT,
+  and a student JWT never matches the service token.
+- The service-token comparison is constant-time. An unset or empty configured
+  token fails closed. Rejections log the method and path, never the supplied or
+  configured credential.
+- Every document list, upload, detail, rename, and delete resolves access through
+  `Course.owner` via `apps.identity.ownership`. `Document.owner` alone grants no
+  access. Upload ownership is checked before the body is parsed or stored.
+- If the identity store is unavailable while authenticating the user or checking
+  ownership, the request fails closed with the endpoint's existing 503 code
+  (`UPLOAD_UNAVAILABLE` or `MATERIAL_UNAVAILABLE`), exposes no exception detail,
+  and causes no storage, database, or dispatch side effect.
+- Identity and Courses still share the Django database. When SCRUM-98 removes the
+  cross-service foreign keys, `apps.identity.ownership` is the single place to
+  replace with an Identity-service call. That call must keep the fail-closed 503 and
+  non-disclosing 404 behavior above.
+- SCRUM-118's rule that the newest Job primary key supersedes older Jobs remains
+  the only current-run rule. SCRUM-99 adds no job-lifecycle constraint.
+
+Verification: `tests/identity/test_service_auth.py` covers credential parsing,
+fail-closed configuration, and log redaction.
+`tests/documents/test_identity_authorization.py` covers credential separation,
+identity-store outages, and the ownership rule. Both run in the full backend suite.
