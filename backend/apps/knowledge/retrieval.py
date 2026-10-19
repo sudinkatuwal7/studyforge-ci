@@ -19,12 +19,30 @@ EMBEDDING_MODEL = "gemini-embedding-2"
 MAX_TOP_K = 10
 
 
+def _maximum_cosine_distance() -> float:
+    """Return a finite distance bound, with an optional relevance cutoff."""
+    minimum_similarity = settings.RETRIEVAL_MIN_COSINE_SIMILARITY
+    if minimum_similarity is None:
+        return 2.0
+    if (
+        type(minimum_similarity) not in (int, float)
+        or not math.isfinite(minimum_similarity)
+        or not -1.0 <= minimum_similarity <= 1.0
+    ):
+        raise ImproperlyConfigured(
+            "RETRIEVAL_MIN_COSINE_SIMILARITY must be null or a finite number between -1 and 1."
+        )
+    return 1.0 - minimum_similarity
+
+
 def retrieve_chunks(user, document_id: int, question: str, top_k: int = 5) -> list[dict]:
     """Return the nearest chunks of one owned, READY document.
 
     Questions use the same unprefixed Gemini input as stored chunk embeddings.
     Results contain the fields accepted by RetrievalResultSerializer; ``score``
     is cosine similarity (one minus the database's cosine distance).
+    An empty list means embedding succeeded but no eligible chunks matched;
+    provider failures propagate and are never treated as empty results.
     """
     if type(document_id) is not int or document_id <= 0:
         raise ValueError("document_id must be a positive integer")
@@ -41,6 +59,7 @@ def retrieve_chunks(user, document_id: int, question: str, top_k: int = 5) -> li
     )
     if settings.EMBEDDING_MODEL != EMBEDDING_MODEL or settings.EMBEDDING_DIMENSION != EMBEDDING_DIMENSION:
         raise ImproperlyConfigured("Retrieval requires gemini-embedding-2 with 768 dimensions.")
+    maximum_distance = _maximum_cosine_distance()
 
     embeddings = embed_texts([question.strip()])
     if len(embeddings) != 1:
@@ -63,6 +82,9 @@ def retrieve_chunks(user, document_id: int, question: str, top_k: int = 5) -> li
             embedding__isnull=False,
         )
         .annotate(distance=CosineDistance("embedding", vector))
+        # PostgreSQL compares NaN above finite values, so these bounds also
+        # exclude undefined cosine distances from legacy all-zero vectors.
+        .filter(distance__gte=0.0, distance__lte=maximum_distance)
         .order_by("distance", "id")[:top_k]
     )
     return [

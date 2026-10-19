@@ -11,6 +11,7 @@ from apps.courses.models import Course
 from apps.documents.models import Document
 from apps.knowledge.models import Chunk
 from apps.knowledge.retrieval import retrieve_chunks
+from apps.processing.exceptions import PermanentProcessingError, RetryableProcessingError
 
 
 DIMENSION = 768
@@ -20,7 +21,11 @@ def _vector(first=0.0, second=0.0):
     return [first, second] + [0.0] * (DIMENSION - 2)
 
 
-@override_settings(EMBEDDING_MODEL="gemini-embedding-2", EMBEDDING_DIMENSION=DIMENSION)
+@override_settings(
+    EMBEDDING_MODEL="gemini-embedding-2",
+    EMBEDDING_DIMENSION=DIMENSION,
+    RETRIEVAL_MIN_COSINE_SIMILARITY=None,
+)
 class RetrievalTests(TestCase):
     @classmethod
     def setUpTestData(cls):
@@ -104,9 +109,68 @@ class RetrievalTests(TestCase):
         self.make_chunk(self.other_document, "mismatched document owner", _vector(1.0), owner=self.owner)
         self.make_chunk(self.document, "unembedded", None)
 
-        results, _ = self.retrieve()
+        results, _ = self.retrieve(top_k=1)
 
         self.assertEqual([row["chunk_id"] for row in results], [included.pk])
+        self.assertEqual(results[0]["score"], 0.0)
+
+    def test_another_users_more_similar_chunk_cannot_displace_owned_match(self):
+        owned = self.make_chunk(self.document, "owned", _vector(0.0, 1.0))
+        self.make_chunk(self.other_document, "private perfect match", _vector(1.0))
+
+        results, _ = self.retrieve(top_k=1)
+
+        self.assertEqual([row["chunk_id"] for row in results], [owned.pk])
+        self.assertEqual(results[0]["content"], "owned")
+
+    def test_mismatched_chunk_owner_cannot_displace_owned_match(self):
+        owned = self.make_chunk(self.document, "owned", _vector(0.0, 1.0))
+        self.make_chunk(
+            self.document, "wrong chunk owner", _vector(1.0), owner=self.other
+        )
+
+        results, _ = self.retrieve(top_k=1)
+
+        self.assertEqual([row["chunk_id"] for row in results], [owned.pk])
+
+    def test_undefined_cosine_distance_does_not_enter_top_k(self):
+        valid = self.make_chunk(self.document, "valid", _vector(-1.0))
+        self.make_chunk(self.document, "zero vector", _vector())
+
+        results, _ = self.retrieve(top_k=2)
+
+        self.assertEqual([row["chunk_id"] for row in results], [valid.pk])
+        self.assertEqual(results[0]["score"], -1.0)
+
+    def test_configured_relevance_cutoff_is_inclusive_and_precedes_top_k(self):
+        identical = self.make_chunk(self.document, "identical", _vector(1.0))
+        orthogonal = self.make_chunk(self.document, "boundary", _vector(0.0, 1.0))
+        self.make_chunk(self.document, "below boundary", _vector(-1.0))
+
+        with override_settings(RETRIEVAL_MIN_COSINE_SIMILARITY=0.0):
+            results, _ = self.retrieve(top_k=10)
+        self.assertEqual([row["chunk_id"] for row in results], [identical.pk, orthogonal.pk])
+
+        with override_settings(RETRIEVAL_MIN_COSINE_SIMILARITY=0.5):
+            results, _ = self.retrieve(top_k=1)
+        self.assertEqual([row["chunk_id"] for row in results], [identical.pk])
+
+        with override_settings(RETRIEVAL_MIN_COSINE_SIMILARITY=1.0):
+            results, _ = self.retrieve(top_k=10)
+        self.assertEqual([row["chunk_id"] for row in results], [identical.pk])
+
+        with override_settings(RETRIEVAL_MIN_COSINE_SIMILARITY=-1.0):
+            results, _ = self.retrieve(top_k=10)
+        self.assertEqual(len(results), 3)
+
+    def test_invalid_relevance_configuration_fails_before_embedding(self):
+        for value in (float("nan"), float("inf"), float("-inf"), -1.1, 1.1, True, "0.5"):
+            with self.subTest(value=value), override_settings(
+                RETRIEVAL_MIN_COSINE_SIMILARITY=value
+            ), patch("apps.knowledge.retrieval.embed_texts") as embed:
+                with self.assertRaises(ImproperlyConfigured):
+                    retrieve_chunks(self.owner, self.document.pk, "question")
+                embed.assert_not_called()
 
     def test_empty_eligible_corpus_returns_no_results(self):
         empty_results, embed = self.retrieve()
@@ -117,7 +181,25 @@ class RetrievalTests(TestCase):
         null_only_results, _ = self.retrieve()
         self.assertEqual(null_only_results, [])
 
+    def test_provider_failure_is_not_an_empty_result(self):
+        for error in (
+            RetryableProcessingError("provider temporarily unavailable"),
+            PermanentProcessingError("provider rejected request"),
+        ):
+            with self.subTest(error=type(error).__name__), patch(
+                "apps.knowledge.retrieval.embed_texts", side_effect=error
+            ):
+                with self.assertRaises(type(error)) as caught:
+                    retrieve_chunks(self.owner, self.document.pk, "question")
+                self.assertIs(caught.exception, error)
+
+    def test_empty_provider_response_is_an_error_not_no_matches(self):
+        with patch("apps.knowledge.retrieval.embed_texts", return_value=[]):
+            with self.assertRaisesRegex(ValueError, "exactly one question vector"):
+                retrieve_chunks(self.owner, self.document.pk, "question")
+
     def test_unowned_or_not_ready_document_is_rejected_before_embedding(self):
+        not_found_messages = []
         for status in (
             Document.Status.PENDING,
             Document.Status.PROCESSING,
@@ -127,16 +209,19 @@ class RetrievalTests(TestCase):
             self.make_chunk(document, "not ready", _vector(1.0))
             with self.subTest(status=status):
                 with patch("apps.knowledge.retrieval.embed_texts") as embed:
-                    with self.assertRaises(Http404):
+                    with self.assertRaises(Http404) as caught:
                         retrieve_chunks(self.owner, document.pk, "question")
+                not_found_messages.append(str(caught.exception))
                 embed.assert_not_called()
 
         for document_id in (self.other_document.pk, self.other_document.pk + 1000):
             with self.subTest(document_id=document_id):
                 with patch("apps.knowledge.retrieval.embed_texts") as embed:
-                    with self.assertRaises(Http404):
+                    with self.assertRaises(Http404) as caught:
                         retrieve_chunks(self.owner, document_id, "question")
+                not_found_messages.append(str(caught.exception))
                 embed.assert_not_called()
+        self.assertEqual(len(set(not_found_messages)), 1)
 
     def test_status_change_after_embedding_is_still_excluded_by_chunk_query(self):
         self.make_chunk(self.document, "was ready", _vector(1.0))
