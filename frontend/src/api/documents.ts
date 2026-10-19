@@ -1,7 +1,8 @@
 import { request } from "./client";
 import type { DocumentError, StudyDocument } from "../types/document";
 
-export const MAX_PDF_BYTES = 20 * 1024 * 1024;
+export const MAX_DOCUMENT_BYTES = 20 * 1024 * 1024;
+export const MAX_PDF_BYTES = MAX_DOCUMENT_BYTES;
 
 function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null;
@@ -46,13 +47,15 @@ function parseDocument(body: unknown): StudyDocument {
   return body as StudyDocument;
 }
 
-export function validatePdf(file: File | null): string | null {
-  if (!file) return "Choose a PDF to upload.";
+export function validateDocument(file: File | null): string | null {
+  if (!file) return "Choose a PDF, DOCX, or PPTX file to upload.";
   if (file.size === 0) return "The selected file is empty.";
-  if (file.size > MAX_PDF_BYTES) return "The PDF must be no larger than 20 MiB.";
-  if (!file.name.toLowerCase().endsWith(".pdf")) return "Choose a file with a .pdf extension.";
+  if (file.size > MAX_DOCUMENT_BYTES) return "The file must be no larger than 20 MiB.";
+  if (!/\.(pdf|docx|pptx)$/i.test(file.name)) return "Choose a file with a .pdf, .docx, or .pptx extension.";
   return null;
 }
+
+export const validatePdf = validateDocument;
 
 export async function uploadDocument(courseId: number, file: File, accessToken: string, signal: AbortSignal) {
   const body = new FormData();

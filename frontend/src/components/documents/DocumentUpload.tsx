@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef, useState, type SubmitEvent } from "react";
-import { DocumentRequestError, uploadDocument, validatePdf } from "../../api/documents";
+import { DocumentRequestError, uploadDocument, validateDocument } from "../../api/documents";
 import { useAuth } from "../../context/AuthContext";
 import type { TrackedDocument } from "../../types/document";
 import DocumentStatus from "./DocumentStatus";
@@ -10,8 +10,8 @@ type Props = { courseId: number; onDocumentSaved?: (document: TrackedDocument) =
 
 export default function DocumentUpload({ courseId, onDocumentSaved }: Props) {
   const { accessToken, user } = useAuth();
-  if (!Number.isSafeInteger(courseId) || courseId <= 0) return <p role="alert">Choose a course before uploading a PDF.</p>;
-  if (!user) return <p role="alert">Sign in to upload a PDF.</p>;
+  if (!Number.isSafeInteger(courseId) || courseId <= 0) return <p role="alert">Choose a course before uploading a document.</p>;
+  if (!user) return <p role="alert">Sign in to upload a document.</p>;
 
   // Changing course or account discards stale UI and cancels its outstanding requests.
   return <UploadForm key={`${user.id}:${courseId}`} courseId={courseId} accessToken={accessToken} onDocumentSaved={onDocumentSaved} />;
@@ -33,9 +33,9 @@ function UploadForm({ courseId, accessToken, onDocumentSaved }: Props & { access
   async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     if (upload.current || tracked) return;
-    const validation = validatePdf(file);
+    const validation = validateDocument(file);
     if (validation) { setError(validation); return; }
-    if (!file || !accessToken || authFailed) { setError("Sign in again to upload a PDF."); return; }
+    if (!file || !accessToken || authFailed) { setError("Sign in again to upload a document."); return; }
 
     const controller = new AbortController();
     upload.current = controller;
@@ -52,7 +52,7 @@ function UploadForm({ courseId, accessToken, onDocumentSaved }: Props & { access
       if (cause instanceof DocumentRequestError) {
         if (cause.status === 401 || cause.status === 403) {
           setRejectedToken(accessToken);
-          setError("Your session has ended. Sign in again to upload a PDF.");
+          setError("Your session has ended. Sign in again to upload a document.");
         } else if (cause.status === 404) {
           setError("This course is unavailable or you no longer have access to it.");
         } else if (cause.status === 503 && cause.documentId) {
@@ -77,19 +77,19 @@ function UploadForm({ courseId, accessToken, onDocumentSaved }: Props & { access
 
   return (
     <section className="document-upload" aria-labelledby={`${inputId}-heading`}>
-      <h2 id={`${inputId}-heading`}>Upload a PDF</h2>
+      <h2 id={`${inputId}-heading`}>Upload a document</h2>
       <form onSubmit={handleSubmit} aria-busy={submitting}>
-        <label htmlFor={inputId}>PDF file</label>
-        <input ref={fileInput} id={inputId} type="file" accept=".pdf,application/pdf" disabled={submitting || !!tracked || !accessToken || authFailed}
+        <label htmlFor={inputId}>Document file</label>
+        <input ref={fileInput} id={inputId} type="file" accept=".pdf,.docx,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation" disabled={submitting || !!tracked || !accessToken || authFailed}
           aria-describedby={`${inputId}-hint${error ? ` ${inputId}-error` : ""}`}
           onChange={(event) => {
             const selected = event.target.files?.[0] ?? null;
             setFile(selected);
-            setError(selected ? validatePdf(selected) ?? "" : "");
+            setError(selected ? validateDocument(selected) ?? "" : "");
           }} />
-        <p id={`${inputId}-hint`}>One PDF, up to 20 MiB. Encrypted PDFs are not supported. The server checks the file before saving it.</p>
+        <p id={`${inputId}-hint`}>One PDF, DOCX, or PPTX file, up to 20 MiB. Encrypted files are not supported. The server checks the file before saving it.</p>
         {file && <p>Selected: {file.name}</p>}
-        <button type="submit" disabled={submitting || !!tracked || !accessToken || authFailed}>{submitting ? "Uploading…" : "Upload PDF"}</button>
+        <button type="submit" disabled={submitting || !!tracked || !accessToken || authFailed}>{submitting ? "Uploading…" : "Upload document"}</button>
       </form>
       {error && <p id={`${inputId}-error`} className="document-error" role="alert">{error}</p>}
       {tracked && <>
@@ -103,7 +103,7 @@ function UploadForm({ courseId, accessToken, onDocumentSaved }: Props & { access
           setError("");
           // The file input is uncontrolled; clear it when beginning a separate upload.
           if (fileInput.current) fileInput.current.value = "";
-        }}>Upload another PDF</button>
+        }}>Upload another document</button>
       </>}
     </section>
   );
