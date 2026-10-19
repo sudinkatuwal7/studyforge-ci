@@ -9,6 +9,7 @@ from django.test import SimpleTestCase, override_settings
 from google.genai import types
 from google.genai.errors import ClientError, ServerError
 
+from apps.documents.result_callbacks import InvalidCallback, _validate_chunks
 from apps.processing.embedding_service import embed_texts
 from apps.processing.exceptions import PermanentProcessingError, RetryableProcessingError
 
@@ -18,6 +19,8 @@ DIMENSION = 768
 def _vector(marker: float) -> list[float]:
     values = [0.0] * DIMENSION
     values[0] = marker
+    if marker == 0.0:
+        values[1] = 1.0
     return values
 
 
@@ -120,6 +123,25 @@ class EmbedTextsTests(SimpleTestCase):
         with patch("apps.processing.embedding_service._make_client", return_value=client):
             with self.assertRaises(PermanentProcessingError):
                 embed_texts(["chunk-0"])
+
+    def test_nonfinite_or_zero_provider_vectors_are_permanent_errors(self):
+        for marker in (0.0, float("nan"), float("inf"), float("-inf")):
+            with self.subTest(marker=marker):
+                vector = [marker] + [0.0] * (DIMENSION - 1)
+                response = SimpleNamespace(embeddings=[SimpleNamespace(values=vector)])
+                client = SimpleNamespace(
+                    models=SimpleNamespace(embed_content=Mock(return_value=response))
+                )
+                with patch("apps.processing.embedding_service._make_client", return_value=client):
+                    with self.assertRaises(PermanentProcessingError):
+                        embed_texts(["chunk-0"])
+
+    def test_callback_rejects_all_zero_embedding(self):
+        with self.assertRaises(InvalidCallback):
+            _validate_chunks(
+                [{"page_number": 1, "content": "text", "embedding": [0.0] * DIMENSION}],
+                1,
+            )
 
     def test_server_error_is_retryable(self):
         client = SimpleNamespace(

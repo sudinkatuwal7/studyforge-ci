@@ -4,6 +4,7 @@ These serializers deliberately define contracts only. They do not perform
 embedding, similarity search, answer generation, routing, or persistence.
 """
 
+from django.db import models
 from rest_framework import serializers
 
 from apps.knowledge.models import Chunk
@@ -79,7 +80,7 @@ class CitationSerializer(serializers.Serializer):
 class AnswerResultSerializer(serializers.Serializer):
     """The future answer response, with citations as the support boundary."""
 
-    class Status(serializers.TextChoices):
+    class Status(models.TextChoices):
         ANSWERED = "ANSWERED", "Answered"
         INSUFFICIENT_CONTEXT = "INSUFFICIENT_CONTEXT", "Insufficient context"
 

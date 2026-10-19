@@ -186,5 +186,7 @@ def _validate_chunks(chunks: list, page_count: int) -> list[tuple[int, str, list
             if not math.isfinite(numeric_value):
                 raise InvalidCallback("invalid_embedding")
             vector.append(numeric_value)
+        if not any(vector):
+            raise InvalidCallback("invalid_embedding")
         validated.append((page_number, content, vector))
     return validated
