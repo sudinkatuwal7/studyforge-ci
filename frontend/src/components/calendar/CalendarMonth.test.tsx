@@ -73,7 +73,7 @@ describe("CalendarMonth", () => {
     expect(screen.getByText("Task: Read chapter")).toBeInTheDocument();
   });
 
-  it("moves to the previous month, the next month, and back to today", async () => {
+  it("moves between months with the arrow buttons and marks today", async () => {
     const user = userEvent.setup();
     render(
       <CalendarMonth year={2026} month={10} events={[]} today={new Date(2026, 9, 18)} />,
@@ -88,9 +88,10 @@ describe("CalendarMonth", () => {
     await user.click(screen.getByRole("button", { name: "Next month" }));
     expect(screen.getByText("November 2026")).toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Today" }));
+    await user.click(screen.getByRole("button", { name: "Previous month" }));
     expect(screen.getByText("October 2026")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Sunday, October 18, 2026, no activities/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Sunday, October 18, 2026, no activities/ })).toHaveClass("calendar-day-today");
+    expect(screen.queryByRole("button", { name: "Today" })).not.toBeInTheDocument();
   });
 
   it("shows a compact day's activities after that date is clicked", async () => {

@@ -11,21 +11,20 @@
 }
 
 .calendar-nav {
-  display: flex;
-  flex-wrap: wrap;
+  display: grid;
+  grid-template-columns: 2rem 1fr 2rem;
   align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.5rem;
+  margin-bottom: 0.35rem;
 }
 
 .calendar-nav button {
-  padding: 0.4rem 0.7rem;
-  border: 1px solid var(--periwinkle);
-  border-radius: 0.5rem;
-  background: white;
-  color: var(--navy);
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
   font: inherit;
-  font-size: 0.85rem;
+  font-size: 1.4rem;
+  line-height: 1;
   cursor: pointer;
 }
 
@@ -36,8 +35,10 @@
 
 .calendar-month-label {
   margin: 0;
-  min-width: 8rem;
-  font-weight: 700;
+  color: var(--muted);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-align: center;
 }
 
 .calendar-weekdays,
@@ -88,6 +89,17 @@
 .calendar-day-number {
   font-size: 0.8rem;
   font-weight: 600;
+}
+
+.calendar-day-today .calendar-day-number {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.55rem;
+  height: 1.55rem;
+  border-radius: 999px;
+  background: var(--navy);
+  color: white;
 }
 
 .calendar-dots {

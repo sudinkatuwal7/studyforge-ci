@@ -1,7 +1,7 @@
 import { useEffect, useId, useMemo, useState } from "react";
 import type { CalendarEvent } from "../../types/calendar";
 import { groupActivitiesByDate, type ColoredActivity } from "./calendarActivities";
-import { buildMonthGrid, getLocalMonth, shiftMonth } from "./calendarDates";
+import { buildMonthGrid, formatCalendarDate, shiftMonth } from "./calendarDates";
 import "./Calendar.css";
 
 const WEEKDAYS = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
@@ -128,11 +128,7 @@ export default function CalendarMonth({
     setVisibleMonth(next.month);
   }
 
-  function showToday() {
-    const current = getLocalMonth(today);
-    setVisibleYear(current.year);
-    setVisibleMonth(current.month);
-  }
+  const todayDate = formatCalendarDate(today ?? new Date());
 
   // Drop a selection that is no longer on screen after the month changes.
   const visibleDate = selectedDate && weeks.some((week) => week.some((day) => day.date === selectedDate))
@@ -143,12 +139,11 @@ export default function CalendarMonth({
   return (
     <div className={`calendar-month calendar-month-${variant}`}>
       <div className="calendar-nav">
-        <button type="button" onClick={() => showMonth(-1)}>Previous month</button>
+        <button type="button" aria-label="Previous month" onClick={() => showMonth(-1)}>‹</button>
         <p className="calendar-month-label" aria-live="polite">
           {MONTH_NAMES[visibleMonth - 1]} {visibleYear}
         </p>
-        <button type="button" onClick={showToday}>Today</button>
-        <button type="button" onClick={() => showMonth(1)}>Next month</button>
+        <button type="button" aria-label="Next month" onClick={() => showMonth(1)}>›</button>
       </div>
       <div className="calendar-weekdays" aria-hidden="true">
         {WEEKDAYS.map((weekday) => (
@@ -161,6 +156,7 @@ export default function CalendarMonth({
             const activities = activitiesByDate.get(day.date)?.activities ?? [];
             const dots = activitiesByDate.get(day.date);
             const isSelected = visibleDate === day.date;
+            const isToday = day.date === todayDate;
             const activityCount = activities.length === 1 ? "1 activity" : `${activities.length} activities`;
             return (
               <button
@@ -171,6 +167,7 @@ export default function CalendarMonth({
                 className={[
                   "calendar-day-button",
                   day.inCurrentMonth ? "" : "calendar-day-outside",
+                  isToday ? "calendar-day-today" : "",
                   isSelected ? "calendar-day-selected" : "",
                 ].filter(Boolean).join(" ")}
                 onClick={() => setSelectedDate(day.date)}

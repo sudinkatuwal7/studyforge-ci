@@ -230,16 +230,6 @@
   box-shadow: 0 8px 24px #26334d0a;
 }
 
-.dashboard-calendar .calendar-nav button {
-  padding: 0.25rem 0.45rem;
-  font-size: 0.75rem;
-}
-
-.dashboard-calendar .calendar-month-label {
-  min-width: 0;
-  font-size: 0.9rem;
-}
-
 .course-form h2,
 .todo-form h2 {
   margin: 0;
