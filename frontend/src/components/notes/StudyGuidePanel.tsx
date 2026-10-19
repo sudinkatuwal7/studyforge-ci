@@ -26,7 +26,7 @@ function messageFor(cause: unknown): string {
       return "This document is unavailable or you no longer have access to it.";
     }
     if (cause.status === 409 && cause.code === "DOCUMENT_HAS_NO_TEXT") {
-      return "No readable text was found in this PDF. Scanned pages are not supported yet.";
+      return "No readable text was found in this document. Image-only content is not supported yet.";
     }
     if (cause.status === 409) {
       return "This document is still being processed. Try again once it is ready.";
