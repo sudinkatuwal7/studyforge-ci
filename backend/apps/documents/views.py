@@ -11,13 +11,13 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.authentication import JWTAuthentication
 
-from apps.courses.models import Course
 from apps.documents.errors import DocumentAPIError, error_body
 from apps.documents.models import Document
 from apps.documents.parsers import DocumentMultipartParser
 from apps.documents.serializers import DocumentSerializer, validate_display_name
 from apps.documents.services import delete_material, locked_material, store_and_dispatch
 from apps.documents.validation import validate_pdf
+from apps.identity.ownership import owned_course, owned_documents
 
 
 def resource_id(value):
@@ -70,14 +70,14 @@ class DocumentUploadView(DocumentAPIView):
         return super().handle_exception(exc)
 
     def get(self, request, course_id):
-        course = Course.objects.filter(pk=resource_id(course_id), owner=request.user).first()
+        course = owned_course(request.user, resource_id(course_id))
         if course is None:
             raise Http404
         documents = Document.objects.filter(course=course).order_by("-created_at", "-pk")
         return Response(DocumentSerializer(documents, many=True).data)
 
     def post(self, request, course_id):
-        course = Course.objects.filter(pk=resource_id(course_id), owner=request.user).first()
+        course = owned_course(request.user, resource_id(course_id))
         if course is None:
             raise Http404
 
@@ -125,9 +125,7 @@ class DocumentDetailView(DocumentAPIView):
         return Response(status=204)
 
     def get(self, request, document_id):
-        document = Document.objects.filter(
-            pk=resource_id(document_id), course__owner=request.user
-        ).first()
+        document = owned_documents(request.user).filter(pk=resource_id(document_id)).first()
         if document is None:
             raise Http404
         return Response(DocumentSerializer(document).data)
