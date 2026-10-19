@@ -417,6 +417,19 @@ Creation input:
 - Responses contain `id`, `title`, `course`, `date`, `time`, `created_at`, and
   `updated_at`. Dates use `YYYY-MM-DD`; times use `HH:MM:SS` or `null`.
   The creation key is never returned.
+
+```json
+{
+  "id": 4,
+  "title": "Review recursion",
+  "course": 7,
+  "date": "2026-10-22",
+  "time": "09:30:00",
+  "created_at": "2026-10-18T02:15:00Z",
+  "updated_at": "2026-10-18T02:15:00Z"
+}
+```
+
 - Listing returns all owned sessions, including past ones, ordered by date,
   untimed entries first, then time and ID. An empty list returns `[]`.
 - PATCH accepts only title, course, date, and time. Omitted fields retain their

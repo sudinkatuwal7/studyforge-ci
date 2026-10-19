@@ -1,6 +1,6 @@
 # Database Schema
 
-User, Course, Document, and Job have model definitions. DocumentChunk and Note remain planned relationships. SCRUM-9 adds persistence only, not upload or processing behavior.
+User, Course, StudySession, Document, and Job have model definitions. DocumentChunk and Note remain planned relationships. SCRUM-9 adds persistence only, not upload or processing behavior.
 
 ```text
 User
@@ -9,14 +9,12 @@ User
  ▼
 Course
  │
- │ 1:N
- ▼
-Document
- │
- ├── processing status
- ├── Job (1:N)
- ├── DocumentChunk
- └── Note
+ ├── 1:N Document
+ │    ├── processing status
+ │    ├── Job (1:N)
+ │    ├── DocumentChunk
+ │    └── Note
+ └── 1:N StudySession
 ```
 
 ## Agreed relationship names
@@ -24,6 +22,7 @@ Document
 | Field | Meaning |
 |---|---|
 | `Course.owner` | The user who owns the course |
+| `StudySession.course` | The course a study session belongs to; the session owner is that course's owner |
 | `Document.course` | The course the document belongs to |
 | `Document.owner` | The owning user, explicitly required by SCRUM-9 Jira |
 | `Job.document` | The document for one logical processing run |
@@ -163,6 +162,32 @@ Quiz 1:N Question
 | `explanation` | `TextField`, may be blank. |
 
 The `options` shape and the index range are validated by `full_clean()`, not by database constraints. Neither `save()` nor DRF's `ModelSerializer` calls `Model.clean()`, so SCRUM-42 must call `full_clean()` on each Quiz and Question before saving (or repeat these checks in the serializer's `validate()`). Source documents are not linked yet; that is deferred to SCRUM-42 pending SCRUM-98.
+
+## SCRUM-82: Study session schema
+
+Defined in `apps.courses.models.StudySession`. This stores one dated study session. The calendar reads these rows together with existing To-Do due dates; there is no separate calendar or aggregate table.
+
+```text
+User 1:N Course 1:N StudySession
+```
+
+### StudySession
+
+The automatically generated `id` is a `BigAutoField`.
+
+| Field | Storage and default |
+|---|---|
+| `creation_key` | Required `UUIDField`, default `uuid.uuid4`, `unique=True`, `editable=False`. Identifies one create request so a matching retry does not insert a second row. Not returned by the API. |
+| `title` | Required `CharField(200)`. |
+| `course` | Required FK to `courses.Course`, `CASCADE`, reverse name `study_sessions`; automatically indexed. |
+| `date` | Required `DateField`. Stores the calendar date as entered (`YYYY-MM-DD`). It is not a timezone-aware timestamp. |
+| `time` | Nullable `TimeField` (`blank=True`, `null=True`). Stores the entered clock time with no timezone conversion. Omitted and `null` both mean no time. |
+| `created_at` | Non-editable datetime; set on the first save. With `USE_TZ`, this is a timezone-aware timestamp. |
+| `updated_at` | Non-editable datetime; updated on each normal save. |
+
+There is no owner column. Access follows `StudySession.course.owner`, the same ownership path as a To-Do. Deleting a course deletes its study sessions through `CASCADE`. The unique `creation_key` is the only extra constraint; date and time are not indexed.
+
+`courses/0004_studysession.py` creates the model and depends on `courses/0003_todoitem_creation_key`. Request fields, status codes, and retry behavior are in the [study-session API contract](api-contract.md#study-session-calendar-endpoints).
 
 ## Migration rules
 
