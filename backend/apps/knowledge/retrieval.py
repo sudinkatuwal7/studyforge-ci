@@ -1,0 +1,77 @@
+"""Owner-scoped cosine retrieval over existing document chunk embeddings."""
+
+from __future__ import annotations
+
+import math
+
+from django.conf import settings
+from django.core.exceptions import ImproperlyConfigured
+from django.shortcuts import get_object_or_404
+from pgvector.django import CosineDistance
+
+from apps.documents.models import Document
+from apps.knowledge.models import Chunk
+from apps.processing.embedding_service import embed_texts
+
+
+EMBEDDING_DIMENSION = 768
+EMBEDDING_MODEL = "gemini-embedding-2"
+MAX_TOP_K = 10
+
+
+def retrieve_chunks(user, document_id: int, question: str, top_k: int = 5) -> list[dict]:
+    """Return the nearest chunks of one owned, READY document.
+
+    Questions use the same unprefixed Gemini input as stored chunk embeddings.
+    Results contain the fields accepted by RetrievalResultSerializer; ``score``
+    is cosine similarity (one minus the database's cosine distance).
+    """
+    if type(document_id) is not int or document_id <= 0:
+        raise ValueError("document_id must be a positive integer")
+    if not isinstance(question, str) or not question.strip():
+        raise ValueError("question must be a nonempty string")
+    if type(top_k) is not int or not 1 <= top_k <= MAX_TOP_K:
+        raise ValueError(f"top_k must be an integer between 1 and {MAX_TOP_K}")
+
+    document = get_object_or_404(
+        Document,
+        pk=document_id,
+        owner=user,
+        status=Document.Status.READY,
+    )
+    if settings.EMBEDDING_MODEL != EMBEDDING_MODEL or settings.EMBEDDING_DIMENSION != EMBEDDING_DIMENSION:
+        raise ImproperlyConfigured("Retrieval requires gemini-embedding-2 with 768 dimensions.")
+
+    embeddings = embed_texts([question.strip()])
+    if len(embeddings) != 1:
+        raise ValueError("The embedding provider must return exactly one question vector.")
+    vector = embeddings[0]
+    if (
+        not isinstance(vector, (list, tuple))
+        or len(vector) != EMBEDDING_DIMENSION
+        or any(type(value) not in (int, float) or not math.isfinite(value) for value in vector)
+        or not any(value != 0 for value in vector)
+    ):
+        raise ValueError("The question embedding must be a finite, nonzero 768-dimensional vector.")
+
+    chunks = (
+        Chunk.objects.filter(
+            owner=user,
+            document_id=document.pk,
+            document__owner=user,
+            document__status=Document.Status.READY,
+            embedding__isnull=False,
+        )
+        .annotate(distance=CosineDistance("embedding", vector))
+        .order_by("distance", "id")[:top_k]
+    )
+    return [
+        {
+            "chunk_id": chunk.pk,
+            "document_id": chunk.document_id,
+            "page_number": chunk.page_number,
+            "content": chunk.content,
+            "score": 1.0 - chunk.distance,
+        }
+        for chunk in chunks
+    ]
