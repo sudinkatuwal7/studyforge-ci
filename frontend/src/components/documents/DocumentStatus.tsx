@@ -83,9 +83,9 @@ export default function DocumentStatus({ tracked, courseId, accessToken }: Props
       <h3>{document?.name ?? tracked.name}</h3>
       <div role="status" aria-live="polite">
         <p>Status: <strong>{document?.status ?? "Not yet checked"}</strong></p>
-        {document?.status === "PENDING" && <p>Your PDF is saved and waiting to be processed.</p>}
-        {document?.status === "PROCESSING" && <p>Your PDF is being processed.</p>}
-        {document?.status === "READY" && <p>Your PDF is ready.</p>}
+        {document?.status === "PENDING" && <p>Your document is saved and waiting to be processed.</p>}
+        {document?.status === "PROCESSING" && <p>Your document is being processed.</p>}
+        {document?.status === "READY" && <p>Your document is ready.</p>}
         {document?.status === "FAILED" && <p className="document-error">{document.error?.message}</p>}
         {!accessToken ? <p className="document-error">Your session has ended. Sign in again to check this document.</p> : notice && <p className="document-error">{notice}</p>}
         {checking && accessToken && <p>Checking status…</p>}
