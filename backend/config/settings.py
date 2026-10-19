@@ -120,6 +120,11 @@ GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "gemini-embedding-2")
 EMBEDDING_DIMENSION = int(os.environ.get("EMBEDDING_DIMENSION", "768"))
 EMBEDDING_BATCH_SIZE = int(os.environ.get("EMBEDDING_BATCH_SIZE", "16"))
+# Disabled until a cosine-similarity cutoff is calibrated on labeled queries.
+_retrieval_min_similarity = os.environ.get("RETRIEVAL_MIN_COSINE_SIMILARITY", "").strip()
+RETRIEVAL_MIN_COSINE_SIMILARITY = (
+    float(_retrieval_min_similarity) if _retrieval_min_similarity else None
+)
 PROCESSING_SERVICE_TOKEN = os.environ.get("PROCESSING_SERVICE_TOKEN", "")
 
 CELERY_BROKER_CONNECTION_TIMEOUT = 3

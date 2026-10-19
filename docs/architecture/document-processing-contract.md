@@ -329,11 +329,52 @@ token:
 - `RUNNING` transitions the application Job to `RUNNING` and Document to
   `PROCESSING`, recording the greatest attempt number observed.
 - `SUCCEEDED` includes `page_count`, `likely_scanned`, and ordered chunks with
-  page number, content, and a finite 768-value embedding. Django validates all
-  fields and atomically replaces the Document's chunks, sets `page_count`,
+  page number, content, and a finite, nonzero 768-value embedding. Django
+  validates all fields and atomically replaces the Document's chunks, sets `page_count`,
   Job `SUCCEEDED`, and Document `READY`.
 - `FAILED` accepts only the safe `PROCESSING_FAILED` code and sets the
   application Job/Document to `FAILED`.
+
+Embedding compatibility is part of the retrieval contract: document chunks and
+questions use the same `gemini-embedding-2` model with 768 output dimensions.
+That model does not use the legacy `task_type` parameter; changing models
+requires re-embedding existing chunks before comparison, as described in the
+[Gemini Embeddings guidance](https://ai.google.dev/gemini-api/docs/embeddings).
+Retrieval's optional
+cosine-similarity cutoff remains disabled until it is calibrated against labeled
+production-like queries; boundary tests do not establish a reliable cutoff.
+
+### SCRUM-16 internal retrieval contract (not a public endpoint)
+
+[`retrieve_chunks`](../../backend/apps/knowledge/retrieval.py) has the signature
+`retrieve_chunks(user, document_id: int, question: str, top_k: int = 5) -> list[dict]`.
+Its caller must supply a trusted authenticated User; the function does not
+authenticate requests. `document_id` must be positive, `question` nonempty after
+trimming, and `top_k` an integer from 1 through 10. Missing, non-owned, or
+non-`READY` selected documents all raise `Http404` before the Gemini call.
+The SQL candidate set requires matching Chunk and Document owners, the selected
+document, `READY` status, a non-null vector, and finite cosine distance before
+ordering by distance and chunk ID and applying top-K. A successful search with
+no eligible chunks returns `[]`; Gemini/provider failures remain errors.
+
+Each retrieval result has `chunk_id`, `document_id`, `page_number`, `content`,
+and `score`, where `score = 1 - cosine_distance`. The planned JSON schemas in
+[`serializers.py`](../../backend/apps/knowledge/serializers.py) specify a query
+with `question` and 1-20 distinct selected `document_ids`, retrieval results,
+citations (`chunk_id`, `document_id`, `page_number`, `excerpt`), and either an
+`ANSWERED` response with citations or `INSUFFICIENT_CONTEXT` with no answer.
+The internal retrieval function searches one document; no multi-document
+adapter, RAG endpoint, or answer generator is implemented here. Citation
+validation requires an authorized-document allowlist derived from owner-scoped
+selection, never from an untrusted answer. The serializer uses Django
+`models.TextChoices`; its JSON/citation tests pass in the ai-learning suite.
+
+The stored Chunk schema records 768 values but not the producing model/version.
+Compatibility with the configured Gemini model is an operational assumption,
+not proven for legacy rows by their dimension. The optional similarity cutoff
+is disabled by default. Production calibration remains unverified and requires
+labeled queries and measured retrieval quality before assigning a threshold.
+Focused tests mock Gemini; they are not live-provider compatibility tests.
 
 Callbacks are limited to 2 MiB, reject mismatched job/document/source identity,
 ignore callbacks for older jobs or attempts, and acknowledge

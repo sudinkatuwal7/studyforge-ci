@@ -10,6 +10,7 @@ from __future__ import annotations
 from collections.abc import Sequence
 
 import httpx
+import math
 from django.conf import settings
 from google import genai
 from google.genai import errors as genai_errors
@@ -99,6 +100,8 @@ def _vectors_from_response(response, *, expected_count: int, dimension: int) -> 
             raise PermanentProcessingError(
                 f"Gemini embedding length {len(vector)} did not match dimension {dimension}."
             )
+        if not all(math.isfinite(value) for value in vector) or not any(vector):
+            raise PermanentProcessingError("Gemini returned a non-finite or zero embedding.")
         vectors.append(vector)
     return vectors
 
