@@ -10,6 +10,7 @@ from processing_service.chunking import TextChunk
 from processing_service.errors import PermanentProcessingError, RetryableProcessingError
 from processing_service.pdf_parser import ExtractionResult, PageText
 from processing_service.tasks import process_document_task
+from processing_service.source_client import SourceDocument
 
 
 class DocumentTaskTests(SimpleTestCase):
@@ -28,8 +29,8 @@ class DocumentTaskTests(SimpleTestCase):
         chunks = [TextChunk(page_number=1, content="page text")]
         embeddings = [[0.5] * 768]
         with (
-            patch("processing_service.tasks.fetch_source_pdf", return_value=b"%PDF") as fetch,
-            patch("processing_service.tasks.extract_pdf_text", return_value=extraction) as extract,
+            patch("processing_service.tasks.fetch_source_document", return_value=SourceDocument(b"%PDF", "application/pdf")) as fetch,
+            patch("processing_service.tasks.extract_document", return_value=extraction) as extract,
             patch("processing_service.tasks.chunk_pages", return_value=chunks) as chunk,
             patch("processing_service.tasks.embed_texts", return_value=embeddings) as embed,
             patch("processing_service.tasks.submit_callback") as callback,
@@ -55,7 +56,7 @@ class DocumentTaskTests(SimpleTestCase):
 
     def test_retryable_failure_requests_celery_retry(self):
         with patch(
-            "processing_service.tasks.fetch_source_pdf",
+            "processing_service.tasks.fetch_source_document",
             side_effect=RetryableProcessingError("Django is temporarily unavailable"),
         ), patch.object(process_document_task, "retry", side_effect=Retry()) as retry, patch(
             "processing_service.tasks.submit_callback"
@@ -70,7 +71,7 @@ class DocumentTaskTests(SimpleTestCase):
 
     def test_permanent_failure_is_reported_to_django(self):
         with patch(
-            "processing_service.tasks.fetch_source_pdf",
+            "processing_service.tasks.fetch_source_document",
             side_effect=ValueError("invalid source"),
         ), patch("processing_service.tasks.submit_callback") as callback:
             with self.assertRaisesRegex(ValueError, "invalid source"):
@@ -87,8 +88,8 @@ class DocumentTaskTests(SimpleTestCase):
             pages=[PageText(page_number=1, text="page text")],
         )
         with (
-            patch("processing_service.tasks.fetch_source_pdf", return_value=b"%PDF"),
-            patch("processing_service.tasks.extract_pdf_text", return_value=extraction),
+            patch("processing_service.tasks.fetch_source_document", return_value=SourceDocument(b"%PDF", "application/pdf")),
+            patch("processing_service.tasks.extract_document", return_value=extraction),
             patch("processing_service.tasks.chunk_pages", return_value=[]),
             patch("processing_service.tasks.embed_texts", return_value=[]),
             patch(
@@ -106,7 +107,7 @@ class DocumentTaskTests(SimpleTestCase):
     def test_stale_or_terminal_job_is_not_processed(self):
         with (
             patch("processing_service.tasks.submit_callback", return_value="stale"),
-            patch("processing_service.tasks.fetch_source_pdf") as fetch,
+            patch("processing_service.tasks.fetch_source_document") as fetch,
         ):
             with self.assertRaises(PermanentProcessingError):
                 process_document_task.run(17, 42, "a" * 64)
