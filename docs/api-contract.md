@@ -4,6 +4,33 @@ All StudyForge APIs are versioned under `/api/v1/`.
 
 This file is the source of truth for the working SCRUM-8 API contract, incorporating Person 3's decisions on 2026-09-25. No `contracts/openapi.yaml` exists, and the repository instructions and supplied SCRUM-8 requirements do not require OpenAPI. SCRUM-8 covers the upload and individual document/status contracts below, not their implementation or the course-document listing contract.
 
+## SCRUM-106 multi-format extension
+
+The same owner-protected course upload endpoint accepts exactly `.pdf`, `.docx`,
+and `.pptx`, each up to 20 MiB inclusive. Browser MIME is advisory. Django
+checks PDF structure or bounded OOXML ZIP structure and the correct Office package
+type before deriving the format from the validated suffix. Unsupported extensions
+return `INVALID_FORMAT`; malformed, mismatched, or ordinary ZIP Office uploads
+return `INVALID_OFFICE`. Encrypted or password-required Office packages are rejected.
+The stored file retains its validated suffix, exact bytes, and SHA-256 digest;
+renaming a material changes only its display name.
+
+The authenticated internal source route returns the canonical MIME for the stored
+suffix: `application/pdf`,
+`application/vnd.openxmlformats-officedocument.wordprocessingml.document`, or
+`application/vnd.openxmlformats-officedocument.presentationml.presentation`. The worker verifies
+the source digest and uses one extraction, chunking, embedding, callback, and
+persistence path. `READY` follows committed chunks and finite 768-dimensional
+pgvector embeddings.
+
+`page_number` is a legacy chunk location field. For PDF it is the actual page;
+for PPTX it is the actual slide. `Document.page_count` is the actual PDF page or
+PPTX slide count. DOCX has no page citation: `Document.page_count` is null and
+`Chunk.page_number = 1` is only a schema compatibility value. DOCX heading level
+and table row/cell order, and PPTX slide title and number, remain in chunk text.
+Consumers must never show DOCX chunks as “Page 1.” No public metadata field or
+search endpoint is introduced; existing notes/quiz retrieval uses the chunks.
+
 Implemented document endpoints (including SCRUM-61 material management) are:
 
 ```text
