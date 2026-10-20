@@ -100,6 +100,11 @@ def _extract_pptx(content: bytes) -> DocumentExtraction:
                     value = shape.text.strip()
                     if value:
                         lines.append(value)
+                elif shape.has_table:
+                    for row in shape.table.rows:
+                        cells = [cell.text.strip() for cell in row.cells]
+                        if any(cells):
+                            lines.append("[Table row] " + " | ".join(cells))
                 if shape.shape_type == 6:  # grouped shapes
                     add_shapes(shape.shapes)
 

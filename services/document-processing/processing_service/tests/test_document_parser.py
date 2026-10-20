@@ -91,6 +91,41 @@ class OfficeExtractionTests(SimpleTestCase):
         self.assertTrue(all(chunk.content.startswith("[Slide 1: Overview]\n") for chunk in chunks))
         self.assertTrue(all(chunk.page_number == 1 and len(chunk.content) <= 1000 for chunk in chunks))
 
+    def test_pptx_tables_follow_shape_row_and_cell_order_including_groups(self):
+        presentation = Presentation()
+        slide = presentation.slides.add_slide(presentation.slide_layouts[5])
+        slide.shapes.title.text = "Overview"
+        slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(1)).text = "Intro text"
+        table = slide.shapes.add_table(2, 2, Inches(1), Inches(2), Inches(4), Inches(2)).table
+        for row, values in enumerate((("Alpha", "Beta"), ("Gamma", "Delta"))):
+            for column, value in enumerate(values):
+                table.cell(row, column).text = value
+        grouped_text = slide.shapes.add_textbox(Inches(1), Inches(4), Inches(4), Inches(1))
+        grouped_text.text = "Grouped text"
+        grouped_table = slide.shapes.add_table(1, 2, Inches(1), Inches(5), Inches(4), Inches(1))
+        grouped_table.table.cell(0, 0).text = "Nested A"
+        grouped_table.table.cell(0, 1).text = "Nested B"
+        slide.shapes.add_group_shape([grouped_text, grouped_table])
+
+        table_only_slide = presentation.slides.add_slide(presentation.slide_layouts[6])
+        table_only = table_only_slide.shapes.add_table(1, 1, Inches(1), Inches(1), Inches(2), Inches(1))
+        table_only.table.cell(0, 0).text = "Standalone cell"
+        stream = BytesIO()
+        presentation.save(stream)
+
+        result = extract_document(stream.getvalue(), PPTX_MIME)
+        self.assertEqual(result.page_count, 2)
+        self.assertEqual(result.pages[0].context_prefix, "[Slide 1: Overview]")
+        self.assertEqual(result.pages[0].text.splitlines(), [
+            "[Slide 1: Overview]", "Intro text",
+            "[Table row] Alpha | Beta", "[Table row] Gamma | Delta",
+            "Grouped text", "[Table row] Nested A | Nested B",
+        ])
+        self.assertEqual(result.pages[1].text.splitlines(), [
+            "[Slide 2]", "[Table row] Standalone cell",
+        ])
+        self.assertEqual([chunk.page_number for chunk in chunk_pages(result.pages)], [1, 2])
+
     def test_blank_documents_have_no_usable_chunks(self):
         document = Document()
         stream = BytesIO()
