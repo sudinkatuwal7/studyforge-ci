@@ -21,19 +21,21 @@ class QuizServiceTestCase(TestCase):
         )
         self.course = Course.objects.create(owner=self.user, name="CS 3358")
 
-    def make_document(self, title, pages=()):
+    def make_document(self, title, pages=(), suffix=".pdf"):
         document = Document.objects.create(
             owner=self.user,
             course=self.course,
             title=title,
             sha256="a" * 64,
-            file=f"documents/2026/10/{title}.pdf",
+            file=f"documents/2026/10/{title}{suffix}",
             status=Document.Status.READY,
-            page_count=max(len(pages), 1),
+            page_count=None if suffix == ".docx" else max(len(pages), 1),
         )
         for page_number, content in enumerate(pages, start=1):
             Chunk.objects.create(
-                owner=self.user, document=document, page_number=page_number, content=content
+                owner=self.user, document=document,
+                page_number=1 if suffix == ".docx" else page_number,
+                content=content,
             )
         return document
 
@@ -120,6 +122,28 @@ class BuildSourceTextTests(QuizServiceTestCase):
         self.assertEqual(empty_ids, [])
         self.assertIn("[Page 1]\nPage one.", text)
         self.assertIn("[Page 2]\nPage two.", text)
+
+    def test_pptx_chunks_use_slide_labels(self):
+        document = self.make_document("Lecture slides", ["Overview.", "Details."], suffix=".pptx")
+
+        text, empty_ids = build_source_text([document], 10_000)
+
+        self.assertEqual(empty_ids, [])
+        self.assertIn("[Slide 1]\nOverview.", text)
+        self.assertIn("[Slide 2]\nDetails.", text)
+        self.assertNotIn("[Page", text)
+
+    def test_docx_chunks_have_no_fake_page_label_even_after_rename(self):
+        document = self.make_document("Original", ["[Heading 2] Overview", "Body text."], suffix=".docx")
+        document.title = "Renamed reading.pdf"
+        document.save(update_fields=["title"])
+
+        text, empty_ids = build_source_text([document], 10_000)
+
+        self.assertEqual(empty_ids, [])
+        self.assertEqual(text, "## Renamed reading.pdf\n\n[Heading 2] Overview\n\nBody text.")
+        self.assertNotIn("[Page", text)
+        self.assertNotIn("[Slide", text)
 
     def test_long_documents_are_sampled_across_all_pages(self):
         pages = [f"Page {n} " + "x" * 90 for n in range(1, 101)]

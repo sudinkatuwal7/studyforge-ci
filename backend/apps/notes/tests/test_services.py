@@ -1,3 +1,5 @@
+from unittest import mock
+
 from django.contrib.auth import get_user_model
 from django.test import TestCase
 
@@ -58,3 +60,28 @@ class GenerateStudyGuideTests(TestCase):
         guide = generate_study_guide(self.document)
 
         self.assertIn("5 words", guide.summary)
+
+    def test_docx_notes_receive_ordered_text_without_a_page_label(self):
+        self.document.file.name = "documents/2026/09/reading.docx"
+        self.document.page_count = None
+        self.document.save(update_fields=["file", "page_count"])
+        Chunk.objects.create(
+            owner=self.user, document=self.document, page_number=1,
+            content="[Heading 2] Overview",
+        )
+        Chunk.objects.create(
+            owner=self.user, document=self.document, page_number=1,
+            content="Body text.",
+        )
+        client = mock.Mock(name="notes_client")
+        client.name = "fake"
+        client.generate.return_value = {
+            "key_concepts": ["Overview"],
+            "important_points": ["Body text"],
+            "summary": "Summary",
+        }
+
+        with mock.patch("apps.notes.services.get_client", return_value=client):
+            generate_study_guide(self.document)
+
+        client.generate.assert_called_once_with("[Heading 2] Overview\n\nBody text.")
