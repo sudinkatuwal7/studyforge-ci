@@ -30,7 +30,31 @@ class OfficeExtractionTests(SimpleTestCase):
             "[Heading 2] Course outline", "First paragraph",
             "[Table row] Name | Meaning", "After the table",
         ])
+        self.assertEqual(result.pages[0].context_prefix, "[Heading 2] Course outline")
+        self.assertEqual(chunk_pages(result.pages)[0].content, result.pages[0].text)
         self.assertEqual(chunk_pages(result.pages)[0].page_number, 1)
+
+    def test_long_docx_sections_repeat_only_their_current_heading(self):
+        document = Document()
+        document.add_heading("First topic", level=1)
+        document.add_paragraph("alpha " * 350)
+        document.add_heading("Second topic", level=2)
+        document.add_paragraph("beta " * 350)
+        stream = BytesIO()
+        document.save(stream)
+
+        units = extract_document(stream.getvalue(), DOCX_MIME).pages
+        self.assertEqual([unit.context_prefix for unit in units], [
+            "[Heading 1] First topic", "[Heading 2] Second topic",
+        ])
+        chunks = chunk_pages(units)
+        first = [chunk for chunk in chunks if "alpha" in chunk.content]
+        second = [chunk for chunk in chunks if "beta" in chunk.content]
+        self.assertGreater(len(first), 1)
+        self.assertGreater(len(second), 1)
+        self.assertTrue(all(chunk.content.startswith("[Heading 1] First topic\n") for chunk in first))
+        self.assertTrue(all(chunk.content.startswith("[Heading 2] Second topic\n") for chunk in second))
+        self.assertTrue(all(len(chunk.content) <= 1000 for chunk in chunks))
 
     def test_pptx_preserves_slide_titles_text_and_location(self):
         presentation = Presentation()
@@ -47,9 +71,25 @@ class OfficeExtractionTests(SimpleTestCase):
         self.assertEqual([unit.page_number for unit in result.pages], [1, 2])
         self.assertIn("First slide", result.pages[0].text)
         self.assertIn("[Slide 1: Overview]", result.pages[0].text)
+        self.assertEqual(result.pages[0].context_prefix, "[Slide 1: Overview]")
+        self.assertEqual(chunk_pages(result.pages)[0].content, result.pages[0].text)
         self.assertIn("Second slide", result.pages[1].text)
         self.assertNotIn("Private speaker note", "\n".join(unit.text for unit in result.pages))
         self.assertEqual([chunk.page_number for chunk in chunk_pages(result.pages)], [1, 2])
+
+    def test_long_pptx_slide_repeats_its_title_on_every_chunk(self):
+        presentation = Presentation()
+        slide = presentation.slides.add_slide(presentation.slide_layouts[5])
+        slide.shapes.title.text = "Overview"
+        slide.shapes.add_textbox(Inches(1), Inches(1), Inches(4), Inches(1)).text = "slide content " * 250
+        stream = BytesIO()
+        presentation.save(stream)
+
+        units = extract_document(stream.getvalue(), PPTX_MIME).pages
+        chunks = chunk_pages(units)
+        self.assertGreater(len(chunks), 1)
+        self.assertTrue(all(chunk.content.startswith("[Slide 1: Overview]\n") for chunk in chunks))
+        self.assertTrue(all(chunk.page_number == 1 and len(chunk.content) <= 1000 for chunk in chunks))
 
     def test_blank_documents_have_no_usable_chunks(self):
         document = Document()

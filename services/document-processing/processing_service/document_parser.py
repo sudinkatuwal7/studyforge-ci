@@ -19,6 +19,7 @@ class TextUnit:
     # or DOCX's required internal compatibility value (never a page citation).
     page_number: int
     text: str
+    context_prefix: str = ""
 
 
 @dataclass(frozen=True)
@@ -53,7 +54,9 @@ def _extract_docx(content: bytes) -> DocumentExtraction:
     from docx.text.paragraph import Paragraph
 
     document = Document(BytesIO(content))
+    units = []
     lines = []
+    heading = ""
     for block in document.iter_inner_content():
         if isinstance(block, Paragraph):
             value = block.text.strip()
@@ -61,7 +64,11 @@ def _extract_docx(content: bytes) -> DocumentExtraction:
                 style_name = block.style.name or ""
                 if style_name.lower().startswith("heading"):
                     level = style_name[len("Heading"):].strip()
-                    value = f"[Heading {level or '1'}] {value}"
+                    if lines:
+                        units.append(TextUnit(1, "\n".join(lines), heading))
+                    heading = f"[Heading {level or '1'}] {value}"
+                    lines = [heading]
+                    continue
                 lines.append(value)
         elif isinstance(block, Table):
             for row in block.rows:
@@ -69,7 +76,9 @@ def _extract_docx(content: bytes) -> DocumentExtraction:
                 if any(cells):
                     lines.append("[Table row] " + " | ".join(cells))
     # DOCX is unpaginated. The positive chunk location is schema compatibility only.
-    return DocumentExtraction([TextUnit(1, "\n".join(lines))], None)
+    if lines or not units:
+        units.append(TextUnit(1, "\n".join(lines), heading))
+    return DocumentExtraction(units, None)
 
 
 def _extract_pptx(content: bytes) -> DocumentExtraction:
@@ -80,7 +89,8 @@ def _extract_pptx(content: bytes) -> DocumentExtraction:
     for number, slide in enumerate(presentation.slides, 1):
         title_shape = slide.shapes.title
         title = title_shape.text.strip() if title_shape and title_shape.has_text_frame else ""
-        lines = [f"[Slide {number}{': ' + title if title else ''}]"]
+        marker = f"[Slide {number}{': ' + title if title else ''}]"
+        lines = [marker]
 
         def add_shapes(shapes):
             for shape in shapes:
@@ -95,5 +105,6 @@ def _extract_pptx(content: bytes) -> DocumentExtraction:
 
         add_shapes(slide.shapes)
         # A title alone is usable text; the marker alone is not.
-        units.append(TextUnit(number, "\n".join(lines) if title or len(lines) > 1 else ""))
+        text = "\n".join(lines) if title or len(lines) > 1 else ""
+        units.append(TextUnit(number, text, marker if text else ""))
     return DocumentExtraction(units, len(units))
