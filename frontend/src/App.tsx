@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
 import { Link, Route, Routes } from "react-router-dom";
 import { getHealth } from "./api/health";
-import  { useAuth } from "./context/AuthContext";
+import { useAuth } from "./context/AuthContext";
 import AppShell from "./components/dashboard/AppShell";
 import AuthLayout from "./components/auth/AuthLayout";
 import LoginPage from "./pages/LoginPage";
+import RegisterPage from "./pages/RegisterPage";
 import { logout } from "./api/auth";
 import CourseDetailPage from "./pages/CourseDetailPage";
 import CalendarPage from "./pages/CalendarPage";
@@ -27,22 +28,25 @@ function App() {
 
   const [logoutError, setLogoutError] = useState<string | null>(null);
 
+  // Which card the signed-out page shows.
+  const [authView, setAuthView] = useState<"login" | "register">("login");
+
   async function handleLogout() {
-   setIsLoggingOut(true);
-   setLogoutError(null);
+    setIsLoggingOut(true);
+    setLogoutError(null);
 
-  try {
-    await logout();
-    clearSession();
-  } catch (error) {
-    setLogoutError(
-      error instanceof Error ? error.message : "Logout failed",
-    );
-  } finally {
-    setIsLoggingOut(false);
+    try {
+      await logout();
+      setAuthView("login");
+      clearSession();
+    } catch (error) {
+      setLogoutError(
+        error instanceof Error ? error.message : "Logout failed",
+      );
+    } finally {
+      setIsLoggingOut(false);
+    }
   }
-}
-
 
   useEffect(() => {
     let cancelled = false;
@@ -94,13 +98,43 @@ function App() {
   }
 
   if (!user) {
+    const isRegister = authView === "register";
+
     return (
       <AuthLayout
-        heroTitle="Welcome back"
-        heroText="Log in to your cozy study space and pick up where you left off."
+        heroTitle={isRegister ? "Start studying smarter" : "Welcome back"}
+        heroText={
+          isRegister
+            ? "Create a free account to keep your courses, materials, and study sessions in one place."
+            : "Log in to your cozy study space and pick up where you left off."
+        }
+        headerActions={
+          <>
+            <button
+              type="button"
+              className="auth-pill"
+              aria-current={isRegister ? undefined : "page"}
+              onClick={() => setAuthView("login")}
+            >
+              Log in
+            </button>
+            <button
+              type="button"
+              className="auth-pill auth-pill-dark"
+              aria-current={isRegister ? "page" : undefined}
+              onClick={() => setAuthView("register")}
+            >
+              Start free
+            </button>
+          </>
+        }
         footer={healthMessage}
       >
-        <LoginPage />
+        {isRegister ? (
+          <RegisterPage onSignIn={() => setAuthView("login")} />
+        ) : (
+          <LoginPage onCreateAccount={() => setAuthView("register")} />
+        )}
       </AuthLayout>
     );
   }

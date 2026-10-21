@@ -179,6 +179,18 @@
   color: var(--ink);
 }
 
+/* First and last name side by side. */
+.auth-name-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+/* Lets inputs shrink inside grid cells instead of overflowing. */
+.auth-name-row > * {
+  min-width: 0;
+}
+
 .auth-input-row {
   display: flex;
   align-items: center;
@@ -483,5 +495,9 @@
     padding: 0 0.75rem;
     font-size: 0.95rem;
     white-space: nowrap;
+  }
+
+  .auth-name-row {
+    grid-template-columns: 1fr;
   }
 }
