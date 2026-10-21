@@ -3,9 +3,9 @@ import { Link, Route, Routes } from "react-router-dom";
 import { getHealth } from "./api/health";
 import  { useAuth } from "./context/AuthContext";
 import AppShell from "./components/dashboard/AppShell";
+import AuthLayout from "./components/auth/AuthLayout";
 import LoginPage from "./pages/LoginPage";
 import { logout } from "./api/auth";
-import CourseList from "./components/courses/CourseList";
 import CourseDetailPage from "./pages/CourseDetailPage";
 import CalendarPage from "./pages/CalendarPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -95,12 +95,13 @@ function App() {
 
   if (!user) {
     return (
-      <main className="auth-layout">
-        <h1>StudyForge</h1>
-        {healthMessage}
+      <AuthLayout
+        heroTitle="Welcome back"
+        heroText="Log in to your cozy study space and pick up where you left off."
+        footer={healthMessage}
+      >
         <LoginPage />
-        <CourseList refreshKey={courseListVersion} />
-      </main>
+      </AuthLayout>
     );
   }
 

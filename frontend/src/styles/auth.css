@@ -1,0 +1,487 @@
+/* Signed-out pages: login and registration. Scoped under .auth-page so the
+   dashboard keeps its own look. */
+.auth-page {
+  --ink: #1d1d1f;
+  --ink-soft: #4a4a52;
+  --line: #e9e4dc;
+  --violet: #7c4ddb;
+  --danger: #b42318;
+  --serif: "Instrument Serif", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
+
+  box-sizing: border-box;
+  min-height: 100vh;
+  padding: 1.5rem clamp(1rem, 4vw, 4.5rem) 2rem;
+  display: flex;
+  flex-direction: column;
+  color: var(--ink);
+}
+
+.auth-page *,
+.auth-page *::before,
+.auth-page *::after {
+  box-sizing: border-box;
+}
+
+/* ---------- Header ---------- */
+.auth-header {
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  max-width: 80rem;
+  width: 100%;
+  margin: 0 auto;
+  padding: 0.75rem 0.75rem 0.75rem 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #fffdf9;
+}
+
+.auth-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.auth-logo {
+  display: grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  border-radius: 50%;
+  background: var(--lavender);
+  color: #5b3fb0;
+}
+
+.auth-wordmark {
+  font-size: 1.45rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.auth-nav {
+  display: flex;
+  gap: 0.25rem;
+  margin-left: auto;
+}
+
+.auth-page .auth-nav-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.5rem 0.9rem;
+  border: none;
+  background: none;
+  color: var(--ink-soft);
+  font-weight: 500;
+}
+
+.auth-header-actions {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.auth-nav + .auth-header-actions {
+  margin-left: 0.5rem;
+}
+
+.auth-page .auth-pill {
+  padding: 0.7rem 1.4rem;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: white;
+  color: var(--ink);
+  font-weight: 500;
+}
+
+.auth-page .auth-pill-dark {
+  border-color: var(--ink);
+  background: var(--ink);
+  color: white;
+}
+
+/* ---------- Hero + card ---------- */
+.auth-main {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr minmax(0, 34rem);
+  align-items: center;
+  gap: clamp(2rem, 6vw, 6rem);
+  max-width: 80rem;
+  width: 100%;
+  margin: 0 auto;
+  padding: 3.5rem 0 2rem;
+}
+
+.auth-hero {
+  text-align: center;
+}
+
+.auth-hero-title {
+  margin: 0;
+  font-family: var(--serif);
+  font-size: clamp(3rem, 7vw, 5.75rem);
+  font-weight: 400;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: var(--ink);
+}
+
+.auth-hero-text {
+  max-width: 24rem;
+  margin: 1.25rem auto 0;
+  font-size: 1.2rem;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+.auth-card {
+  padding: 3rem clamp(1.25rem, 4vw, 3rem) 2.25rem;
+  border: 1px solid var(--line);
+  border-radius: 1.75rem;
+  background: #fffdfa;
+  box-shadow: 0 18px 40px #26334d0d;
+}
+
+.auth-card-title {
+  margin: 0;
+  text-align: center;
+  font-family: var(--serif);
+  font-size: clamp(2.1rem, 4vw, 2.75rem);
+  font-weight: 400;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+}
+
+.auth-subtitle {
+  margin-top: 0.6rem;
+  text-align: center;
+  font-size: 1.05rem;
+  color: var(--ink-soft);
+}
+
+/* ---------- Form ---------- */
+.auth-page .auth-form {
+  width: 100%;
+  margin-top: 2rem;
+  gap: 1.25rem;
+}
+
+.auth-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.auth-field label {
+  font-weight: 600;
+  font-size: 0.95rem;
+  color: var(--ink);
+}
+
+.auth-input-row {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  min-height: 3.5rem;
+  padding: 0 0.5rem 0 1.1rem;
+  border: 1px solid var(--line);
+  border-radius: 0.85rem;
+  background: white;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.auth-input-row:focus-within {
+  border-color: var(--violet);
+  box-shadow: 0 0 0 3px #7c4ddb26;
+}
+
+.auth-input-row:has(input[aria-invalid="true"]) {
+  border-color: var(--danger);
+}
+
+.auth-input-row:has(input[aria-invalid="true"]):focus-within {
+  box-shadow: 0 0 0 3px #b4231826;
+}
+
+/* The row draws the border and focus ring, so the input itself stays plain.
+   1rem font size also stops iOS from zooming into the field. */
+.auth-page .auth-input-row input {
+  flex: 1;
+  min-width: 0;
+  padding: 0.9rem 0;
+  border: none;
+  border-radius: 0;
+  background: transparent;
+  font-size: 1rem;
+  color: var(--ink);
+}
+
+.auth-page .auth-input-row input:focus-visible {
+  outline: none;
+}
+
+.auth-input-row input::placeholder {
+  color: #9b9aa3;
+}
+
+.field-icon {
+  display: flex;
+  color: #6b6a73;
+}
+
+.auth-page .password-toggle {
+  display: grid;
+  place-items: center;
+  width: 2.5rem;
+  height: 2.5rem;
+  padding: 0;
+  border: none;
+  border-radius: 0.6rem;
+  background: none;
+  color: #6b6a73;
+}
+
+.auth-page .password-toggle:hover {
+  background: #f4f1ec;
+  color: var(--ink);
+}
+
+.field-hint {
+  font-size: 0.875rem;
+  color: var(--ink-soft);
+}
+
+.field-error {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--danger);
+}
+
+.auth-alert {
+  padding: 0.85rem 1rem;
+  border: 1px solid #f4c7c3;
+  border-radius: 0.85rem;
+  background: #fef3f2;
+  color: var(--danger);
+  font-weight: 500;
+}
+
+.auth-row-end {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 0.6rem;
+}
+
+.auth-page .link-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--violet);
+  font-weight: 500;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+.auth-page .link-button.strong {
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.auth-page .link-button.strong:hover {
+  text-decoration: underline;
+}
+
+.auth-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  color: var(--ink-soft);
+}
+
+.auth-checkbox input {
+  width: 1.15rem;
+  height: 1.15rem;
+  margin: 0;
+  accent-color: var(--violet);
+}
+
+.auth-page .auth-submit {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  min-height: 3.5rem;
+  margin-top: 0.25rem;
+  border: none;
+  border-radius: 0.9rem;
+  background: var(--ink);
+  font-size: 1.1rem;
+  font-weight: 500;
+  color: white;
+  transition: background 0.15s;
+}
+
+.auth-page .auth-submit:hover:not(:disabled) {
+  background: #000;
+}
+
+.spinner {
+  width: 1.1rem;
+  height: 1.1rem;
+  border: 2px solid #ffffff59;
+  border-top-color: white;
+  border-radius: 50%;
+  animation: auth-spin 0.8s linear infinite;
+}
+
+@keyframes auth-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner {
+    animation-duration: 2.4s;
+  }
+}
+
+.auth-divider {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  margin: 1.5rem 0;
+  color: var(--ink-soft);
+  font-size: 0.95rem;
+}
+
+.auth-divider::before,
+.auth-divider::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--line);
+}
+
+.auth-page .auth-google {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  width: 100%;
+  min-height: 3.5rem;
+  border: 1px solid var(--line);
+  border-radius: 0.9rem;
+  background: #f7f5f1;
+  color: var(--ink);
+  font-size: 1.05rem;
+  font-weight: 500;
+}
+
+/* Keep icons full size when a narrow screen squeezes the text. */
+.auth-page button svg,
+.field-icon svg {
+  flex-shrink: 0;
+}
+
+.soon-badge {
+  white-space: nowrap;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: var(--lavender);
+  color: #5b3fb0;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.auth-switch {
+  margin-top: 1.75rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--line);
+  text-align: center;
+  color: var(--ink-soft);
+}
+
+/* Placeholders for features that are not built yet. */
+.auth-page button:disabled:not([aria-busy="true"]) {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.auth-page .auth-nav-item:disabled {
+  opacity: 1;
+}
+
+.auth-footer {
+  max-width: 80rem;
+  width: 100%;
+  margin: 0 auto;
+  font-size: 0.85rem;
+  text-align: center;
+}
+
+/* ---------- Tablet and mobile ---------- */
+@media (max-width: 60rem) {
+  .auth-main {
+    grid-template-columns: minmax(0, 34rem);
+    justify-content: center;
+    align-content: start;
+    gap: 2rem;
+    padding-top: 2.5rem;
+  }
+
+  .auth-hero-text {
+    margin-top: 0.75rem;
+    font-size: 1.05rem;
+  }
+}
+
+@media (max-width: 48rem) {
+  .auth-page {
+    padding-top: 1rem;
+  }
+
+  .auth-header {
+    padding-left: 1rem;
+  }
+
+  .auth-nav {
+    display: none;
+  }
+
+  .auth-header-actions {
+    margin-left: auto;
+  }
+
+  .auth-wordmark {
+    font-size: 1.2rem;
+  }
+
+  .auth-logo {
+    width: 2.25rem;
+    height: 2.25rem;
+  }
+
+  .auth-page .auth-pill {
+    padding: 0.55rem 1rem;
+  }
+
+  .auth-main {
+    padding-top: 1.75rem;
+  }
+
+  .auth-card {
+    padding-top: 2.25rem;
+    border-radius: 1.35rem;
+  }
+
+  .auth-page .auth-google {
+    gap: 0.5rem;
+    padding: 0 0.75rem;
+    font-size: 0.95rem;
+    white-space: nowrap;
+  }
+}
