@@ -23,8 +23,8 @@ const mockGet = vi.mocked(getDocument);
 const tree = (courseId = 7) => <StrictMode><DocumentUpload courseId={courseId} /></StrictMode>;
 
 async function chooseAndSubmit() {
-  fireEvent.change(screen.getByLabelText("PDF file"), { target: { files: [new File(["%PDF-test"], "Lecture.pdf", { type: "application/pdf" })] } });
-  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Upload PDF" })); });
+  fireEvent.change(screen.getByLabelText("Document file"), { target: { files: [new File(["%PDF-test"], "Lecture.pdf", { type: "application/pdf" })] } });
+  await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Upload document" })); });
 }
 
 async function advance(ms = 2000) {
@@ -41,13 +41,19 @@ beforeEach(() => {
 afterEach(() => { cleanup(); vi.useRealTimers(); });
 
 describe("PDF upload and status", () => {
+  it("offers all three supported formats in the existing file picker", () => {
+    render(tree());
+    expect(screen.getByLabelText("Document file")).toHaveAttribute(
+      "accept", expect.stringContaining(".pdf,.docx,.pptx"),
+    );
+  });
   it("requires a file and blocks invalid selections before a request", async () => {
     render(tree());
-    fireEvent.click(screen.getByRole("button", { name: "Upload PDF" }));
+    fireEvent.click(screen.getByRole("button", { name: "Upload document" }));
     expect(screen.getByRole("alert")).toHaveTextContent("Choose a PDF");
-    fireEvent.change(screen.getByLabelText("PDF file"), { target: { files: [new File(["hello"], "notes.txt")] } });
-    fireEvent.click(screen.getByRole("button", { name: "Upload PDF" }));
-    expect(screen.getByRole("alert")).toHaveTextContent(".pdf extension");
+    fireEvent.change(screen.getByLabelText("Document file"), { target: { files: [new File(["hello"], "notes.txt")] } });
+    fireEvent.click(screen.getByRole("button", { name: "Upload document" }));
+    expect(screen.getByRole("alert")).toHaveTextContent(".pdf, .docx, or .pptx extension");
     expect(mockUpload).not.toHaveBeenCalled();
   });
 
@@ -163,7 +169,7 @@ describe("PDF upload and status", () => {
     render(tree());
     await chooseAndSubmit();
     expect(screen.getByRole("alert")).toHaveTextContent(status === 401 ? /session has ended/ : status === 404 ? /course is unavailable/ : /valid, readable PDF/);
-    if (status === 401) expect(screen.getByRole("button", { name: "Upload PDF" })).toBeDisabled();
+    if (status === 401) expect(screen.getByRole("button", { name: "Upload document" })).toBeDisabled();
     await advance(10000);
     expect(mockGet).not.toHaveBeenCalled();
   });
@@ -200,10 +206,10 @@ describe("PDF upload and status", () => {
   it("cleans up pending timers when starting another document", async () => {
     render(tree());
     await chooseAndSubmit();
-    fireEvent.click(screen.getByRole("button", { name: "Upload another PDF" }));
+    fireEvent.click(screen.getByRole("button", { name: "Upload another document" }));
     await advance(6000);
     expect(mockGet).not.toHaveBeenCalled();
     expect(screen.queryByText("PENDING")).not.toBeInTheDocument();
-    expect(screen.getByLabelText("PDF file")).toHaveValue("");
+    expect(screen.getByLabelText("Document file")).toHaveValue("");
   });
 });

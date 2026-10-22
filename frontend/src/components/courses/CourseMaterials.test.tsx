@@ -27,8 +27,8 @@ async function click(name: string) {
   await act(async () => { fireEvent.click(screen.getByRole("button", { name })); });
 }
 async function upload() {
-  fireEvent.change(screen.getByLabelText("PDF file"), { target: { files: [new File(["%PDF-test"], "Lecture.pdf")] } });
-  await click("Upload PDF");
+  fireEvent.change(screen.getByLabelText("Document file"), { target: { files: [new File(["%PDF-test"], "Lecture.pdf")] } });
+  await click("Upload document");
 }
 
 beforeEach(() => {
@@ -144,7 +144,7 @@ it("puts uploads in the persistent list with one poller and retains them after a
   await upload();
   expect(screen.getAllByRole("article")).toHaveLength(1);
   expect(screen.getAllByRole("heading", { name: "Lecture.pdf" })).toHaveLength(1);
-  await click("Upload another PDF");
+  await click("Upload another document");
   await act(async () => { await vi.advanceTimersByTimeAsync(2000); });
   expect(getDocument).toHaveBeenCalledTimes(1);
   expect(screen.getByText("READY")).toBeInTheDocument();

@@ -16,7 +16,7 @@ from apps.documents.models import Document
 from apps.documents.parsers import DocumentMultipartParser
 from apps.documents.serializers import DocumentSerializer, validate_display_name
 from apps.documents.services import delete_material, locked_material, store_and_dispatch
-from apps.documents.validation import validate_pdf
+from apps.documents.validation import validate_document
 from apps.identity.ownership import owned_course, owned_documents
 
 
@@ -98,8 +98,8 @@ class DocumentUploadView(DocumentAPIView):
         if len(parts) != 1 or len(files) != 1:
             raise DocumentAPIError("INVALID_UPLOAD")
         upload = files[0]
-        title, sha256 = validate_pdf(upload)
-        snapshot = store_and_dispatch(course=course, upload=upload, title=title, sha256=sha256)
+        title, sha256, suffix = validate_document(upload)
+        snapshot = store_and_dispatch(course=course, upload=upload, title=title, sha256=sha256, suffix=suffix)
         return Response(snapshot, status=201)
 
 

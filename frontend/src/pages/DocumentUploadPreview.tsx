@@ -30,7 +30,7 @@ export default function DocumentUploadPreview() {
 
   return (
     <main>
-      <h1>PDF upload development preview</h1>
+      <h1>Document upload development preview</h1>
       <p>This separate preview is for testing before the course screen is integrated.</p>
       {isRestoring ? <p role="status">Checking your session…</p> : !user ? <LoginPage /> : <>
         <p>Signed in as {user.email}</p>

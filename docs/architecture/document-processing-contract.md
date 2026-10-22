@@ -2,6 +2,27 @@
 
 Status: **APPROVED — Architecture and SCRUM-118 integration contract agreed; recovery decisions remain open**
 
+## SCRUM-106 format extension
+
+Sanish approved extending source retrieval MIME handling, extraction dispatch,
+normalized results, Office handlers, and minimum chunk/location compatibility.
+The Celery task, queue, retries, service authentication, Job lifecycle, callback
+delivery, and atomic callback persistence retain the SCRUM-108/SCRUM-118 design.
+
+Validated PDF, DOCX, and PPTX files retain their stored suffix. Django serves the
+source with server-controlled canonical MIME; the worker checks identity, size,
+and SHA-256 before dispatching to the matching parser. Parsers produce ordered
+text units for the shared chunker and embedding client. PDF units are pages,
+PPTX units are slides, and DOCX is one ordered unpaginated unit. PPTX slide titles
+and DOCX heading/table markers are included in persisted text. Speaker notes and
+image-only content are outside extraction. Empty text is rejected by the existing
+callback contract and becomes a controlled processing failure.
+
+The callback's legacy `page_count` is an actual PDF page count, PPTX slide count,
+or null for DOCX. `Chunk.page_number` means PDF page or PPTX slide; its required
+value of 1 for DOCX is internal schema compatibility and must not be rendered as
+a Word page citation. No migration or metadata JSON is needed.
+
 The SCRUM-118 clarification supplied by Sanish on October 17, 2026 is recorded
 in section 15. It supersedes earlier open ownership questions and the original
 HTTP 200 handling of stale/terminal callbacks described in section 14.

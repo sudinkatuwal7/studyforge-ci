@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { deleteDocument, DocumentRequestError, getDocument, listDocuments, MAX_PDF_BYTES, renameDocument, uploadDocument, validatePdf } from "./documents";
+import { deleteDocument, DocumentRequestError, getDocument, listDocuments, MAX_PDF_BYTES, renameDocument, uploadDocument, validateDocument, validatePdf } from "./documents";
 
 const document = {
   id: 12, course_id: 7, name: "Lecture.pdf", status: "PENDING",
@@ -101,6 +101,12 @@ describe("document API", () => {
 });
 
 describe("client PDF prechecks", () => {
+  it("accepts PDF, DOCX, and PPTX extensions without trusting browser MIME", () => {
+    for (const name of ["lecture.pdf", "notes.DOCX", "slides.pptx"]) {
+      expect(validateDocument(new File(["source"], name, { type: "text/plain" }))).toBeNull();
+    }
+    expect(validateDocument(new File(["source"], "legacy.doc"))).toMatch(/\.docx/);
+  });
   it("checks missing, empty, non-PDF, and oversized files", () => {
     expect(validatePdf(null)).toMatch(/Choose a PDF/);
     expect(validatePdf(new File([], "empty.pdf"))).toMatch(/empty/);

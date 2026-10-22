@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from io import BytesIO
 from typing import Any
 
 from celery import shared_task
@@ -10,9 +9,9 @@ from celery import shared_task
 from .chunking import chunk_pages
 from .embedding_service import embed_texts
 from .errors import PermanentProcessingError, RetryableProcessingError
-from .pdf_parser import extract_pdf_text
+from .document_parser import extract_document
 from .result_client import submit_callback
-from .source_client import fetch_source_pdf
+from .source_client import fetch_source_document
 
 TASK_MAX_RETRIES = 3
 TASK_RETRY_COUNTDOWN_SECONDS = 60
@@ -43,8 +42,8 @@ def process_document_task(
     _submit_or_retry(self, {**identity, "status": "RUNNING"})
 
     try:
-        pdf_bytes = fetch_source_pdf(job_id, document_id, source_sha256)
-        extraction = extract_pdf_text(BytesIO(pdf_bytes))
+        source = fetch_source_document(job_id, document_id, source_sha256)
+        extraction = extract_document(source.content, source.mime_type)
         chunks = chunk_pages(extraction.pages)
         embeddings = embed_texts([chunk.content for chunk in chunks])
     except RetryableProcessingError as exc:

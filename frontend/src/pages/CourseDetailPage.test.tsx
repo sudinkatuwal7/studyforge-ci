@@ -45,13 +45,13 @@ it("opens the selected course, uploads with its ID and session, and displays the
 
   const link = await screen.findByRole("link", { name: /Data Analysis/ });
   expect(link).toHaveAttribute("href", `/courses/${course.id}`);
-  expect(screen.queryByLabelText("PDF file")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("Document file")).not.toBeInTheDocument();
   fireEvent.click(link);
-  const input = await screen.findByLabelText("PDF file");
+  const input = await screen.findByLabelText("Document file");
   expect(screen.getByRole("heading", { name: course.name })).toBeInTheDocument();
   const file = new File(["%PDF-test"], "Lecture.pdf", { type: "application/pdf" });
   fireEvent.change(input, { target: { files: [file] } });
-  fireEvent.click(screen.getByRole("button", { name: "Upload PDF" }));
+  fireEvent.click(screen.getByRole("button", { name: "Upload document" }));
   expect(await screen.findByText("PENDING")).toBeInTheDocument();
 
   const uploads = fetch.mock.calls.filter(([, options]) => options?.method === "POST");
@@ -76,5 +76,5 @@ it("keeps the upload form hidden when a direct course link returns 404", async (
   render(<MemoryRouter initialEntries={["/courses/99/"]}><App /></MemoryRouter>);
 
   expect(await screen.findByRole("alert")).toHaveTextContent("Course not found or you do not have access to it.");
-  expect(screen.queryByLabelText("PDF file")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("Document file")).not.toBeInTheDocument();
 });

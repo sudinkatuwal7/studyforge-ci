@@ -59,6 +59,21 @@ def test_invalid_envelope_does_not_mutate(callback_job, field, value):
 
 
 @pytest.mark.django_db
+def test_null_page_count_is_only_valid_for_docx(callback_job):
+    payload = success(callback_job)
+    payload["page_count"] = None
+    assert post(callback_job.pk, payload).json() == {"error": "invalid_page_count"}
+    assert not Chunk.objects.exists()
+
+    callback_job.document.file.name = "documents/contract.docx"
+    callback_job.document.save(update_fields=["file"])
+    assert post(callback_job.pk, payload).json() == {"status": "applied"}
+    callback_job.document.refresh_from_db()
+    assert callback_job.document.page_count is None
+    assert list(callback_job.document.chunks.values_list("page_number", flat=True)) == [1]
+
+
+@pytest.mark.django_db
 @pytest.mark.parametrize("field,value", [
     ("content", "  \n"), ("page_number", True), ("page_number", 0),
     ("page_number", 2), ("embedding", [0.0] * 767),

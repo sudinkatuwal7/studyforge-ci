@@ -12,13 +12,13 @@ vi.mock("../context/AuthContext", () => ({
 
 beforeEach(() => window.history.replaceState(null, "", "/upload-preview.html"));
 
-it("opens the actual PDF file picker from the page without needing a URL parameter", () => {
+it("opens the actual Document file picker from the page without needing a URL parameter", () => {
   render(<DocumentUploadPreview />);
-  expect(screen.queryByLabelText("PDF file")).not.toBeInTheDocument();
+  expect(screen.queryByLabelText("Document file")).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Course ID"), { target: { value: "1" } });
   fireEvent.click(screen.getByRole("button", { name: "Open upload form" }));
-  expect(screen.getByLabelText("PDF file")).toHaveAttribute("type", "file");
-  expect(screen.getByRole("button", { name: "Upload PDF" })).toBeEnabled();
+  expect(screen.getByLabelText("Document file")).toHaveAttribute("type", "file");
+  expect(screen.getByRole("button", { name: "Upload document" })).toBeEnabled();
   expect(window.location.search).toBe("?courseId=1");
 });
 
@@ -26,5 +26,5 @@ it("still opens the uploader immediately when the URL includes a course ID", () 
   window.history.replaceState(null, "", "/upload-preview.html?courseId=1");
   render(<DocumentUploadPreview />);
   expect(screen.getByLabelText("Course ID")).toHaveValue(1);
-  expect(screen.getByLabelText("PDF file")).toBeEnabled();
+  expect(screen.getByLabelText("Document file")).toBeEnabled();
 });

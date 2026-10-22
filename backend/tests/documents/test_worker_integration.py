@@ -8,6 +8,7 @@ execute their production code against isolated storage and PostgreSQL.
 from email.message import Message
 from io import BytesIO
 import json
+import math
 from pathlib import Path
 from types import SimpleNamespace
 from urllib.error import HTTPError
@@ -21,6 +22,7 @@ from django.test import Client
 
 from apps.documents.models import Document, Job
 from apps.knowledge.models import Chunk
+from apps.notes.selectors import get_ordered_chunks
 
 
 @pytest.fixture
@@ -90,6 +92,48 @@ def test_uploaded_pdf_reaches_ready_and_identical_redelivery_is_acknowledged(
     assert document.page_count == 1
     assert Chunk.objects.filter(document=document).count() == len(result["chunks"]) > 0
     assert all(chunk.owner_id == document.owner_id for chunk in document.chunks.all())
+    assert owner_client.get(f"/api/v1/documents/{document.pk}/").json()["status"] == "READY"
+
+
+@pytest.mark.django_db(transaction=True)
+@pytest.mark.parametrize("suffix,page_count,locations", [
+    (".docx", None, [1]),
+    (".pptx", 2, [1, 2]),
+])
+def test_uploaded_office_uses_existing_worker_callback_and_notes_path(
+    suffix, page_count, locations, worker_bridge, owner_client, course, office_factory, dispatch,
+):
+    source = office_factory(suffix)
+    response = owner_client.post(
+        f"/api/v1/courses/{course.pk}/documents/",
+        {"file": SimpleUploadedFile("lecture" + suffix, source, content_type="text/plain")},
+        format="multipart",
+    )
+    assert response.status_code == 201, response.content
+    document = Document.objects.get(pk=response.json()["id"])
+    job = document.jobs.get()
+    dispatch.assert_called_once_with(job.pk, document.pk, document.sha256)
+
+    result = worker_bridge.task.run(job.pk, document.pk, document.sha256)
+    assert [payload["status"] for payload, _ in worker_bridge.callbacks] == ["RUNNING", "SUCCEEDED"]
+    assert worker_bridge.results.submit_callback(job.pk, result) == "duplicate"
+    document.refresh_from_db()
+    job.refresh_from_db()
+    assert document.status == Document.Status.READY
+    assert job.status == Job.Status.SUCCEEDED
+    assert document.page_count == page_count
+    chunks = list(get_ordered_chunks(document))
+    assert chunks
+    assert sorted({chunk.page_number for chunk in chunks}) == locations
+    assert all(chunk.owner_id == document.owner_id for chunk in chunks)
+    assert all(len(chunk.embedding) == 768 and all(math.isfinite(x) for x in chunk.embedding) for chunk in chunks)
+    text = "\n".join(chunk.content for chunk in chunks)
+    if suffix == ".docx":
+        assert "[Heading 2] Course outline" in text
+        assert "[Table row] Concept | Definition" in text
+    else:
+        assert "[Slide 1: Overview]" in text
+        assert "[Slide 2: Details]" in text
     assert owner_client.get(f"/api/v1/documents/{document.pk}/").json()["status"] == "READY"
 
 

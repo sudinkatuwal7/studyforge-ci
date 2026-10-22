@@ -63,8 +63,13 @@ def build_source_text(documents, char_budget):
             empty_ids.append(document.pk)
             continue
 
+        # The stored suffix is set after upload validation and survives renaming.
+        # DOCX has no physical pages; its chunk.page_number is schema compatibility only.
+        source_format = document.file.name.rsplit(".", 1)[-1].lower()
+        location_label = {"pdf": "Page", "pptx": "Slide"}.get(source_format)
         body = "\n\n".join(
-            f"[Page {chunk.page_number}]\n{chunk.content.strip()}"
+            (f"[{location_label} {chunk.page_number}]\n" if location_label else "")
+            + chunk.content.strip()
             for chunk in _sample_evenly(chunks, per_document)
         )
         # Chunks vary in size, so the sample can still overshoot slightly.

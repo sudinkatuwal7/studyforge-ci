@@ -37,7 +37,7 @@ describe("StudyGuidePanel", () => {
     expect(screen.getByText(/hash table stores entries/i)).toBeInTheDocument();
   });
 
-  it("explains a scanned PDF differently from one still processing", async () => {
+  it("explains a document without readable text differently from one still processing", async () => {
     mockGenerate.mockRejectedValue(new StudyGuideError(409, "DOCUMENT_HAS_NO_TEXT"));
 
     renderPanel();

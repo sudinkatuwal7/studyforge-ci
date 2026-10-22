@@ -127,7 +127,7 @@ class TestUpload:
         self,
         name, upload, uploaded_pdf, assert_error, assert_no_upload
     ):
-        assert_error(upload(file=uploaded_pdf(name=name)), 400, "INVALID_PDF")
+        assert_error(upload(file=uploaded_pdf(name=name)), 400, "INVALID_FORMAT")
         assert_no_upload()
 
 
@@ -266,7 +266,7 @@ class TestAccessAndStatus:
         upload, foreign_course, uploaded_pdf, assert_error, assert_no_upload, monkeypatch
     ):
         validator = Mock(side_effect=AssertionError("Ownership must be checked first"))
-        monkeypatch.setattr("apps.documents.views.validate_pdf", validator)
+        monkeypatch.setattr("apps.documents.views.validate_document", validator)
         foreign = upload(course_id=foreign_course.pk, file=uploaded_pdf(data=b"invalid"))
         missing = upload(course_id=foreign_course.pk + 1000000)
         assert_error(foreign, 404, "RESOURCE_NOT_FOUND")
@@ -306,11 +306,11 @@ class TestAccessAndStatus:
         ("PROCESSING", None, None),
         ("READY", None, None),
         ("FAILED", "PROCESSING_FAILED", {
-            "code": "PROCESSING_FAILED", "message": "This PDF could not be processed."
+            "code": "PROCESSING_FAILED", "message": "This document could not be processed."
         }),
         ("FAILED", "PROCESSING_DISPATCH_FAILED", {
             "code": "PROCESSING_DISPATCH_FAILED",
-            "message": "The PDF was saved, but processing could not be started."
+            "message": "The document was saved, but processing could not be started."
         }),
     ])
     def test_document_representation_for_each_persisted_state(

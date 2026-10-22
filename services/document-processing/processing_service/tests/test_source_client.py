@@ -8,7 +8,7 @@ from urllib.error import HTTPError
 from django.test import SimpleTestCase, override_settings
 
 from processing_service.errors import PermanentProcessingError, RetryableProcessingError
-from processing_service.source_client import MAX_PDF_BYTES, fetch_source_pdf
+from processing_service.source_client import MAX_PDF_BYTES, fetch_source_document, fetch_source_pdf
 
 
 PDF_BYTES = b"%PDF-1.4 source bytes"
@@ -41,6 +41,21 @@ class FakeResponse:
     PROCESSING_SERVICE_TOKEN="shared-test-token",
 )
 class SourceClientTests(SimpleTestCase):
+    def test_fetches_office_source_with_canonical_mime_and_verified_hash(self):
+        for mime in (
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+        ):
+            with self.subTest(mime=mime):
+                response = FakeResponse()
+                response.headers.replace_header("Content-Type", mime)
+                opener = Mock()
+                opener.open.return_value = response
+                with patch("processing_service.source_client.build_opener", return_value=opener):
+                    source = fetch_source_document(19, 42, SOURCE_SHA256)
+                self.assertEqual(source.content, PDF_BYTES)
+                self.assertEqual(source.mime_type, mime)
+
     def test_fetches_expected_job_document_and_verifies_digest(self):
         response = FakeResponse()
         opener = Mock()
@@ -52,7 +67,7 @@ class SourceClientTests(SimpleTestCase):
         request = opener.open.call_args.args[0]
         self.assertEqual(request.full_url, "http://host.docker.internal:8000/internal/v1/jobs/19/document/")
         self.assertEqual(request.get_header("Authorization"), "Bearer shared-test-token")
-        self.assertEqual(request.get_header("Accept"), "application/pdf")
+        self.assertIn("application/pdf", request.get_header("Accept"))
         self.assertEqual(opener.open.call_args.kwargs["timeout"], 15)
 
     def test_rejects_hash_mismatch(self):
@@ -76,7 +91,7 @@ class SourceClientTests(SimpleTestCase):
         opener = Mock()
         opener.open.return_value = response
         with patch("processing_service.source_client.build_opener", return_value=opener):
-            with self.assertRaisesRegex(PermanentProcessingError, "non-PDF"):
+            with self.assertRaisesRegex(PermanentProcessingError, "unsupported source format"):
                 fetch_source_pdf(19, 42, SOURCE_SHA256)
 
     def test_rejects_oversized_response_before_reading_body(self):
