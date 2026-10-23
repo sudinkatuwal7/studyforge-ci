@@ -82,17 +82,6 @@ export function ChevronDownIcon() {
   );
 }
 
-// Open book with a spark: the StudyForge mark.
-export function LogoMark() {
-  return (
-    <Icon width="26" height="26" strokeWidth={1.6}>
-      <path d="M3 6.5c2.8-1.2 5.8-1.2 9 .8 3.2-2 6.2-2 9-.8v11c-2.8-1.2-5.8-1.2-9 .8-3.2-2-6.2-2-9-.8Z" />
-      <path d="M12 7.3v11" />
-      <path d="M17.5 2.5v2.5M16.25 3.75h2.5" />
-    </Icon>
-  );
-}
-
 export function GoogleIcon() {
   return (
     <svg viewBox="0 0 48 48" width="20" height="20" aria-hidden="true" focusable="false">

@@ -1,6 +1,7 @@
 import type { ReactNode } from "react";
+import BrandMark from "../shared/BrandMark";
 import Panda from "../shared/Panda";
-import { ChevronDownIcon, LogoMark } from "./icons";
+import { ChevronDownIcon } from "./icons";
 import "../../styles/auth.css";
 
 type AuthLayoutProps = {
@@ -29,7 +30,7 @@ export default function AuthLayout({
       <header className="auth-header">
         <div className="auth-brand">
           <span className="auth-logo">
-            <LogoMark />
+            <BrandMark />
           </span>
           <span className="auth-wordmark">StudyForge</span>
         </div>
