@@ -6,6 +6,7 @@ import math
 
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
+from django.http import Http404
 from django.shortcuts import get_object_or_404
 from pgvector.django import CosineDistance
 
@@ -17,6 +18,7 @@ from apps.processing.embedding_service import embed_texts
 EMBEDDING_DIMENSION = 768
 EMBEDDING_MODEL = "gemini-embedding-2"
 MAX_TOP_K = 10
+MAX_SELECTED_DOCUMENTS = 20
 
 
 def _maximum_cosine_distance() -> float:
@@ -57,6 +59,41 @@ def retrieve_chunks(user, document_id: int, question: str, top_k: int = 5) -> li
         owner=user,
         status=Document.Status.READY,
     )
+    return _retrieve_authorized_chunks(user, [document.pk], question, top_k)
+
+
+def retrieve_chunks_for_documents(
+    user, document_ids: list[int], question: str, top_k: int = 5
+) -> list[dict]:
+    """Globally rank chunks from 1–20 unique, owned, READY documents.
+
+    Reject the entire selection before embedding if any document is unavailable.
+    Embed the question once, regardless of the number of selected documents.
+    """
+    if (
+        not isinstance(document_ids, list)
+        or not 1 <= len(document_ids) <= MAX_SELECTED_DOCUMENTS
+        or any(type(document_id) is not int or document_id <= 0 for document_id in document_ids)
+        or len(set(document_ids)) != len(document_ids)
+    ):
+        raise ValueError("document_ids must be a list of 1 to 20 unique positive integers")
+    if not isinstance(question, str) or not question.strip():
+        raise ValueError("question must be a nonempty string")
+    if type(top_k) is not int or not 1 <= top_k <= MAX_TOP_K:
+        raise ValueError(f"top_k must be an integer between 1 and {MAX_TOP_K}")
+
+    authorized_ids = list(
+        Document.objects.filter(
+            pk__in=document_ids, owner=user, status=Document.Status.READY
+        ).values_list("pk", flat=True)
+    )
+    if len(authorized_ids) != len(document_ids):
+        raise Http404("No such documents.")
+    return _retrieve_authorized_chunks(user, authorized_ids, question, top_k)
+
+
+def _retrieve_authorized_chunks(user, document_ids, question, top_k):
+    """Share embedding and ranking while rechecking ownership and readiness."""
     if settings.EMBEDDING_MODEL != EMBEDDING_MODEL or settings.EMBEDDING_DIMENSION != EMBEDDING_DIMENSION:
         raise ImproperlyConfigured("Retrieval requires gemini-embedding-2 with 768 dimensions.")
     maximum_distance = _maximum_cosine_distance()
@@ -76,7 +113,7 @@ def retrieve_chunks(user, document_id: int, question: str, top_k: int = 5) -> li
     chunks = (
         Chunk.objects.filter(
             owner=user,
-            document_id=document.pk,
+            document_id__in=document_ids,
             document__owner=user,
             document__status=Document.Status.READY,
             embedding__isnull=False,

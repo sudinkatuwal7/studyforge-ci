@@ -1,4 +1,4 @@
-"""JSON schemas for the future, query-only RAG API.
+"""Request and final response validation for the query-only RAG API.
 
 These serializers deliberately define contracts only. They do not perform
 embedding, similarity search, answer generation, routing, or persistence.
@@ -7,6 +7,7 @@ embedding, similarity search, answer generation, routing, or persistence.
 from django.db import models
 from rest_framework import serializers
 
+from apps.documents.models import Document
 from apps.knowledge.models import Chunk
 
 
@@ -45,7 +46,9 @@ class CitationSerializer(serializers.Serializer):
 
     Callers must supply ``user`` and ``authorized_document_ids`` in serializer
     context. The latter must come from the owner-scoped document selection,
-    never directly from the untrusted answer payload.
+    never directly from the untrusted answer payload. The endpoint's service and
+    generator additionally enforce the exact retrieved chunk-ID allowlist;
+    document authorization alone is not proof that a chunk was retrieved.
     """
 
     chunk_id = serializers.IntegerField(min_value=1, max_value=MAX_IDENTIFIER)
@@ -56,7 +59,7 @@ class CitationSerializer(serializers.Serializer):
     def validate(self, attrs):
         user = self.context.get("user")
         authorized_document_ids = self.context.get("authorized_document_ids")
-        if user is None or authorized_document_ids is None:
+        if user is None or not user.is_authenticated or authorized_document_ids is None:
             raise serializers.ValidationError(
                 "Citation validation requires an authorized user and document selection."
             )
@@ -67,18 +70,25 @@ class CitationSerializer(serializers.Serializer):
             pk=attrs["chunk_id"],
             owner=user,
             document_id=attrs["document_id"],
+            document__owner=user,
+            document__status=Document.Status.READY,
         ).only("page_number", "content").first()
         if chunk is None:
             raise serializers.ValidationError("Citation chunk is not authorized for this document.")
         if attrs["page_number"] != chunk.page_number:
             raise serializers.ValidationError("Citation page does not match the cited chunk.")
-        if attrs["excerpt"] not in chunk.content:
+        if not attrs["excerpt"].strip() or attrs["excerpt"] not in chunk.content:
             raise serializers.ValidationError("Citation excerpt is not present in the cited chunk.")
-        return attrs
+        return {
+            "chunk_id": chunk.pk,
+            "document_id": chunk.document_id,
+            "page_number": chunk.page_number,
+            "excerpt": attrs["excerpt"],
+        }
 
 
 class AnswerResultSerializer(serializers.Serializer):
-    """The future answer response, with citations as the support boundary."""
+    """Final answer response, with current source ownership/readiness checks."""
 
     class Status(models.TextChoices):
         ANSWERED = "ANSWERED", "Answered"
@@ -89,6 +99,19 @@ class AnswerResultSerializer(serializers.Serializer):
     citations = CitationSerializer(many=True, required=True)
 
     def validate(self, attrs):
+        user = self.context.get("user")
+        selected_ids = self.context.get("authorized_document_ids")
+        if user is None or not user.is_authenticated or not selected_ids:
+            raise serializers.ValidationError("Answer validation requires an authorized document selection.")
+        # Run after nested citation validation, including for abstentions and
+        # selected documents that did not contribute a cited top-K chunk.
+        authorized_ids = set(
+            Document.objects.filter(
+                pk__in=selected_ids, owner=user, status=Document.Status.READY
+            ).values_list("pk", flat=True)
+        )
+        if authorized_ids != set(selected_ids):
+            raise serializers.ValidationError("Selected documents are no longer available.")
         status = attrs["status"]
         answer = attrs["answer"]
         citations = attrs["citations"]

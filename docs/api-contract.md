@@ -483,13 +483,14 @@ If an API contract changes later, update all of the following:
 - frontend TypeScript type
 - affected tests
 
-## Future RAG query contract (schema only)
+## RAG questions — SCRUM-20
 
-This is a future contract for page-cited question answering. It defines JSON
-validation only; this repository does not yet expose a RAG route, perform
-similarity retrieval, or generate answers.
+`POST /api/v1/rag/questions/` requires an authenticated user with a valid JWT
+access token (`Authorization: Bearer <access-token>`). This is a query-only
+endpoint: it does not save answers, create notes, or modify documents. The route
+is mounted through `apps.knowledge.urls` under the existing `/api/v1/` prefix.
 
-The future request selects the source documents explicitly:
+The request selects the source documents explicitly:
 
 ```json
 {
@@ -500,9 +501,18 @@ The future request selects the source documents explicitly:
 
 `question` is a nonblank string up to 2,000 characters. `document_ids` is a
 nonempty, duplicate-free list of at most 20 positive integer Document IDs.
+IDs are bounded by the signed 64-bit integer maximum (9,223,372,036,854,775,807).
+The 20-document limit applies per request, not per user or across requests.
+The server validates the whole selection as owned and READY before any embedding
+or generation call. A single unavailable ID rejects the entire selection; it is
+never silently dropped. Client-supplied passages, citations, or owner IDs are not
+used as evidence. `top_k` is server-controlled, currently five globally ranked
+chunks across the selection, not five per document. A selected document is not
+guaranteed a place among those five chunks.
 
-Future retrieval returns structured evidence, preserving the stored Chunk ID,
-Document ID, and one-based PDF page number:
+Internal retrieval produces evidence with stable stored Chunk ID, Document ID,
+and page number (one-based PDF page). This evidence shape is not an additional
+top-level field in the HTTP answer:
 
 ```json
 {
@@ -541,8 +551,91 @@ An empty citation list means the response must explicitly abstain:
 }
 ```
 
-Before an answer is returned, each citation must identify a Chunk owned by the
-authenticated user and belonging to one of the request's owner-authorized
-Document IDs. Its stored document and page number must match the citation, and
-the cited excerpt must occur verbatim in that Chunk. `ANSWERED` with no citations, or
-`INSUFFICIENT_CONTEXT` with answer text or citations, is invalid.
+### Evidence and citation checks
+
+Gemini (`gemini-embedding-2`, 768 dimensions) embeds the question once. PostgreSQL/
+pgvector filters Chunk and Document ownership and READY status before applying
+the optional similarity cutoff, global cosine-distance/chunk-ID ordering, and
+top-K. The generator receives text, not embedding vectors. It bounds input to at
+most ten passages, 4,000 characters each and 24,000 passage characters total;
+normal endpoint retrieval currently supplies at most five passages.
+
+OpenAI generation requests strict structured JSON. The system instruction treats
+passage text as untrusted data, not instructions; source text appears only in a
+JSON user-data envelope. The server rejects malformed, refused, incomplete, or
+unsupported output rather than fabricating citations or converting errors into
+successful abstentions.
+
+Before an answer is returned, each citation must:
+
+- Reference an exact chunk ID in the retrieved evidence allowlist. An owned chunk
+  in a selected document is still invalid if it was not retrieved.
+- Belong to an authorized selected document, with both current Chunk.owner and
+  Document.owner matching the authenticated user and Document.status still READY.
+- Match the stored document ID and page number. These are canonical identifiers,
+  not page numbers or source names invented by the model.
+- Include a nonblank verbatim excerpt present in the bounded passage actually
+  sent to the model and in the current stored chunk. Excerpts are not paraphrased
+  or silently repaired. Stored chunk text must still match the retrieval snapshot
+  at the service's verification step.
+
+The generator and service enforce the retrieved-ID allowlist; the final serializer
+independently verifies current ownership, readiness, page and excerpt. Its document
+allowlist alone does not establish retrieval membership. The entire selected
+document set is rechecked after provider calls and at final answer validation,
+including selected documents that did not contribute a citation.
+
+`ANSWERED` with no citations, or `INSUFFICIENT_CONTEXT` with answer text or
+citations, is invalid. Empty retrieval returns `200` with the exact abstention
+object above without constructing or calling the generation client. A model can
+also explicitly abstain after receiving evidence.
+
+### HTTP results and errors
+
+| Status | Meaning |
+| --- | --- |
+| `200` | Valid `ANSWERED` or `INSUFFICIENT_CONTEXT` object shown above. |
+| `400` | Malformed JSON or invalid question/document selection; DRF parse or field errors. |
+| `401` | Missing, invalid, or expired JWT credentials. |
+| `404` | At document authorization, any selected document is missing, foreign, or non-READY. Generic `{"detail":"No such documents."}`; no failing ID is disclosed. |
+| `405` | Unsupported application method, such as GET. DRF OPTIONS metadata remains available under its normal permission checks. |
+| `503` | Embedding/generation failure, incompatible retrieval configuration, malformed output, or unverifiable citations. |
+
+All handled upstream and answer-validation failures return only:
+
+```json
+{
+  "code": "RAG_GENERATION_FAILED",
+  "detail": "The question could not be answered right now. Please try again."
+}
+```
+
+Provider errors never become `200 INSUFFICIENT_CONTEXT`. Responses do not include
+SDK exception messages, keys, raw model output, or private passage text. If a
+document changes during processing, the selection recheck can return generic
+`404`; revocation or citation changes caught at the later final-validation step
+return sanitized `503`. No partial answer or citations are returned on failure.
+
+### Configuration, verification and limitations
+
+- `RAG_LLM_BACKEND` defaults to `fake`, which always abstains. Real text generation
+  requires `RAG_LLM_BACKEND=openai`, `OPENAI_API_KEY`, and optionally `RAG_LLM_MODEL`
+  (default `gpt-4o-mini`). Gemini embedding configuration remains separate.
+- Endpoint integration tests use real JWT and PostgreSQL/pgvector with mocked
+  Gemini vectors and OpenAI responses. They verify evidence flow, strict requests,
+  validation, and safe failures, not live-provider behavior or answer quality.
+- Verbatim citation provenance does not prove that every answer claim logically
+  follows from its quote. Prompt/data separation reduces injection risk but is
+  not a formal guarantee that a model will ignore every malicious passage.
+- Final checks use separate database reads, without a lock spanning validation
+  and response delivery. They detect changes observed at those checks but do not
+  guarantee atomic revocation: changes after a final check remain a race window.
+  If one selected document becomes non-READY during embedding while another
+  still supplies eligible evidence, generation can run on the remaining evidence
+  before the full-selection recheck rejects the request. No answer is returned.
+- The similarity cutoff is disabled by default pending relevance calibration;
+  top-K passages may not cover all facts or every selected document. Bounds can
+  truncate evidence. No frontend chat integration is included in this backend work.
+- The supplied SCRUM-20 acceptance criteria require retrieved-content answers,
+  structured citations, rejection of invalid references, and handling insufficient
+  information/generation errors. They do not separately specify this route name.
