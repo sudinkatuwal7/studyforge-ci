@@ -1,4 +1,5 @@
 import type { ReactNode } from "react";
+import Panda from "../shared/Panda";
 import { ChevronDownIcon, LogoMark } from "./icons";
 import "../../styles/auth.css";
 
@@ -47,6 +48,7 @@ export default function AuthLayout({
 
       <main className="auth-main">
         <div className="auth-hero">
+          <Panda className="panda auth-panda" />
           <h1 className="auth-hero-title">{heroTitle}</h1>
           <p className="auth-hero-text">{heroText}</p>
         </div>

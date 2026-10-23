@@ -1,12 +1,11 @@
-/* Signed-out pages: login and registration. Scoped under .auth-page so the
-   dashboard keeps its own look. */
+/* Signed-out pages: login and registration. Scoped under .auth-page.
+   Colors and fonts come from the dashboard palette in index.css. */
 .auth-page {
-  --ink: #1d1d1f;
-  --ink-soft: #4a4a52;
+  --ink: var(--navy);
+  --ink-soft: var(--muted);
   --line: #e9e4dc;
-  --violet: #7c4ddb;
+  --accent: var(--periwinkle);
   --danger: #b42318;
-  --serif: "Instrument Serif", "Iowan Old Style", "Palatino Linotype", Georgia, serif;
 
   box-sizing: border-box;
   min-height: 100vh;
@@ -49,7 +48,7 @@
   height: 2.75rem;
   border-radius: 50%;
   background: var(--lavender);
-  color: #5b3fb0;
+  color: var(--navy);
 }
 
 .auth-wordmark {
@@ -91,6 +90,7 @@
   background: white;
   color: var(--ink);
   font-weight: 500;
+  white-space: nowrap;
 }
 
 .auth-page .auth-pill-dark {
@@ -116,13 +116,20 @@
   text-align: center;
 }
 
+/* The dashboard mascot, larger here. Overrides .panda from dashboard.css. */
+.auth-hero .auth-panda {
+  display: block;
+  width: clamp(7rem, 13vw, 10rem);
+  height: auto;
+  margin: 0 auto 1.5rem;
+}
+
 .auth-hero-title {
   margin: 0;
-  font-family: var(--serif);
-  font-size: clamp(3rem, 7vw, 5.75rem);
-  font-weight: 400;
-  line-height: 1;
-  letter-spacing: -0.03em;
+  font-size: clamp(2.5rem, 5.5vw, 4rem);
+  font-weight: 700;
+  line-height: 1.05;
+  letter-spacing: -0.02em;
   color: var(--ink);
 }
 
@@ -145,11 +152,10 @@
 .auth-card-title {
   margin: 0;
   text-align: center;
-  font-family: var(--serif);
-  font-size: clamp(2.1rem, 4vw, 2.75rem);
-  font-weight: 400;
-  line-height: 1.1;
-  letter-spacing: -0.02em;
+  font-size: clamp(1.6rem, 3vw, 2rem);
+  font-weight: 700;
+  line-height: 1.15;
+  letter-spacing: -0.01em;
   color: var(--ink);
 }
 
@@ -204,8 +210,8 @@
 }
 
 .auth-input-row:focus-within {
-  border-color: var(--violet);
-  box-shadow: 0 0 0 3px #7c4ddb26;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px #7387e833;
 }
 
 .auth-input-row:has(input[aria-invalid="true"]) {
@@ -292,7 +298,7 @@
   padding: 0;
   border: none;
   background: none;
-  color: var(--violet);
+  color: var(--accent);
   font-weight: 500;
   text-decoration: underline;
   text-underline-offset: 3px;
@@ -318,7 +324,7 @@
   width: 1.15rem;
   height: 1.15rem;
   margin: 0;
-  accent-color: var(--violet);
+  accent-color: var(--accent);
 }
 
 .auth-page .auth-submit {
@@ -338,7 +344,7 @@
 }
 
 .auth-page .auth-submit:hover:not(:disabled) {
-  background: #000;
+  background: #1b2538;
 }
 
 .spinner {
@@ -404,7 +410,7 @@
   padding: 0.15rem 0.55rem;
   border-radius: 999px;
   background: var(--lavender);
-  color: #5b3fb0;
+  color: var(--navy);
   font-size: 0.75rem;
   font-weight: 600;
 }
@@ -448,6 +454,11 @@
   .auth-hero-text {
     margin-top: 0.75rem;
     font-size: 1.05rem;
+  }
+
+  .auth-hero .auth-panda {
+    width: 5.5rem;
+    margin-bottom: 1rem;
   }
 }
 
@@ -499,5 +510,26 @@
 
   .auth-name-row {
     grid-template-columns: 1fr;
+  }
+}
+
+/* Small phones: keep the brand and both header buttons on one line. */
+@media (max-width: 26rem) {
+  .auth-header {
+    gap: 0.5rem;
+    padding: 0.5rem 0.5rem 0.5rem 0.75rem;
+  }
+
+  .auth-brand {
+    gap: 0.5rem;
+  }
+
+  .auth-wordmark {
+    font-size: 1.05rem;
+  }
+
+  .auth-page .auth-pill {
+    padding: 0.5rem 0.8rem;
+    font-size: 0.9rem;
   }
 }
