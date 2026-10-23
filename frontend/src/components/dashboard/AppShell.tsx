@@ -1,5 +1,6 @@
 import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
+import BrandMark from "../shared/BrandMark";
 
 type HealthState =
   | { status: "checking" }
@@ -80,14 +81,6 @@ function pageTitle(pathname: string): string {
 
 function navClass(isActive: boolean) {
   return isActive ? "nav-link nav-link-active" : "nav-link";
-}
-
-function BrandMark() {
-  return (
-    <svg className="brand-mark" viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M6 4.5h9.5A2.5 2.5 0 0 1 18 7v12.5L12.5 16 7 19.5V7A2.5 2.5 0 0 1 6 4.5z" />
-    </svg>
-  );
 }
 
 function HomeIcon() {
