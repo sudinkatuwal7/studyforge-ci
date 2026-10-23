@@ -48,6 +48,23 @@ Keep durable task context available to the user and teammates across sessions. G
   - `GET /api/v1/auth/me/`, `POST /api/v1/auth/token/refresh/`, `POST /api/v1/auth/logout/`.
 - Frontend tests use Vitest + React Testing Library + user-event (`npm test`). Lint is `oxlint` (`npm run lint`). Build is `tsc -b && vite build`.
 
+## Progress (October 22, 2026)
+
+- Done and committed: Step 1 (`2e75d6a`), Step 2 including CSS and login App wiring (`8c25fd5`), Step 3 with RegisterPage and auth view switch (`5e4a4a4`). Steps 4 and 5 were absorbed into Steps 2 and 3.
+- Step 6: `LoginPage.test.tsx` (7 tests) and `RegisterPage.test.tsx` (6 tests) were drafted and verified in a scratchpad copy (13/13 pass, full suite 195/195, `tsc -b` clean, lint clean). They were given to the task owner to add.
+- Test pattern: mock `../api/auth` with `vi.importActual` and override only `login`/`register`, so the real `AuthError` class still satisfies the pages' `instanceof` checks. Mock `useAuth` with a `vi.hoisted` `saveLogin`. The config already sets `clearMocks`/`restoreMocks`.
+- Remaining: commit the tests, add the AI reports under `docs/ai-dev-reports/` in the final coding commit, rebase onto `origin/development`, push to GitHub (CI), then Bitbucket, then open the PR.
+- **Theme alignment (October 22, 2026; replaces parts of the October 20 design decisions):**
+  - The task owner chose to match the dashboard. The dashboard panda moved to the shared `components/shared/Panda.tsx` and appears above the auth hero headline, which reverses the earlier "no illustration" decision.
+  - In `auth.css`, `--ink` is navy, `--ink-soft` is muted grey, and `--violet` was renamed to `--accent` (periwinkle).
+  - Instrument Serif was dropped from the CSS and from `index.html`. Titles use the dashboard sans at weight 700.
+  - A 26rem breakpoint keeps the header on one line on phones at 360–390px.
+  - Logo step (proposed and verified in scratch): move the dashboard `BrandMark` to `components/shared/BrandMark.tsx`, use it in AppShell and AuthLayout, delete `LogoMark` from `auth/icons.tsx`, and add `.auth-logo .brand-mark` sizing and stroke rules to `auth.css`.
+  - `public/favicon.svg` is still Vite's default logo. It is out of scope unless the task owner asks.
+  - On October 22, the task owner asked Claude to apply the small `auth.css` edits and the test `paste` fix directly. That was a one-off. The default is still to provide code in chat.
+- Test pitfall: typing about 60 characters with `user.type` timed out (5 seconds) in the full parallel suite. The auth test helpers use `user.click` + `user.paste` to fill fields.
+- `backend/apps/documents/test_internal_auth.py` is untracked and unrelated to SCRUM-113. Do not commit it on this branch.
+
 ## Proposed plan (awaiting the task owner's go-ahead)
 
 1. `api/auth.ts`: add `register()` that exposes backend field errors, and let `login()` distinguish bad credentials (400/401) from server or network failures.
