@@ -45,7 +45,12 @@ def test_registration_rejects_duplicate_email_ignoring_case():
 
     response = APIClient().post(
         REGISTER_URL,
-        {"email": "STUDENT@example.edu", "password": "AnotherRiver!8462"},
+        {
+            "email": "STUDENT@example.edu",
+            "password": "AnotherRiver!8462",
+            "first_name": "Sam",
+            "last_name": "Student",
+        },
         format="json",
     )
 
@@ -65,10 +70,44 @@ def test_registration_rejects_duplicate_email_ignoring_case():
 def test_registration_returns_field_errors(email, password, error_field):
     response = APIClient().post(
         REGISTER_URL,
-        {"email": email, "password": password},
+        {
+            "email": email,
+            "password": password,
+            "first_name": "Sam",
+            "last_name": "Student",
+        },
         format="json",
     )
 
     assert response.status_code == 400
     assert error_field in response.json()
+    assert User.objects.count() == 0
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("first_name", None),
+        ("last_name", None),
+        ("first_name", "   "),
+        ("last_name", ""),
+    ],
+)
+def test_registration_requires_first_and_last_name(field, value):
+    payload = {
+        "email": "new@example.edu",
+        "password": "EveningRivers!8462",
+        "first_name": "Sam",
+        "last_name": "Student",
+    }
+    if value is None:
+        del payload[field]
+    else:
+        payload[field] = value
+
+    response = APIClient().post(REGISTER_URL, payload, format="json")
+
+    assert response.status_code == 400
+    assert field in response.json()
     assert User.objects.count() == 0

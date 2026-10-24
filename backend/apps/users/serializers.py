@@ -10,8 +10,8 @@ User = get_user_model()
 class RegisterSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True, trim_whitespace=False)
-    first_name = serializers.CharField(required=False, allow_blank=True)
-    last_name = serializers.CharField(required=False, allow_blank=True)
+    first_name = serializers.CharField(max_length=150)
+    last_name = serializers.CharField(max_length=150)
 
     def validate_email(self, value):
         email = value.strip().lower()
@@ -24,8 +24,8 @@ class RegisterSerializer(serializers.Serializer):
     def validate(self, attrs):
         candidate = User(
             email=attrs["email"],
-            first_name=attrs.get("first_name", ""),
-            last_name=attrs.get("last_name", ""),
+            first_name=attrs["first_name"],
+            last_name=attrs["last_name"],
         )
 
         try:
