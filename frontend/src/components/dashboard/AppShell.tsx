@@ -11,14 +11,12 @@ export default function AppShell({
   email,
   health,
   isLoggingOut,
-  logoutError,
   onLogout,
   children,
 }: {
   email: string;
   health: HealthState;
   isLoggingOut: boolean;
-  logoutError: string | null;
   onLogout: () => void;
   children: ReactNode;
 }) {
@@ -66,7 +64,6 @@ export default function AppShell({
             <span className="avatar" aria-hidden="true">{initial}</span>
           </div>
         </header>
-        {logoutError && <p className="form-error" role="alert">{logoutError}</p>}
         {children}
       </main>
     </div>

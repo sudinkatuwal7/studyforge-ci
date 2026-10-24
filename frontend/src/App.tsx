@@ -6,7 +6,6 @@ import AppShell from "./components/dashboard/AppShell";
 import AuthLayout from "./components/auth/AuthLayout";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
-import { logout } from "./api/auth";
 import CourseDetailPage from "./pages/CourseDetailPage";
 import CalendarPage from "./pages/CalendarPage";
 import DashboardPage from "./pages/DashboardPage";
@@ -22,30 +21,15 @@ function App() {
   // Increasing this number tells CourseList to fetch the latest courses.
   const [courseListVersion, setCourseListVersion] = useState(0);
 
-  const { user, isRestoring, clearSession } = useAuth();
-
-  const [isLoggingOut, setIsLoggingOut] = useState(false);
-
-  const [logoutError, setLogoutError] = useState<string | null>(null);
+  const { user, isRestoring, isSigningOut, signOut } = useAuth();
 
   // Which card the signed-out page shows.
   const [authView, setAuthView] = useState<"login" | "register">("login");
 
-  async function handleLogout() {
-    setIsLoggingOut(true);
-    setLogoutError(null);
-
-    try {
-      await logout();
-      setAuthView("login");
-      clearSession();
-    } catch (error) {
-      setLogoutError(
-        error instanceof Error ? error.message : "Logout failed",
-      );
-    } finally {
-      setIsLoggingOut(false);
-    }
+  // Reset to the log in card while signed in, so whenever the session ends the
+  // user lands where the signed-out message is shown.
+  if (user && authView !== "login") {
+    setAuthView("login");
   }
 
   useEffect(() => {
@@ -143,9 +127,8 @@ function App() {
     <AppShell
       email={user.email}
       health={health}
-      isLoggingOut={isLoggingOut}
-      logoutError={logoutError}
-      onLogout={handleLogout}
+      isLoggingOut={isSigningOut}
+      onLogout={() => void signOut()}
     >
       <Routes>
         <Route path="/" element={
