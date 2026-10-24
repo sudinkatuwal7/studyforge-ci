@@ -5,9 +5,11 @@ from django.http import Http404
 from rest_framework.exceptions import NotAuthenticated
 
 from apps.documents.models import Document
+from apps.identity.ownership import owned_conversation
 from apps.knowledge.llm import LLMError, generate_answer, validate_answer
 from apps.knowledge.models import Chunk
 from apps.knowledge.retrieval import retrieve_chunks_for_documents
+from apps.knowledge.scope import question_documents
 from apps.knowledge.serializers import AnswerResultSerializer
 from apps.processing.exceptions import ProcessingError
 
@@ -16,10 +18,10 @@ class RAGServiceError(Exception):
     """Safe boundary for provider failures and unverifiable generated output."""
 
 
-def _authorized_document_ids(user, document_ids):
+def _authorized_document_ids(user, document_ids, conversation=None):
     authorized_ids = list(
-        Document.objects.filter(
-            pk__in=document_ids, owner=user, status=Document.Status.READY
+        question_documents(user, conversation).filter(
+            pk__in=document_ids, status=Document.Status.READY
         ).values_list("pk", flat=True)
     )
     if len(authorized_ids) != len(document_ids):
@@ -27,7 +29,7 @@ def _authorized_document_ids(user, document_ids):
     return authorized_ids
 
 
-def answer_question(user, document_ids, question):
+def answer_question(user, document_ids, question, *, conversation=None):
     """Answer validated RAGQuerySerializer input for an authenticated user.
 
     All selected documents must be authorized, not just those contributing a
@@ -37,9 +39,15 @@ def answer_question(user, document_ids, question):
     """
     if not user or not user.is_authenticated:
         raise NotAuthenticated()
-    authorized_ids = _authorized_document_ids(user, document_ids)
+    if conversation is not None and owned_conversation(user, conversation.pk) is None:
+        raise Http404
+    authorized_ids = _authorized_document_ids(user, document_ids, conversation)
     try:
-        passages = retrieve_chunks_for_documents(user, authorized_ids, question)
+        if conversation is None:
+            passages = retrieve_chunks_for_documents(user, authorized_ids, question)
+        else:
+            passages = retrieve_chunks_for_documents(user, authorized_ids, question,
+                                                     conversation=conversation)
     except (ProcessingError, ImproperlyConfigured, ValueError):
         raise RAGServiceError("The question could not be answered right now.") from None
 
@@ -56,15 +64,20 @@ def answer_question(user, document_ids, question):
 
     # Recheck the entire selection after network calls, including documents that
     # did not contribute evidence. Never derive this allowlist from model output.
-    authorized_ids = _authorized_document_ids(user, authorized_ids)
+    if conversation is not None and owned_conversation(user, conversation.pk) is None:
+        raise Http404
+    authorized_ids = _authorized_document_ids(user, authorized_ids, conversation)
     if result["citations"]:
         sources = {passage["chunk_id"]: passage for passage in evidence}
+        allowed_chunks = question_documents(user, conversation).filter(
+            pk__in=authorized_ids, status=Document.Status.READY
+        ).values("pk")
         current_chunks = {
             chunk.pk: chunk
             for chunk in Chunk.objects.filter(
                 pk__in=[citation["chunk_id"] for citation in result["citations"]],
                 owner=user,
-                document_id__in=authorized_ids,
+                document_id__in=allowed_chunks,
                 document__owner=user,
                 document__status=Document.Status.READY,
             )
@@ -84,7 +97,8 @@ def answer_question(user, document_ids, question):
 
     serializer = AnswerResultSerializer(
         data=result,
-        context={"user": user, "authorized_document_ids": authorized_ids},
+        context={"user": user, "authorized_document_ids": authorized_ids,
+                 "conversation": conversation},
     )
     if not serializer.is_valid():
         raise RAGServiceError("The question could not be answered right now.")
