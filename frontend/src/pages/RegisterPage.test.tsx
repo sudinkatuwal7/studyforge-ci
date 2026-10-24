@@ -26,8 +26,8 @@ type FormValues = {
 async function fillAndSubmit(values: FormValues) {
   const user = userEvent.setup();
   const fields: [string, string | undefined][] = [
-    ["First name (optional)", values.firstName],
-    ["Last name (optional)", values.lastName],
+    ["First name", values.firstName],
+    ["Last name", values.lastName],
     ["Email address", values.email],
     ["Password", values.password],
     ["Confirm password", values.confirmPassword],
@@ -55,11 +55,28 @@ describe("RegisterPage", () => {
   it("checks password length and match before calling the API", async () => {
     render(<RegisterPage onSignIn={vi.fn()} />);
 
-    await fillAndSubmit({ email: "new@example.test", password: "short", confirmPassword: "shorter" });
+    await fillAndSubmit({
+      firstName: "Ada",
+      lastName: "Lovelace",
+      email: "new@example.test",
+      password: "short",
+      confirmPassword: "shorter",
+    });
 
     expect(screen.getByText("Use at least 8 characters.")).toBeInTheDocument();
     expect(screen.getByText("Passwords don't match.")).toBeInTheDocument();
     expect(screen.getByLabelText("Password")).toHaveFocus();
+    expect(register).not.toHaveBeenCalled();
+  });
+
+  it("requires first and last name before calling the API", async () => {
+    render(<RegisterPage onSignIn={vi.fn()} />);
+
+    await fillAndSubmit({ ...validForm, firstName: "   ", lastName: undefined });
+
+    expect(screen.getByText("Enter your first name.")).toBeInTheDocument();
+    expect(screen.getByText("Enter your last name.")).toBeInTheDocument();
+    expect(screen.getByLabelText("First name")).toHaveFocus();
     expect(register).not.toHaveBeenCalled();
   });
 
