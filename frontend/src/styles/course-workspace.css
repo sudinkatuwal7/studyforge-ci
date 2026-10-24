@@ -1,0 +1,115 @@
+/* Keep the course route within the viewport so content and Pandu can scroll independently. */
+.app-shell-course { height: 100dvh; min-height: 0; overflow: hidden; }
+.app-shell-course > .workspace { display: flex; flex-direction: column; min-height: 0; padding-bottom: 1.5rem; }
+.course-workspace { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 1.1rem; }
+.course-workspace * { box-sizing: border-box; }
+.course-workspace-header { flex: none; }
+.course-workspace-header a { color: #56658a; font-size: .85rem; text-decoration: none; }
+.course-workspace-header h2 { margin: .4rem 0 .2rem; font-size: clamp(1.3rem, 2vw, 1.9rem); overflow-wrap: anywhere; }
+.course-workspace-header p { max-height: 3rem; overflow: auto; }
+/* Desktop gives Pandu a little more room while keeping course content primary. */
+.course-workspace-grid { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 2fr) minmax(20rem, 1fr); gap: 1.2rem; }
+.course-content, .course-chat { border: 1px solid #e7e6ee; border-radius: 1.2rem; background: white; min-width: 0; min-height: 0; overflow: hidden; }
+.course-content { display: flex; flex-direction: column; }
+.course-workspace button, .course-workspace select, .course-workspace textarea { font: inherit; }
+.course-workspace button { border: 1px solid #ddddeb; border-radius: .65rem; padding: .5rem .8rem; background: #f5f3fc; color: #384466; cursor: pointer; }
+.course-workspace button:hover:not(:disabled) { background: #e9e3fa; }
+.course-workspace button:disabled { opacity: .55; cursor: not-allowed; }
+.course-workspace :focus-visible { outline: 2px solid #6775c5; outline-offset: 3px; }
+.course-workspace [hidden] { display: none !important; }
+.course-tabs { display: flex; gap: .4rem; padding: .8rem; border-bottom: 1px solid #efedf4; flex: none; }
+.course-tabs button { background: transparent; border-color: transparent; }
+.course-tabs button[aria-selected="true"] { background: #e9e3fa; color: #473c70; }
+.soon-badge { display: inline-block; font-size: .7rem; background: #e6f0eb; color: #416353; border-radius: 2rem; padding: .15rem .45rem; margin-left: .35rem; }
+.course-content-scroll { overflow: auto; min-height: 0; padding: 1.2rem; overscroll-behavior: contain; }
+.course-workspace .course-materials > h3 { margin-top: 0; }
+.course-workspace .document-upload { width: 100%; border: 1px dashed #c5c4db; background: #f8f7fc; border-radius: 1rem; }
+.course-workspace .material-item { border: 1px solid #e3e6ed; border-radius: 1rem; }
+.course-workspace .document-status { border: 0; padding: 0; margin: 0 0 .5rem; }
+.course-workspace .document-status h3 { font-size: 1rem; }
+.course-workspace .document-status strong { background: #edf3fa; padding: .15rem .4rem; border-radius: .4rem; font-size: .8rem; }
+.course-workspace select { display: block; max-width: 100%; width: 100%; padding: .6rem; margin-top: .4rem; border: 1px solid #ddddeb; border-radius: .6rem; background: white; }
+.quiz-placeholder { padding: 2rem 1rem; text-align: center; }
+.quiz-placeholder button { margin-top: 1rem; }
+.demo-chat-container { position: relative; width: 100%; height: 100%; min-height: 0; min-width: 0; }
+/* Pandu's message history expands while sources and the composer remain reachable. */
+.course-chat { height: 100%; display: flex; flex-direction: column; border-radius: 1rem; }
+.chat-header { display: flex; align-items: center; gap: .7rem; padding: .85rem 1rem; background: #fff; border-bottom: 1px solid #eeedf3; flex: none; }
+.chat-header h3 { margin: 0; font-size: 1rem; line-height: 1.2; }
+.chat-header p { margin-top: .12rem; font-size: .72rem; color: #707a91; }
+.pandu-avatar { display: inline-grid; place-items: center; flex: none; color: #5f52b5; background: #f0edff; border-radius: 50%; }
+.pandu-avatar-small { width: 2.25rem; height: 2.25rem; font-size: 1.1rem; }
+.pandu-avatar-large { width: 5rem; height: 5rem; font-size: 2rem; box-shadow: inset 0 0 0 10px #f7f5ff; }
+.chat-demo-badge { margin-left: auto; padding: .2rem .5rem; color: #625a7c; background: #f4f2fa; border-radius: 999px; font-size: .67rem; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
+.chat-messages { flex: 1; min-height: 0; overflow: auto; padding: 1rem; overscroll-behavior: contain; }
+.chat-empty { display: flex; align-items: center; flex-direction: column; justify-content: center; min-height: 100%; padding: 1.5rem .25rem; text-align: center; }
+.chat-empty h4 { margin: .9rem 0 .3rem; font-size: 1.15rem; }
+.chat-empty > p { max-width: 18rem; font-size: .82rem; }
+.chat-empty > small { margin-top: .8rem; color: #8a91a3; font-size: .68rem; }
+.chat-prompts { display: flex; align-items: center; flex-direction: column; gap: .45rem; margin-top: 1.15rem; }
+.course-workspace .chat-prompts button { padding: .45rem .85rem; border-color: #e2e2ec; border-radius: 999px; background: #fff; font-size: .76rem; }
+.course-workspace .chat-prompts button:hover:not(:disabled) { border-color: #c9c5ea; background: #f8f7ff; }
+.chat-message { max-width: 90%; padding: .7rem .8rem; border: 1px solid #ececf2; border-radius: .9rem; margin-bottom: .65rem; background: #fff; overflow-wrap: anywhere; }
+.chat-message p { white-space: pre-wrap; margin-top: .25rem; font-size: .82rem; }
+.chat-message strong { font-size: .7rem; }
+.chat-message-user { margin-left: auto; border-color: #e6e1fa; background: #f4f1ff; }
+.chat-message-assistant { margin-right: auto; }
+.chat-citation { margin-top: .55rem; font-size: .7rem !important; text-align: left; }
+.chat-streaming-cursor { display: inline-block; width: .42rem; height: 1em; margin-left: .2rem; border-radius: .08rem; background: #7b6fd0; vertical-align: -.12em; animation: pandu-cursor 1s steps(1) infinite; }
+.chat-streaming-status { display: flex; align-items: center; justify-content: space-between; gap: .75rem; padding: .55rem .7rem; border-radius: .75rem; background: #f7f6fb; }
+.chat-streaming-status p { font-size: .75rem; }
+.chat-streaming-status button { flex: none; padding: .35rem .6rem; background: #fff; font-size: .7rem; }
+.chat-references { position: relative; margin: 0 .75rem .5rem; font-size: .75rem; flex: none; }
+.chat-references summary { width: fit-content; padding: .3rem .55rem; border-radius: 999px; color: #616b82; cursor: pointer; list-style: none; }
+.chat-references summary::-webkit-details-marker { display: none; }
+.chat-references summary:hover { background: #f4f2fa; }
+.reference-options { position: absolute; right: 0; bottom: calc(100% + .4rem); left: 0; z-index: 2; max-height: 14rem; padding: .75rem; border: 1px solid #e1e1ea; border-radius: .8rem; overflow: auto; background: #fff; box-shadow: 0 12px 30px #26334d1a; }
+.reference-options fieldset { border: 0; padding: .35rem 0; margin: 0; min-width: 0; }
+.reference-options legend { font-weight: 700; }
+.reference-options label { display: flex; gap: .45rem; margin-top: .45rem; overflow-wrap: anywhere; }
+.reference-options small { display: block; color: var(--muted); }
+.course-workspace .chat-composer { display: grid; grid-template-columns: minmax(0, 1fr) 2.4rem; align-items: center; gap: .45rem; width: auto; margin: 0 .75rem .75rem; padding: .42rem; border: 1px solid #dedee8; border-radius: .8rem; background: #fff; box-shadow: 0 3px 14px #26334d0d; flex: none; }
+.chat-composer-label { position: absolute; width: 1px; height: 1px; padding: 0; border: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
+.chat-composer textarea { width: 100%; min-height: 2.35rem; max-height: 7rem; padding: .55rem .65rem; border: 0; resize: none; background: transparent; line-height: 1.25; }
+.chat-composer textarea:focus { outline: 0; }
+.course-workspace .chat-send { display: grid; place-items: center; width: 2.35rem; height: 2.35rem; padding: 0; border: 0; border-radius: .7rem; background: #6f68aa; color: #fff; font-size: 1rem; }
+.course-workspace .chat-send:hover:not(:disabled) { background: #5d568f; }
+.course-workspace .chat-send:disabled { background: #d8d8e2; }
+.chat-detail { position: absolute; inset: auto .75rem .75rem; z-index: 3; border: 1px solid #dcdbe7; border-radius: .8rem; padding: .85rem; background: white; box-shadow: 0 12px 30px #26334d25; max-height: 80%; overflow: auto; font-size: .8rem; }
+.chat-detail button { margin-top: .7rem; }
+@keyframes pandu-cursor { 50% { opacity: .15; } }
+@media (prefers-reduced-motion: reduce) { .chat-streaming-cursor { animation: none; } }
+@media (max-width: 64rem) {
+  /* Stack course content over Pandu on tablet and mobile without hiding either panel. */
+  .app-shell-course { grid-template-rows: auto minmax(0, 1fr); }
+  .app-shell-course .sidebar { flex-direction: row; align-items: center; gap: .5rem; padding: .4rem .7rem; }
+  .app-shell-course .brand { font-size: .85rem; padding: .3rem; }
+  .app-shell-course .sidebar-nav { flex: 1; gap: 0; }
+  .app-shell-course .sidebar .nav-link { width: auto; padding: .4rem; font-size: .8rem; }
+  .app-shell-course .sidebar-logout { margin-left: auto; }
+  .app-shell-course > .workspace { padding: .6rem; }
+  .app-shell-course .topbar { display: none; }
+  .course-workspace { gap: .5rem; }
+  .course-workspace-header h2 { margin: .15rem 0; }
+  .course-workspace-header p { display: none; }
+  .course-workspace-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: minmax(0, 55fr) minmax(0, 45fr); gap: .6rem; }
+  .course-tabs { padding: .35rem; }
+  .course-content-scroll { padding: .8rem; }
+  .chat-header { padding: .45rem .7rem; gap: .5rem; }
+  .chat-header h3 { font-size: .85rem; }
+  .chat-messages { padding: .5rem .7rem; }
+  .pandu-avatar-small { width: 1.8rem; height: 1.8rem; }
+  .pandu-avatar-large { width: 2.5rem; height: 2.5rem; font-size: 1.1rem; }
+  .chat-empty { min-height: auto; padding: .35rem; }
+  .chat-empty h4 { margin: .3rem 0 .1rem; font-size: .9rem; }
+  .chat-empty > p, .chat-empty > small { display: none; }
+  .chat-prompts { flex-direction: row; flex-wrap: wrap; justify-content: center; gap: .3rem; margin-top: .35rem; }
+  .course-workspace .chat-prompts button { padding: .25rem .5rem; font-size: .65rem; }
+  .chat-references { margin: 0 .6rem .3rem; }
+  .course-workspace .chat-composer { margin: 0 .6rem .5rem; }
+}
+@media (max-width: 28rem) {
+  .app-shell-course .brand { font-size: 0; gap: 0; }
+  .app-shell-course .sidebar svg { width: 1rem; height: 1rem; }
+  .app-shell-course .sidebar-nav .nav-link { gap: .2rem; }
+}

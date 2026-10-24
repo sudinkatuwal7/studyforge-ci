@@ -5,13 +5,17 @@ import type { TrackedDocument } from "../../types/document";
 import DocumentUpload from "../documents/DocumentUpload";
 import MaterialItem from "../documents/MaterialItem";
 
-export default function CourseMaterials({ courseId }: { courseId: number }) {
+// One material source powers both workspace tabs and Pandu's reference picker.
+type Props = { courseId: number; view?: "materials" | "notes"; onMaterialsChange?: (materials: TrackedDocument[]) => void };
+
+export default function CourseMaterials({ courseId, view, onMaterialsChange }: Props) {
   const { accessToken, user } = useAuth();
   if (!user || !accessToken) return <p role="alert">Sign in to view course materials.</p>;
-  return <Materials key={`${courseId}:${user.id}:${accessToken}`} courseId={courseId} accessToken={accessToken} />;
+  return <Materials key={`${courseId}:${user.id}:${accessToken}`} courseId={courseId} accessToken={accessToken} view={view} onMaterialsChange={onMaterialsChange} />;
 }
 
-function Materials({ courseId, accessToken }: { courseId: number; accessToken: string }) {
+function Materials({ courseId, accessToken, view, onMaterialsChange }: Props & { accessToken: string }) {
+  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [materials, setMaterials] = useState<TrackedDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -39,12 +43,22 @@ function Materials({ courseId, accessToken }: { courseId: number; accessToken: s
     return () => controller.abort();
   }, [courseId, accessToken, reload]);
 
+  // Publish uploads, renames, deletions, and status updates without another API request.
+  useEffect(() => { onMaterialsChange?.(materials); }, [materials, onMaterialsChange]);
+
+  // Fall back to the first material if the previous selection was removed.
+  const selected = materials.find((item) => item.id === selectedId)?.id ?? materials[0]?.id;
+
   return <section className="course-materials" aria-labelledby={`course-${courseId}-materials`}>
-    <h3 id={`course-${courseId}-materials`}>Course materials</h3>
+    <h3 id={`course-${courseId}-materials`}>{view === "notes" ? "Study notes" : "Course materials"}</h3>
+    {view === "notes" && materials.length > 0 && <label>Choose a material<select value={selected} onChange={(event) => setSelectedId(Number(event.target.value))}>{materials.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
+    {/* Keep uploads in the Materials tab while preserving this mounted component. */}
+    <div hidden={view === "notes"}>
     <DocumentUpload courseId={courseId} onDocumentSaved={(document) => {
       setNotice("");
       setMaterials((current) => [document, ...current.filter((item) => item.id !== document.id)]);
     }} />
+    </div>
     {loading && <p role="status">Loading materials...</p>}
     {notice && <p role="status">{notice}</p>}
     {error && <div><p role="alert" className="document-error">{error}</p><button disabled={loading} onClick={() => {
@@ -52,7 +66,9 @@ function Materials({ courseId, accessToken }: { courseId: number; accessToken: s
     }}>Retry loading materials</button></div>}
     {!loading && !error && !materials.length && <p>No materials uploaded yet.</p>}
     <ul className="material-list">
-      {materials.map((tracked) => <li key={tracked.id}><MaterialItem tracked={tracked} courseId={courseId} accessToken={accessToken}
+      {/* Notes display only the selected material; Materials displays the entire list. */}
+      {materials.map((tracked) => <li key={tracked.id} hidden={view === "notes" && tracked.id !== selected}><MaterialItem view={view} tracked={tracked} courseId={courseId} accessToken={accessToken}
+        onStatusChange={(document) => setMaterials((current) => current.map((item) => item.id === document.id ? { ...item, snapshot: document } : item))}
         onRenamed={(document) => setMaterials((current) => current.map((item) => item.id === document.id ? document : item))}
         onDeleted={() => {
           removed.current.add(tracked.id);

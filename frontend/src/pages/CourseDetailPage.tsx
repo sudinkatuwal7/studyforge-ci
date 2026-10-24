@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { getCourse } from "../api/courses";
-import CourseMaterials from "../components/courses/CourseMaterials";
+import CourseWorkspace from "../components/courses/CourseWorkspace";
 import { useAuth } from "../context/AuthContext";
 import type { Course } from "../types/course";
 
@@ -43,19 +43,15 @@ function CourseDetail({ courseId }: { courseId: string }) {
     };
   }, [accessToken, courseId]);
 
+  // Hand the authenticated course to the workspace only after it loads successfully.
+  if (state.status === "ready") return <CourseWorkspace course={state.course} />;
+
   return (
     <section className="course-detail">
       <Link to="/">← My courses</Link>
       {state.status === "loading" && <p role="status">Loading course...</p>}
       {state.status === "error" && <p className="form-error" role="alert">{state.message}</p>}
-      {state.status === "ready" && (
-        <>
-          <h2>{state.course.name}</h2>
-          {state.course.description && <p>{state.course.description}</p>}
-          {/* Upload into the owned course returned by the course API. */}
-          <CourseMaterials courseId={state.course.id} />
-        </>
-      )}
+
     </section>
   );
 }

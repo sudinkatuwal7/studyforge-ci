@@ -27,7 +27,8 @@ export default function AppShell({
   const onDashboard = pathname === "/";
 
   return (
-    <div className="app-shell">
+    // Course routes need a viewport-sized shell for independently scrolling content and chat.
+    <div className={`app-shell${pathname.startsWith("/courses/") ? " app-shell-course" : ""}`}>
       <aside className="sidebar">
         <Link to="/" className="brand">
           <BrandMark />

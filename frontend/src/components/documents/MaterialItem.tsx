@@ -1,15 +1,16 @@
 import { useEffect, useId, useRef, useState, type SubmitEvent } from "react";
 import { deleteDocument, DocumentRequestError, renameDocument } from "../../api/documents";
-import type { TrackedDocument } from "../../types/document";
+import type { StudyDocument, TrackedDocument } from "../../types/document";
 import StudyGuidePanel from "../notes/StudyGuidePanel";
 import DocumentStatus from "./DocumentStatus";
 
 type Props = {
   tracked: TrackedDocument; courseId: number; accessToken: string;
+  view?: "materials" | "notes"; onStatusChange?: (document: StudyDocument) => void;
   onRenamed: (document: TrackedDocument) => void; onDeleted: () => void;
 };
 
-export default function MaterialItem({ tracked, courseId, accessToken, onRenamed, onDeleted }: Props) {
+export default function MaterialItem({ tracked, courseId, accessToken, onRenamed, onDeleted, view, onStatusChange }: Props) {
   const inputId = useId();
   const [mode, setMode] = useState<"view" | "rename" | "delete">("view");
   const [name, setName] = useState(tracked.name);
@@ -52,7 +53,9 @@ export default function MaterialItem({ tracked, courseId, accessToken, onRenamed
   function submit(event: SubmitEvent<HTMLFormElement>) { event.preventDefault(); void mutate("rename"); }
 
   return <article className="material-item" aria-label={tracked.name} aria-busy={busy}>
-    <DocumentStatus key={revision} tracked={tracked} courseId={courseId} accessToken={accessToken} />
+    {/* Material management stays mounted but is hidden while viewing study notes. */}
+    <div hidden={view === "notes"}>
+    <DocumentStatus key={revision} tracked={tracked} courseId={courseId} accessToken={accessToken} onStatusChange={onStatusChange} />
     {tracked.snapshot && <p className="material-date">Uploaded <time dateTime={tracked.snapshot.created_at}>{new Date(tracked.snapshot.created_at).toLocaleString()}</time></p>}
     {mode === "view" && <div className="material-actions">
       <button onClick={() => { setName(tracked.name); setError(""); setNotice(""); setMode("rename"); }}>Rename</button>
@@ -69,6 +72,10 @@ export default function MaterialItem({ tracked, courseId, accessToken, onRenamed
     </div>}
     {error && <p role="alert" className="document-error">{error}</p>}
     {notice && <p role="status">{notice}</p>}
-    <StudyGuidePanel documentId={tracked.id} documentName={tracked.name} accessToken={accessToken} />
+    </div>
+    {/* Notes use the real study-guide API only after processing completes. */}
+    <div hidden={view === "materials"}>
+    {view === "notes" && tracked.snapshot?.status !== "READY" ? <p>Study notes will be available when this material is ready.</p> : <StudyGuidePanel documentId={tracked.id} documentName={tracked.name} accessToken={accessToken} />}
+    </div>
   </article>;
 }

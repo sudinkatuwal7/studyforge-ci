@@ -9,10 +9,13 @@ function isTerminal(document: StudyDocument | null) {
   return document?.status === "READY" || document?.status === "FAILED";
 }
 
-type Props = { tracked: TrackedDocument; courseId: number; accessToken: string | null };
+type Props = { tracked: TrackedDocument; courseId: number; accessToken: string | null; onStatusChange?: (document: StudyDocument) => void };
 
-export default function DocumentStatus({ tracked, courseId, accessToken }: Props) {
+export default function DocumentStatus({ tracked, courseId, accessToken, onStatusChange }: Props) {
   const [document, setDocument] = useState(tracked.snapshot);
+  // Keep the latest callback available without restarting the status polling loop.
+  const notify = useRef(onStatusChange);
+  useEffect(() => { notify.current = onStatusChange; }, [onStatusChange]);
   const latest = useRef(tracked.snapshot);
   const [notice, setNotice] = useState("");
   const [canRefresh, setCanRefresh] = useState(!tracked.snapshot);
@@ -45,6 +48,8 @@ export default function DocumentStatus({ tracked, courseId, accessToken }: Props
         failures = 0;
         latest.current = next;
         setDocument(next);
+        // Share the fresh status with Notes and Pandu's course-material references.
+        notify.current?.(next);
         setNotice("");
         if (!isTerminal(next)) timer = setTimeout(poll, POLL_DELAY_MS);
       } catch (error) {
