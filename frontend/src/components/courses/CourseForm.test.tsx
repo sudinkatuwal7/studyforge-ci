@@ -42,8 +42,10 @@ beforeEach(() => {
     accessToken,
     user: { id: 1, email: "student@example.test", first_name: "", last_name: "" },
     isRestoring: false,
+    isSigningOut: false,
+    signedOutReason: null,
     saveLogin: vi.fn(),
-    clearSession: vi.fn(),
+    signOut: vi.fn(),
     authenticatedFetch: vi.fn(async () => new Response()),
   });
   vi.mocked(getHealth).mockResolvedValue({ status: "ok" });

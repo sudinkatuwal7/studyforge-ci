@@ -10,7 +10,7 @@ import {
   MailIcon,
 } from "../components/auth/icons";
 import { validateEmail, validateRequired } from "../components/auth/validation";
-import { useAuth } from "../context/AuthContext";
+import { type SignedOutReason, useAuth } from "../context/AuthContext";
 
 type LoginPageProps = {
   // Shows the "Sign up" link when provided.
@@ -18,6 +18,11 @@ type LoginPageProps = {
 };
 
 type Field = "email" | "password";
+
+const SIGNED_OUT_MESSAGES: Record<SignedOutReason, string> = {
+  signed_out: "You've been signed out.",
+  expired: "Your session expired. Please sign in again.",
+};
 
 export default function LoginPage({ onCreateAccount }: LoginPageProps) {
   const [email, setEmail] = useState("");
@@ -32,7 +37,7 @@ export default function LoginPage({ onCreateAccount }: LoginPageProps) {
   const [submitting, setSubmitting] = useState(false);
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
-  const { saveLogin } = useAuth();
+  const { saveLogin, signedOutReason } = useAuth();
 
   const fieldErrors: Record<Field, string | undefined> = {
     email: validateEmail(email),
@@ -89,10 +94,16 @@ export default function LoginPage({ onCreateAccount }: LoginPageProps) {
 
       {/* noValidate: show our messages instead of the browser's pop-up bubbles. */}
       <form className="auth-form" noValidate onSubmit={handleSubmit}>
-        {formError && (
+        {formError ? (
           <p className="auth-alert" role="alert">
             {formError}
           </p>
+        ) : (
+          signedOutReason && (
+            <p className="auth-notice" role="status">
+              {SIGNED_OUT_MESSAGES[signedOutReason]}
+            </p>
+          )
         )}
 
         <FormField

@@ -8,18 +8,24 @@ import {
 } from "react";
 import {
   RefreshRejectedError,
+  logout,
   refreshAccessToken,
   restoreSession,
   type LoginResult,
 } from "../api/auth";
 import { fetchWithAccessToken } from "../api/client";
 
+// Why the last session ended, so the login screen can explain it.
+export type SignedOutReason = "signed_out" | "expired";
+
 type AuthContextValue = {
   accessToken: string | null;
   user: LoginResult["user"] | null;
   isRestoring: boolean;
+  isSigningOut: boolean;
+  signedOutReason: SignedOutReason | null;
   saveLogin: (result: LoginResult) => void;
-  clearSession: () => void;
+  signOut: () => Promise<void>;
   authenticatedFetch: (
     path: string,
     options?: RequestInit,
@@ -31,16 +37,39 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<LoginResult | null>(null);
   const [isRestoring, setIsRestoring] = useState(true);
+  const [isSigningOut, setIsSigningOut] = useState(false);
+  const [signedOutReason, setSignedOutReason] = useState<SignedOutReason | null>(null);
 
   const sessionRef = useRef<LoginResult | null>(null);
   const sessionVersionRef = useRef(0);
   const refreshPromiseRef = useRef<Promise<string> | null>(null);
 
-  function storeSession(next: LoginResult | null) {
+  // A new login clears the reason. Ending a session records one, or null when
+  // there was nothing to end, such as a first visit with no refresh cookie.
+  function storeSession(
+    next: LoginResult | null,
+    reason: SignedOutReason | null = null,
+  ) {
     sessionVersionRef.current += 1;
     sessionRef.current = next;
     refreshPromiseRef.current = null;
     setSession(next);
+    setSignedOutReason(next ? null : reason);
+  }
+
+  async function signOut() {
+    setIsSigningOut(true);
+    try {
+      // Wait for the server, so a late logout response cannot delete the
+      // cookie of a login that happens right after it.
+      await logout();
+    } catch {
+      // End the local session anyway. If the request never reached the
+      // server, the HttpOnly cookie survives and a reload signs back in.
+    } finally {
+      storeSession(null, "signed_out");
+      setIsSigningOut(false);
+    }
   }
 
   function sharedRefresh(): Promise<string> {
@@ -121,7 +150,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           error instanceof RefreshRejectedError &&
           sessionVersionRef.current === sessionVersion
         ) {
-          storeSession(null);
+          storeSession(null, "expired");
         }
         throw error;
       }
@@ -144,7 +173,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       response.status === 401 &&
       sessionVersionRef.current === sessionVersion
     ) {
-      storeSession(null);
+      storeSession(null, "expired");
     }
 
     return response;
@@ -154,8 +183,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     accessToken: session?.access ?? null,
     user: session?.user ?? null,
     isRestoring,
-    saveLogin: storeSession,
-    clearSession: () => storeSession(null),
+    isSigningOut,
+    signedOutReason,
+    saveLogin: (result) => storeSession(result),
+    signOut,
     authenticatedFetch,
   };
 

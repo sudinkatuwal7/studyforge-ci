@@ -10,7 +10,6 @@ function renderShell(path: string) {
         email="student@example.test"
         health={{ status: "ok" }}
         isLoggingOut={false}
-        logoutError={null}
         onLogout={() => undefined}
       >
         <p>Page body</p>
