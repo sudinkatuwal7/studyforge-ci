@@ -118,6 +118,21 @@ class SourceClientTests(SimpleTestCase):
             with self.assertRaises(RetryableProcessingError):
                 fetch_source_pdf(19, 42, SOURCE_SHA256)
 
+    def test_missing_or_stale_job_is_permanent(self):
+        for status in (404, 409):
+            with self.subTest(status=status):
+                opener = Mock()
+                opener.open.side_effect = HTTPError(
+                    "http://django/internal",
+                    status,
+                    "rejected",
+                    Message(),
+                    None,
+                )
+                with patch("processing_service.source_client.build_opener", return_value=opener):
+                    with self.assertRaises(PermanentProcessingError):
+                        fetch_source_pdf(19, 42, SOURCE_SHA256)
+
     def test_does_not_follow_redirects(self):
         opener = Mock()
         opener.open.side_effect = HTTPError(

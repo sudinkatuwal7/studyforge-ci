@@ -22,7 +22,7 @@ urlpatterns = [
     path("admin/", admin.site.urls),
     path("api/v1/health/", health),
     path(
-        "internal/v1/jobs/<int:job_id>/document/",
+        "internal/v1/jobs/<str:job_id>/document/",
         InternalJobDocumentView.as_view(),
         name="internal-job-document",
     ),

@@ -4,6 +4,74 @@ All StudyForge APIs are versioned under `/api/v1/`.
 
 This file is the source of truth for the working SCRUM-8 API contract, incorporating Person 3's decisions on 2026-09-25. No `contracts/openapi.yaml` exists, and the repository instructions and supplied SCRUM-8 requirements do not require OpenAPI. SCRUM-8 covers the upload and individual document/status contracts below, not their implementation or the course-document listing contract.
 
+## Internal processing-service source route
+
+This route is an internal service-to-service endpoint. It is **not public**, is
+not mounted under `/api/v1/`, and must not be called by browsers or ordinary
+student clients. It uses the processing-service bearer credential, not a student
+JWT and not the public course/document ownership authorization.
+
+### Request
+
+```http
+GET /internal/v1/jobs/{job_id}/document/
+Authorization: Bearer <PROCESSING_SERVICE_TOKEN>
+```
+
+The route has no request body. `{job_id}` is the positive integer primary key of
+the application `Job`, not a Document ID. Django resolves the associated
+Document through `Job.document`; callers cannot supply an independent storage
+path or document selector. A newer Job for the same Document supersedes an older
+Job and the older Job cannot fetch the source.
+
+### Successful response
+
+The response is `200 OK` and streams the exact bytes stored in the Document's
+private file. The MIME type is server-controlled from the stored validated suffix:
+
+| Suffix | `Content-Type` |
+|---|---|
+| `.pdf` | `application/pdf` |
+| `.docx` | `application/vnd.openxmlformats-officedocument.wordprocessingml.document` |
+| `.pptx` | `application/vnd.openxmlformats-officedocument.presentationml.presentation` |
+
+The response also includes `X-Document-ID`, `X-Source-SHA256`, and
+`Cache-Control: no-store`. It does not expose the storage key or local filesystem
+path. The processing client verifies the document ID, digest header, body digest,
+size, MIME type, and redirect behavior before parsing.
+
+### Authentication, statuses, and safe failures
+
+| Situation | HTTP response | Meaning/client behavior |
+|---|---:|---|
+| Valid service token and current Job with readable file | `200` streamed bytes | Worker consumes and verifies the source. |
+| Missing, malformed, or invalid service credential | `401` `{"error":"unauthorized"}` | Do not retry with a student JWT; treat as permanent. |
+| Django has no configured service token | `503` `{"error":"service_unavailable"}` | Service configuration is unavailable; worker may retry only according to its task policy. |
+| Missing or unknown Job | `404` `{"error":"not_found"}` | No source bytes or storage details; worker treats it as permanent. |
+| Non-positive Job ID reaching the view | `404` `{"error":"not_found"}` | Rejected before Job lookup. |
+| Nonempty malformed, non-ASCII, negative, or out-of-range Job ID | `404` `{"error":"not_found"}` after service authentication | Rejected before Job lookup; valid IDs are ASCII decimal integers from 1 through 9223372036854775807. |
+| Newer Job exists for the same Document | `409` `{"error":"stale_job"}` | Worker stops this execution; no file is opened. |
+| Empty/missing stored filename | `404` `{"error":"not_found"}` | No storage read is attempted. |
+| Unsupported stored suffix | `415` `{"error":"unsupported_source"}` | Worker treats the source as permanently unsupported. |
+| Missing blob or storage-open failure | `503` `{"error":"source_unavailable"}` | No path, exception text, or traceback is returned; retrieval may retry. |
+| Non-GET method | `405` | Not a source-download operation. |
+
+An absent path segment (for example `/internal/v1/jobs//document/`) does not
+match the route and retains the framework's 404 response; JSON is not guaranteed
+for URLs outside this route. The result callback route is unchanged.
+
+The worker calls this exact job-scoped URL from
+`processing_service.source_client.fetch_source_document(job_id, document_id,
+source_sha256)`. It rejects redirects, uses a bounded timeout, classifies 404,
+409, and 415 as permanent failures, and classifies 408, 429, and 5xx responses as
+retryable. A body digest mismatch is an integrity failure, not a permission
+response. A storage failure after streaming has begun may terminate the stream;
+the worker must detect incomplete or invalid content and must not persist it.
+
+Student ownership remains enforced by the public `/api/v1/` document endpoints;
+the internal route authorizes the trusted processing service and the Job-to-
+Document relationship. No separate internal Document-ID route is defined.
+
 ## SCRUM-106 multi-format extension
 
 The same owner-protected course upload endpoint accepts exactly `.pdf`, `.docx`,

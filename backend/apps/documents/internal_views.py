@@ -2,7 +2,7 @@
 
 import logging
 
-from django.core.exceptions import RequestDataTooBig
+from django.core.exceptions import RequestDataTooBig, SuspiciousFileOperation
 from django.db import DatabaseError
 from django.http import FileResponse, JsonResponse
 from django.utils.decorators import method_decorator
@@ -31,6 +31,13 @@ class InternalJobDocumentView(View):
         unauthorized = authorize_processing_service(request)
         if unauthorized:
             return unauthorized
+        # Bound the conversion before querying the signed BigAutoField key.
+        job_id = str(job_id)
+        if not job_id.isascii() or not job_id.isdecimal() or len(job_id) > 19:
+            return JsonResponse({"error": "not_found"}, status=404)
+        job_id = int(job_id)
+        if not 0 < job_id <= 9223372036854775807:
+            return JsonResponse({"error": "not_found"}, status=404)
 
         try:
             job = Job.objects.select_related("document").get(pk=job_id)
@@ -38,16 +45,21 @@ class InternalJobDocumentView(View):
             return JsonResponse({"error": "not_found"}, status=404)
 
         document = job.document
-        if not document.file:
+        # Match callback authorization: a newer run supersedes this job.
+        if Job.objects.filter(document_id=document.pk, pk__gt=job.pk).exists():
+            return JsonResponse({"error": "stale_job"}, status=409)
+        file_name = str(document.file.name or "")
+        file_basename = file_name.rsplit("/", 1)[-1]
+        if not file_basename:
             return JsonResponse({"error": "not_found"}, status=404)
-        suffix = "." + document.file.name.rsplit(".", 1)[-1].lower()
+        suffix = "." + file_basename.rsplit(".", 1)[-1].lower()
         if suffix not in FORMATS:
             return JsonResponse({"error": "unsupported_source"}, status=415)
 
         try:
             source = document.file.open("rb")
-        except OSError:
-            logger.exception("Could not open the source document for job %s.", job_id)
+        except (OSError, SuspiciousFileOperation):
+            logger.error("Could not open the source document for job %s.", job_id)
             return JsonResponse({"error": "source_unavailable"}, status=503)
 
         response = FileResponse(
