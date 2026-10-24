@@ -1,6 +1,8 @@
 import type { ReactNode } from "react";
 import { Link, useLocation } from "react-router-dom";
+import type { PublicUser } from "../../api/auth";
 import BrandMark from "../shared/BrandMark";
+import ProfileMenu from "./ProfileMenu";
 
 type HealthState =
   | { status: "checking" }
@@ -8,20 +10,19 @@ type HealthState =
   | { status: "error"; message: string };
 
 export default function AppShell({
-  email,
+  user,
   health,
-  isLoggingOut,
-  onLogout,
+  isSigningOut,
+  onSignOut,
   children,
 }: {
-  email: string;
+  user: PublicUser;
   health: HealthState;
-  isLoggingOut: boolean;
-  onLogout: () => void;
+  isSigningOut: boolean;
+  onSignOut: () => void;
   children: ReactNode;
 }) {
   const { pathname, hash } = useLocation();
-  const initial = email.trim().charAt(0).toUpperCase() || "?";
   const onDashboard = pathname === "/";
 
   return (
@@ -45,10 +46,6 @@ export default function AppShell({
             <CalendarIcon /> Calendar
           </Link>
         </nav>
-        <button className="nav-link sidebar-logout" type="button" onClick={onLogout} disabled={isLoggingOut}>
-          <LogoutIcon />
-          {isLoggingOut ? "Logging out..." : "Log out"}
-        </button>
       </aside>
 
       <main className="workspace">
@@ -60,8 +57,7 @@ export default function AppShell({
               {health.status === "ok" && "Backend connected."}
               {health.status === "error" && `Backend unavailable. ${health.message}`}
             </p>
-            <p className="account-email">Signed in as {email}</p>
-            <span className="avatar" aria-hidden="true">{initial}</span>
+            <ProfileMenu user={user} isSigningOut={isSigningOut} onSignOut={onSignOut} />
           </div>
         </header>
         {children}
@@ -110,14 +106,6 @@ function TasksIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M5 7h14M5 12h14M5 17h9" />
       <path d="M4 7.2 5.2 8.4 7.4 6M4 12.2 5.2 13.4 7.4 11" />
-    </svg>
-  );
-}
-
-function LogoutIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true">
-      <path d="M10 6H6.5A1.5 1.5 0 0 0 5 7.5v9A1.5 1.5 0 0 0 6.5 18H10M10 12h9M16 8.5 19.5 12 16 15.5" />
     </svg>
   );
 }

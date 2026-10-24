@@ -5,7 +5,7 @@ import App from "../App";
 
 vi.mock("../context/AuthContext", () => ({
   useAuth: () => ({
-    user: { id: 9, email: "student@example.test" },
+    user: { id: 9, email: "student@example.test", first_name: "", last_name: "" },
     accessToken: "course-session-token",
     isRestoring: false,
   }),

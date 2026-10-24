@@ -7,10 +7,10 @@ function renderShell(path: string) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <AppShell
-        email="student@example.test"
+        user={{ id: 1, email: "student@example.test", first_name: "Sam", last_name: "Student" }}
         health={{ status: "ok" }}
-        isLoggingOut={false}
-        onLogout={() => undefined}
+        isSigningOut={false}
+        onSignOut={() => undefined}
       >
         <p>Page body</p>
       </AppShell>
@@ -33,5 +33,12 @@ describe("AppShell calendar navigation", () => {
 
     expect(screen.getByRole("heading", { level: 1, name: "Dashboard" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Calendar" })).not.toHaveAttribute("aria-current");
+  });
+
+  it("offers sign out in the profile menu instead of the sidebar", () => {
+    renderShell("/");
+
+    expect(screen.getByRole("button", { name: "Account menu for Sam Student" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Log out/ })).not.toBeInTheDocument();
   });
 });
