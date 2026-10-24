@@ -125,10 +125,10 @@ function App() {
 
   return (
     <AppShell
-      email={user.email}
+      user={user}
       health={health}
-      isLoggingOut={isSigningOut}
-      onLogout={() => void signOut()}
+      isSigningOut={isSigningOut}
+      onSignOut={() => void signOut()}
     >
       <Routes>
         <Route path="/" element={

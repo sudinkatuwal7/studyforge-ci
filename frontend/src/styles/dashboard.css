@@ -69,10 +69,6 @@
   color: white;
 }
 
-.sidebar-logout {
-  margin-top: auto;
-}
-
 .workspace {
   box-sizing: border-box;
   min-width: 0;
@@ -98,7 +94,6 @@
   gap: 0.85rem;
 }
 
-.account-email,
 .topbar .health {
   margin: 0;
   font-size: 0.85rem;
@@ -113,6 +108,136 @@
   background: var(--lavender);
   color: var(--navy);
   font-weight: 700;
+}
+
+.profile-menu {
+  position: relative;
+}
+
+.profile-trigger {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.25rem 0.6rem 0.25rem 0.25rem;
+  border: 0;
+  border-radius: 999px;
+  background: white;
+  color: var(--navy);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+  box-shadow: 0 4px 14px #26334d14;
+}
+
+.profile-trigger-name {
+  max-width: 10rem;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-chevron {
+  width: 1rem;
+  height: 1rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.profile-trigger[aria-expanded="true"] .profile-chevron {
+  transform: rotate(180deg);
+}
+
+.profile-panel {
+  position: absolute;
+  top: calc(100% + 0.5rem);
+  right: 0;
+  z-index: 10;
+  width: 16rem;
+  max-width: calc(100vw - 2rem);
+  padding: 0.5rem;
+  border-radius: 1rem;
+  background: white;
+  box-shadow: 0 12px 32px #26334d29;
+}
+
+.profile-panel[hidden] {
+  display: none;
+}
+
+.profile-summary {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+  padding: 0.6rem;
+  border-bottom: 1px solid #e9e4dc;
+}
+
+.profile-name,
+.profile-email {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.profile-name {
+  font-weight: 700;
+  color: var(--navy);
+}
+
+.profile-email {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.profile-options {
+  margin: 0;
+  padding: 0.35rem 0;
+  list-style: none;
+  border-bottom: 1px solid #e9e4dc;
+}
+
+.profile-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  box-sizing: border-box;
+  width: 100%;
+  padding: 0.6rem;
+  border: 0;
+  border-radius: 0.6rem;
+  background: transparent;
+  color: var(--navy);
+  font: inherit;
+  text-align: left;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.profile-option:hover:not(:disabled),
+.profile-option:focus-visible {
+  background: var(--lavender);
+}
+
+.profile-option:disabled {
+  color: var(--muted);
+  cursor: not-allowed;
+}
+
+.profile-panel .soon-badge {
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  background: var(--lavender);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.profile-signout {
+  margin-top: 0.35rem;
+  font-weight: 600;
 }
 
 .welcome-banner {
@@ -280,11 +405,6 @@
     flex-wrap: wrap;
   }
 
-  .sidebar-logout {
-    margin-top: 0;
-    width: auto;
-  }
-
   .stat-row,
   .dashboard-columns,
   .dashboard-page .course-list ul {
@@ -294,6 +414,11 @@
   .topbar {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .profile-panel {
+    right: auto;
+    left: 0;
   }
 }
 
