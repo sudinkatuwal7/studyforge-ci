@@ -64,7 +64,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let cancelled = false;
 
-    restoreSession()
+        // StrictMode runs this effect twice in development. Sharing the refresh keeps
+    // that to one request, because a second one would reuse a single-use token.
+    restoreSession(sharedRefresh)
+
       .then((result) => {
         if (!cancelled) storeSession(result);
       })
