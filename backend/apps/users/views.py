@@ -7,10 +7,19 @@ from rest_framework import status
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
-from rest_framework_simplejwt.exceptions import AuthenticationFailed, TokenError
+from rest_framework_simplejwt.exceptions import (
+    AuthenticationFailed,
+    TokenBackendError,
+    TokenError,
+)
 from rest_framework_simplejwt.serializers import (
     TokenObtainPairSerializer,
     TokenRefreshSerializer,
+)
+from rest_framework_simplejwt.state import token_backend
+from rest_framework_simplejwt.token_blacklist.models import (
+    BlacklistedToken,
+    OutstandingToken,
 )
 from rest_framework_simplejwt.tokens import RefreshToken
 
@@ -18,6 +27,53 @@ from .serializers import PublicUserSerializer, RegisterSerializer
 
 
 User = get_user_model()
+
+REFRESH_COOKIE = "studyforge_refresh"
+REFRESH_COOKIE_PATH = "/api/v1/auth/"
+
+
+def set_refresh_cookie(response, refresh_token):
+    response.set_cookie(
+        key=REFRESH_COOKIE,
+        value=refresh_token,
+        max_age=int(settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds()),
+        httponly=True,
+        secure=not settings.DEBUG,
+        samesite="Lax",
+        path=REFRESH_COOKIE_PATH,
+    )
+
+
+def clear_refresh_cookie(response):
+    response.delete_cookie(REFRESH_COOKIE, path=REFRESH_COOKIE_PATH, samesite="Lax")
+
+
+def revoke_all_sessions_if_reused(refresh_token):
+    """Blacklist every refresh token of a user whose used-up token came back.
+
+    Rotation makes each refresh token single-use, so a genuine but blacklisted
+    token means two parties hold copies of one login. We cannot tell which one
+    is the attacker, so every session of that user ends.
+    """
+    try:
+        # Checks signature and expiry, so a forged token cannot sign anyone out.
+        payload = token_backend.decode(refresh_token, verify=True)
+    except TokenBackendError:
+        return
+
+    if payload.get("token_type") != "refresh":
+        return
+    if not BlacklistedToken.objects.filter(token__jti=payload.get("jti")).exists():
+        return
+
+    active = OutstandingToken.objects.filter(
+        user_id=payload.get("user_id"),
+        blacklistedtoken__isnull=True,
+    )
+    BlacklistedToken.objects.bulk_create(
+        [BlacklistedToken(token=token) for token in active],
+        ignore_conflicts=True,
+    )
 
 
 @ensure_csrf_cookie
@@ -55,17 +111,7 @@ class LoginView(APIView):
             },
             status=status.HTTP_200_OK,
         )
-        response.set_cookie(
-            key="studyforge_refresh",
-            value=serializer.validated_data["refresh"],
-            max_age=int(
-                settings.SIMPLE_JWT["REFRESH_TOKEN_LIFETIME"].total_seconds()
-            ),
-            httponly=True,
-            secure=not settings.DEBUG,
-            samesite="Lax",
-            path="/api/v1/auth/",
-        )
+        set_refresh_cookie(response, serializer.validated_data["refresh"])
         return response
 
     def get_authenticate_header(self, request):
@@ -81,10 +127,11 @@ class RefreshView(APIView):
         return 'Bearer realm="api"'
 
     def post(self, request):
-        refresh_token = request.COOKIES.get("studyforge_refresh")
+        refresh_token = request.COOKIES.get(REFRESH_COOKIE)
         if not refresh_token:
             raise AuthenticationFailed("Refresh token is missing or invalid.")
 
+        revoke_all_sessions_if_reused(refresh_token)
         serializer = TokenRefreshSerializer(data={"refresh": refresh_token})
 
         try:
@@ -97,14 +144,13 @@ class RefreshView(APIView):
                     "WWW-Authenticate": self.get_authenticate_header(request)
                 },
             )
-            response.delete_cookie(
-                "studyforge_refresh",
-                path="/api/v1/auth/",
-                samesite="Lax",
-            )
+            clear_refresh_cookie(response)
             return response
 
-        return Response({"access": serializer.validated_data["access"]})
+        # The rotated refresh token goes only in the HttpOnly cookie, never the body.
+        response = Response({"access": serializer.validated_data["access"]})
+        set_refresh_cookie(response, serializer.validated_data["refresh"])
+        return response
 
 
 @method_decorator(csrf_protect, name="dispatch")
@@ -113,7 +159,7 @@ class LogoutView(APIView):
     permission_classes = [AllowAny]
 
     def post(self, request):
-        refresh_token = request.COOKIES.get("studyforge_refresh")
+        refresh_token = request.COOKIES.get(REFRESH_COOKIE)
 
         if refresh_token:
             try:
@@ -123,11 +169,7 @@ class LogoutView(APIView):
                 pass
 
         response = Response(status=status.HTTP_204_NO_CONTENT)
-        response.delete_cookie(
-            "studyforge_refresh",
-            path="/api/v1/auth/",
-            samesite="Lax",
-        )
+        clear_refresh_cookie(response)
         return response
 
 

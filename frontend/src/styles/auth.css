@@ -296,6 +296,15 @@
   font-weight: 500;
 }
 
+/* Neutral notice, such as why the last session ended. */
+.auth-notice {
+  padding: 0.85rem 1rem;
+  border-radius: 0.85rem;
+  background: var(--lavender);
+  color: var(--ink);
+  font-weight: 500;
+}
+
 .auth-row-end {
   display: flex;
   justify-content: flex-end;

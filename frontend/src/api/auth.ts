@@ -109,7 +109,20 @@ export async function login(
   return (await response.json()) as LoginResult;
 }
 
-export async function refreshAccessToken(): Promise<string> {
+// Refresh tokens are single-use, so tabs take turns refreshing. A tab that waited
+// then sends the newest cookie instead of one another tab just used up.
+const REFRESH_LOCK = "studyforge-refresh";
+
+export function refreshAccessToken(): Promise<string> {
+  // jsdom and older browsers have no Web Locks API, so refresh without one.
+  if (typeof navigator !== "undefined" && navigator.locks) {
+    return navigator.locks.request(REFRESH_LOCK, requestAccessToken);
+  }
+  return requestAccessToken();
+}
+
+async function requestAccessToken(): Promise<string> {
+
   if (!API_BASE_URL) {
     throw new Error("VITE_API_BASE_URL is not configured");
   }
@@ -148,8 +161,12 @@ export async function refreshAccessToken(): Promise<string> {
   return access;
 }
 
-export async function restoreSession(): Promise<LoginResult> {
-  const access = await refreshAccessToken();
+// AuthContext passes its shared refresh so a double-run effect sends one request.
+export async function restoreSession(
+  refresh: () => Promise<string> = refreshAccessToken,
+): Promise<LoginResult> {
+  const access = await refresh();
+
   const { user } = await getJson<{ user: PublicUser }>("/auth/me/", access);
   return { access, user };
 }
@@ -184,6 +201,20 @@ export async function logout(): Promise<void> {
   }
 }
 export class RefreshRejectedError extends Error {}
+
+// How long an access token is valid, from its own "iat" and "exp" claims. Both
+// come from the server's clock, so a wrong clock on this computer does not matter.
+// Returns null for anything that is not a readable JWT.
+export function accessTokenLifetimeMs(token: string): number | null {
+  try {
+    const payload = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const { exp, iat } = JSON.parse(atob(payload)) as { exp?: unknown; iat?: unknown };
+    if (typeof exp !== "number" || typeof iat !== "number" || exp <= iat) return null;
+    return (exp - iat) * 1000;
+  } catch {
+    return null;
+  }
+}
 export type RegisterInput = {
   email: string;
   password: string;

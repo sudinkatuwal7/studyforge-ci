@@ -13,6 +13,7 @@ import {
   validateEmail,
   validatePassword,
   validatePasswordMatch,
+  validateRequired,
 } from "../components/auth/validation";
 import { useAuth } from "../context/AuthContext";
 
@@ -71,6 +72,8 @@ export default function RegisterPage({ onSignIn }: RegisterPageProps) {
   const { saveLogin } = useAuth();
 
   const clientErrors: FieldErrors = {
+    firstName: validateRequired(values.firstName.trim(), "Enter your first name."),
+    lastName: validateRequired(values.lastName.trim(), "Enter your last name."),
     email: validateEmail(values.email),
     password: validatePassword(values.password),
     confirmPassword: validatePasswordMatch(values.password, values.confirmPassword),
@@ -189,14 +192,16 @@ export default function RegisterPage({ onSignIn }: RegisterPageProps) {
         <div className="auth-name-row">
           <FormField
             id="register-first-name"
-            label="First name (optional)"
+            label="First name"
+            maxLength={150}
             autoComplete="given-name"
             icon={<UserIcon />}
             {...fieldProps("firstName")}
           />
           <FormField
             id="register-last-name"
-            label="Last name (optional)"
+            label="Last name"
+            maxLength={150}
             autoComplete="family-name"
             icon={<UserIcon />}
             {...fieldProps("lastName")}

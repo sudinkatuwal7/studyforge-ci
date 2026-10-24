@@ -1,7 +1,8 @@
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthError, type LoginResult, login } from "../api/auth";
+import type { SignedOutReason } from "../context/AuthContext";
 import LoginPage from "./LoginPage";
 
 // Keep the real AuthError class so the page's instanceof checks still work.
@@ -9,8 +10,17 @@ vi.mock("../api/auth", async () => {
   const actual = await vi.importActual<typeof import("../api/auth")>("../api/auth");
   return { ...actual, login: vi.fn() };
 });
-const { saveLogin } = vi.hoisted(() => ({ saveLogin: vi.fn() }));
-vi.mock("../context/AuthContext", () => ({ useAuth: () => ({ saveLogin }) }));
+const { saveLogin, auth } = vi.hoisted(() => ({
+  saveLogin: vi.fn(),
+  auth: { signedOutReason: null as SignedOutReason | null },
+}));
+vi.mock("../context/AuthContext", () => ({
+  useAuth: () => ({ saveLogin, signedOutReason: auth.signedOutReason }),
+}));
+
+beforeEach(() => {
+  auth.signedOutReason = null;
+});
 
 const loginResult: LoginResult = {
   access: "access-token",
@@ -104,6 +114,34 @@ describe("LoginPage", () => {
     expect(password).toHaveAttribute("type", "text");
     await user.click(screen.getByRole("button", { name: "Hide password" }));
     expect(password).toHaveAttribute("type", "password");
+  });
+
+  it.each([
+    { reason: "signed_out" as const, message: "You've been signed out." },
+    { reason: "expired" as const, message: "Your session expired. Please sign in again." },
+  ])("explains a $reason session end", ({ reason, message }) => {
+    auth.signedOutReason = reason;
+
+    render(<LoginPage />);
+
+    expect(screen.getByRole("status")).toHaveTextContent(message);
+  });
+
+  it("shows no notice on a first visit", () => {
+    render(<LoginPage />);
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+
+  it("replaces the notice with a login error", async () => {
+    auth.signedOutReason = "expired";
+    vi.mocked(login).mockRejectedValue(new AuthError("credentials", "Incorrect email or password."));
+    render(<LoginPage />);
+
+    await fillAndSubmit("student@example.test", "wrong-password");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent("Incorrect email or password.");
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
   });
 
   it("shows the sign up link only when a handler is provided", async () => {
