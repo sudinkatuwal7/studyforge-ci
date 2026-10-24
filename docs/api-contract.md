@@ -707,3 +707,32 @@ return sanitized `503`. No partial answer or citations are returned on failure.
 - The supplied SCRUM-20 acceptance criteria require retrieved-content answers,
   structured citations, rejection of invalid references, and handling insufficient
   information/generation errors. They do not separately specify this route name.
+
+## Conversation scope and APIs (SCRUM-76)
+
+SCRUM-76 provides the private `Conversation` and upload contract for SCRUM-75.
+Message persistence and chat history are not part of this model. A conversation
+has an authenticated owner, an optional course, a title, and timestamps. A course
+conversation is accessible only when both `Conversation.owner` and `Course.owner`
+match the caller. Missing and foreign conversation IDs return the same
+`404 {"code":"RESOURCE_NOT_FOUND","message":"Resource not found."}` body.
+Requests without a valid JWT return 401.
+
+| Route | Method | Contract |
+| --- | --- | --- |
+| `/api/v1/conversations/` | GET | List only the caller's accessible conversations, newest updated first. |
+| `/api/v1/conversations/` | POST | Create from optional `course_id` and `title`; omitted/null course means standalone. A foreign or missing course is 404. |
+| `/api/v1/conversations/{id}/` | GET, DELETE | Read or delete one accessible conversation. |
+| `/api/v1/conversations/{id}/documents/` | GET, POST | List conversation uploads or upload one validated PDF, DOCX, or PPTX as multipart `file`. Uploads use the existing processing handoff and status values. |
+| `/api/v1/conversations/{id}/documents/{document_id}/` | GET, DELETE | Read upload status or delete an upload in this exact conversation. |
+| `/api/v1/conversations/{id}/questions/` | POST | Ask with `{"question":"...","document_ids":[...]}`; selected IDs must be READY uploads in this conversation or, for course chat, normal materials in its course. Response matches the RAG questions contract. |
+
+Each Document has exactly one scope: a course material has `course_id` and no
+conversation; a chat upload has `conversation_id` and no `course_id`. A chat upload
+is never returned by normal course material lists or accepted by study-guide,
+quiz, or ordinary RAG document selection. Moving a chat upload into course
+materials requires a separate, explicit action; this API does not provide one.
+Deleting a conversation or its course cascades to its uploads. Chat upload files
+are deleted from private storage as part of the database deletion transaction.
+As with normal material deletion, a later database commit failure cannot restore
+a file already removed from storage.
