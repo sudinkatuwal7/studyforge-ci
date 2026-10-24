@@ -30,6 +30,26 @@ def resource_id(value):
     return pk
 
 
+def read_upload(request):
+    """Validate one multipart source after the caller has checked its scope."""
+    if request.content_type.split(";", 1)[0].strip().lower() != "multipart/form-data":
+        raise DocumentAPIError("UNSUPPORTED_MEDIA_TYPE", 415)
+    if request.stream is None:
+        raise DocumentAPIError("INVALID_REQUEST")
+    data = request.data
+    if set(data) - {"file"}:
+        raise DocumentAPIError("INVALID_UPLOAD")
+    parts = data.getlist("file")
+    files = request.FILES.getlist("file")
+    if not parts:
+        raise DocumentAPIError("FILE_REQUIRED")
+    if len(parts) != 1 or len(files) != 1:
+        raise DocumentAPIError("INVALID_UPLOAD")
+    upload = files[0]
+    title, sha256, suffix = validate_document(upload)
+    return upload, title, sha256, suffix
+
+
 class DocumentAPIView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
@@ -73,7 +93,7 @@ class DocumentUploadView(DocumentAPIView):
         course = owned_course(request.user, resource_id(course_id))
         if course is None:
             raise Http404
-        documents = Document.objects.filter(course=course).order_by("-created_at", "-pk")
+        documents = Document.objects.filter(course=course, conversation__isnull=True).order_by("-created_at", "-pk")
         return Response(DocumentSerializer(documents, many=True).data)
 
     def post(self, request, course_id):
@@ -82,23 +102,7 @@ class DocumentUploadView(DocumentAPIView):
             raise Http404
 
         # Resolve ownership before accessing request.data, which parses the body.
-        if request.content_type.split(";", 1)[0].strip().lower() != "multipart/form-data":
-            raise DocumentAPIError("UNSUPPORTED_MEDIA_TYPE", 415)
-        # DRF skips parser invocation for a zero-length body. Such a body has no
-        # multipart framing; it differs from a valid form with a missing file.
-        if request.stream is None:
-            raise DocumentAPIError("INVALID_REQUEST")
-        data = request.data
-        if set(data) - {"file"}:
-            raise DocumentAPIError("INVALID_UPLOAD")
-        parts = data.getlist("file")
-        files = request.FILES.getlist("file")
-        if not parts:
-            raise DocumentAPIError("FILE_REQUIRED")
-        if len(parts) != 1 or len(files) != 1:
-            raise DocumentAPIError("INVALID_UPLOAD")
-        upload = files[0]
-        title, sha256, suffix = validate_document(upload)
+        upload, title, sha256, suffix = read_upload(request)
         snapshot = store_and_dispatch(course=course, upload=upload, title=title, sha256=sha256, suffix=suffix)
         return Response(snapshot, status=201)
 
