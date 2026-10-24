@@ -201,6 +201,20 @@ export async function logout(): Promise<void> {
   }
 }
 export class RefreshRejectedError extends Error {}
+
+// How long an access token is valid, from its own "iat" and "exp" claims. Both
+// come from the server's clock, so a wrong clock on this computer does not matter.
+// Returns null for anything that is not a readable JWT.
+export function accessTokenLifetimeMs(token: string): number | null {
+  try {
+    const payload = token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/");
+    const { exp, iat } = JSON.parse(atob(payload)) as { exp?: unknown; iat?: unknown };
+    if (typeof exp !== "number" || typeof iat !== "number" || exp <= iat) return null;
+    return (exp - iat) * 1000;
+  } catch {
+    return null;
+  }
+}
 export type RegisterInput = {
   email: string;
   password: string;

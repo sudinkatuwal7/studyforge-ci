@@ -1,7 +1,7 @@
-import { render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { StrictMode } from "react";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AuthProvider, useAuth } from "./AuthContext";
 
 const savedUser = { id: 1, email: "ada@example.test", first_name: "Ada", last_name: "Lovelace" };
@@ -11,6 +11,10 @@ type ServerOptions = {
   refreshStatus?: number;
   laterRefreshStatus?: number;
   tabs?: number;
+  // Refreshes after page load that never reach the server.
+  offlineRefreshes?: number;
+  // Return real-looking JWTs that expire after this many seconds.
+  accessLifetime?: number;
   // A logout that never reaches the server, or one that waits for `finishLogout`.
   logout?: "ok" | "offline" | "pending";
 };
@@ -20,6 +24,8 @@ function stubAuthServer({
   refreshStatus = 200,
   laterRefreshStatus = refreshStatus,
   tabs = 1,
+  offlineRefreshes = 0,
+  accessLifetime,
   logout = "ok",
 }: ServerOptions = {}) {
   document.cookie = "csrftoken=test-csrf";
@@ -28,11 +34,17 @@ function stubAuthServer({
   vi.stubGlobal("fetch", vi.fn(async (url: string) => {
     if (url.endsWith("/auth/csrf/")) return Response.json({ status: "ok" });
     if (url.endsWith("/auth/token/refresh/")) {
-      const status = refreshes.length < tabs ? refreshStatus : laterRefreshStatus;
+      const isPageLoad = refreshes.length < tabs;
+      const status = isPageLoad ? refreshStatus : laterRefreshStatus;
       refreshes.push(url);
-      return status === 200
-        ? Response.json({ access: "restored-access-token" })
-        : new Response("{}", { status });
+      if (!isPageLoad && refreshes.length - tabs <= offlineRefreshes) {
+        throw new TypeError("Failed to fetch");
+      }
+      if (status !== 200) return new Response("{}", { status });
+      const access = accessLifetime
+        ? fakeAccessToken(accessLifetime, refreshes.length)
+        : "restored-access-token";
+      return Response.json({ access });
     }
     if (url.endsWith("/auth/me/")) return Response.json({ user: savedUser });
     if (url.endsWith("/auth/logout/")) {
@@ -43,6 +55,13 @@ function stubAuthServer({
     return new Response("{}", { status: 401 });
   }));
   return { refreshes, finishLogout: () => finishLogout() };
+}
+
+// A JWT-shaped token: only its payload matters to the frontend.
+function fakeAccessToken(lifetimeSeconds: number, id: number) {
+  const iat = Math.floor(Date.now() / 1000);
+  const payload = btoa(JSON.stringify({ token_type: "access", iat, exp: iat + lifetimeSeconds, jti: id }));
+  return `header.${payload.replace(/=+$/, "")}.signature`;
 }
 
 function SessionStatus() {
@@ -205,5 +224,74 @@ describe("AuthProvider across tabs", () => {
     outsider.close();
 
     expect(await second.findByText("Reason: expired")).toBeInTheDocument();
+  });
+});
+
+describe("AuthProvider scheduled refresh", () => {
+  const MINUTE = 60_000;
+
+  beforeEach(() => vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout"] }));
+  afterEach(() => vi.useRealTimers());
+
+  // Moves the fake clock forward and lets the fetch promises it starts settle.
+  async function advance(ms: number) {
+    await act(() => vi.advanceTimersByTimeAsync(ms));
+  }
+
+  async function renderSignedIn() {
+    render(<AuthProvider><SessionStatus /></AuthProvider>);
+    await advance(0);
+    expect(screen.getByText("Signed in as ada@example.test")).toBeInTheDocument();
+  }
+
+  it("refreshes a minute before each access token expires", async () => {
+    const { refreshes } = stubAuthServer({ accessLifetime: 15 * 60 });
+    await renderSignedIn();
+
+    await advance(14 * MINUTE - 1_000);
+    expect(refreshes).toHaveLength(1);
+
+    await advance(1_000);
+    expect(refreshes).toHaveLength(2);
+
+    // The new token gets its own timer.
+    await advance(14 * MINUTE);
+    expect(refreshes).toHaveLength(3);
+    expect(screen.getByText("Signed in as ada@example.test")).toBeInTheDocument();
+  });
+
+  it("ends the session as expired when the scheduled refresh is rejected", async () => {
+    stubAuthServer({ accessLifetime: 15 * 60, laterRefreshStatus: 401 });
+    await renderSignedIn();
+
+    await advance(14 * MINUTE);
+
+    expect(screen.getByText("Signed out")).toBeInTheDocument();
+    expect(screen.getByText("Reason: expired")).toBeInTheDocument();
+  });
+
+  it("tries again later when a refresh never reaches the server", async () => {
+    const { refreshes } = stubAuthServer({ accessLifetime: 15 * 60, offlineRefreshes: 1 });
+    await renderSignedIn();
+
+    await advance(14 * MINUTE);
+    expect(refreshes).toHaveLength(2);
+    expect(screen.getByText("Signed in as ada@example.test")).toBeInTheDocument();
+
+    await advance(30_000);
+    expect(refreshes).toHaveLength(3);
+    expect(screen.getByText("Signed in as ada@example.test")).toBeInTheDocument();
+  });
+
+  it("stops refreshing after sign-out", async () => {
+    const { refreshes } = stubAuthServer({ accessLifetime: 15 * 60 });
+    await renderSignedIn();
+
+    fireEvent.click(screen.getByRole("button", { name: "Sign out" }));
+    await advance(0);
+    expect(screen.getByText("Signed out")).toBeInTheDocument();
+
+    await advance(30 * MINUTE);
+    expect(refreshes).toHaveLength(1);
   });
 });

@@ -8,6 +8,7 @@ import {
 } from "react";
 import {
   RefreshRejectedError,
+  accessTokenLifetimeMs,
   logout,
   refreshAccessToken,
   restoreSession,
@@ -17,6 +18,11 @@ import { fetchWithAccessToken } from "../api/client";
 
 // Why the last session ended, so the login screen can explain it.
 export type SignedOutReason = "signed_out" | "expired";
+
+// Refresh this long before the access token expires, and wait this long before
+// trying again after a refresh that failed for a reason other than rejection.
+const REFRESH_EARLY_MS = 60_000;
+const REFRESH_RETRY_MS = 30_000;
 
 // Every StudyForge tab in this browser hears when one of them ends a session.
 const AUTH_CHANNEL = "studyforge-auth";
@@ -67,6 +73,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     refreshPromiseRef.current = null;
     setSession(next);
     setSignedOutReason(next ? null : reason);
+  }
+
+  // Swap in a new access token without starting a new session.
+  function replaceAccessToken(access: string) {
+    if (!sessionRef.current) return;
+    const updated = { ...sessionRef.current, access };
+    sessionRef.current = updated;
+    setSession(updated);
   }
 
   // End this tab's session and tell the other tabs, which end theirs without
@@ -149,6 +163,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  // Refresh shortly before each access token expires, so pages that send the
+  // token directly never get a 401 for an expired one.
+  const currentAccess = session?.access;
+  useEffect(() => {
+    if (!currentAccess) return;
+    const lifetime = accessTokenLifetimeMs(currentAccess);
+    if (lifetime === null) return;
+
+    const sessionVersion = sessionVersionRef.current;
+    let stopped = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    function attempt() {
+      sharedRefresh().then(
+        (access) => {
+          // Skip if the session ended, or another refresh already replaced the token.
+          if (stopped || sessionVersionRef.current !== sessionVersion) return;
+          if (sessionRef.current?.access === currentAccess) replaceAccessToken(access);
+        },
+        (error: unknown) => {
+          if (stopped || sessionVersionRef.current !== sessionVersion) return;
+          if (error instanceof RefreshRejectedError) {
+            endSession("expired");
+          } else {
+            // Offline or server error: the refresh cookie is still good, so try again.
+            timer = setTimeout(attempt, REFRESH_RETRY_MS);
+          }
+        },
+      );
+    }
+
+    // The token was just issued, so its lifetime starts now.
+    timer = setTimeout(attempt, Math.max(lifetime - REFRESH_EARLY_MS, 0));
+
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, [currentAccess]);
+
   async function authenticatedFetch(
     path: string,
     options: RequestInit = {},
@@ -199,9 +253,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         throw new Error("Session changed. Please try again.");
       }
 
-      const updated = { ...sessionRef.current, access };
-      sessionRef.current = updated;
-      setSession(updated);
+      replaceAccessToken(access);
     }
 
     response = await fetchWithAccessToken(path, access, options);
