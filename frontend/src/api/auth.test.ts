@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { RefreshRejectedError, refreshAccessToken } from "./auth";
+import { RefreshRejectedError, accessTokenLifetimeMs, refreshAccessToken } from "./auth";
 
 function stubAuthServer(refreshStatus = 200) {
   document.cookie = "csrftoken=test-csrf";
@@ -53,5 +53,30 @@ describe("refreshAccessToken", () => {
     stubAuthServer(401);
 
     await expect(refreshAccessToken()).rejects.toBeInstanceOf(RefreshRejectedError);
+  });
+});
+
+describe("accessTokenLifetimeMs", () => {
+  function token(payload: object) {
+    // JWTs use base64url: no padding, and - and _ instead of + and /.
+    const encoded = btoa(JSON.stringify(payload)).replace(/=+$/, "").replace(/\+/g, "-").replace(/\//g, "_");
+    return `header.${encoded}.signature`;
+  }
+
+  it("reads the lifetime from the token's own iat and exp", () => {
+    expect(accessTokenLifetimeMs(token({ iat: 1_000, exp: 1_900 }))).toBe(900_000);
+  });
+
+  it("decodes base64url payloads", () => {
+    // This name makes the base64 contain "/", which base64url writes as "_".
+    expect(accessTokenLifetimeMs(token({ iat: 1_000, exp: 1_060, name: "??>>" }))).toBe(60_000);
+  });
+
+  it.each([
+    ["is not a JWT", "restored-access-token"],
+    ["has no iat", token({ exp: 1_900 })],
+    ["expires before it was issued", token({ iat: 1_900, exp: 1_000 })],
+  ])("returns null when the token %s", (_label, value) => {
+    expect(accessTokenLifetimeMs(value)).toBeNull();
   });
 });
