@@ -13,6 +13,7 @@ from django.urls import reverse
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken
 
+from apps.conversations.models import Conversation
 from apps.courses.models import Course
 from apps.documents.models import Document
 from apps.knowledge.llm import OpenAIRAGLLM
@@ -153,6 +154,21 @@ class QuestionsAPITests(TestCase):
                     self.assertEqual(result.status_code, 404)
                     bodies.append(result.json())
         self.assertTrue(all(body == {"detail": "No such documents."} for body in bodies))
+        self.assert_no_providers()
+
+    def test_owned_conversation_upload_is_not_an_ordinary_rag_source(self):
+        conversation = Conversation.objects.create(owner=self.owner, course=self.course)
+        upload = Document.objects.create(
+            owner=self.owner, conversation=conversation, title="Chat only",
+            sha256="a" * 64, file="documents/chat-only.pdf", status=Document.Status.READY,
+        )
+        self.make_chunk(upload, "PRIVATE conversation-only text.")
+
+        for ids in ([upload.pk], [self.document.pk, upload.pk]):
+            with self.subTest(ids=ids):
+                result = self.post(ids=ids)
+                self.assertEqual(result.status_code, 404)
+                self.assertEqual(result.json(), {"detail": "No such documents."})
         self.assert_no_providers()
 
     def test_success_uses_one_embedding_and_global_retrieval(self):
