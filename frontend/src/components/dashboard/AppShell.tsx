@@ -1,4 +1,4 @@
-import type { ReactNode } from "react";
+import { type KeyboardEvent, type ReactNode, useEffect, useRef, useState } from "react";
 import { Link, useLocation } from "react-router-dom";
 import type { PublicUser } from "../../api/auth";
 import BrandMark from "../shared/BrandMark";
@@ -22,19 +22,65 @@ export default function AppShell({
   onSignOut: () => void;
   children: ReactNode;
 }) {
-  const { pathname, hash } = useLocation();
+  const { pathname, hash, key } = useLocation();
   const onDashboard = pathname === "/";
+  const onHome = onDashboard && hash !== "#courses" && hash !== "#tasks";
+
+  // On phones the sidebar is a drawer. It stays open only for the location it
+  // was opened on, so any navigation (a nav link, Back, a course link) closes it.
+  const [navOpenAt, setNavOpenAt] = useState<string | null>(null);
+  // Forget that location once we leave it, so going Back to it doesn't reopen the drawer.
+  if (navOpenAt !== null && navOpenAt !== key) setNavOpenAt(null);
+  const navOpen = navOpenAt === key;
+
+  const menuButtonRef = useRef<HTMLButtonElement>(null);
+  const brandRef = useRef<HTMLAnchorElement>(null);
+  const wasNavOpen = useRef(false);
+
+  useEffect(() => {
+    if (navOpen) brandRef.current?.focus();
+    else if (wasNavOpen.current) menuButtonRef.current?.focus();
+    wasNavOpen.current = navOpen;
+  }, [navOpen]);
+
+  useEffect(() => {
+    const desktop = window.matchMedia?.("(min-width: 64.0625rem)");
+    if (!desktop) return;
+    const close = () => { if (desktop.matches) setNavOpenAt(null); };
+    desktop.addEventListener("change", close);
+    return () => desktop.removeEventListener("change", close);
+  }, []);
+
+  function closeNav() {
+    setNavOpenAt(null);
+  }
+
+  function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
+    if (!navOpen) return;
+    if (event.key === "Escape") closeNav();
+    if (event.key === "Tab") {
+      const links = Array.from(event.currentTarget.querySelectorAll<HTMLAnchorElement>(".sidebar a"));
+      const first = links[0];
+      const last = links[links.length - 1];
+      if (event.shiftKey && document.activeElement === first) {
+        event.preventDefault();
+        last?.focus();
+      } else if (!event.shiftKey && document.activeElement === last) {
+        event.preventDefault();
+        first?.focus();
+      }
+    }
+  }
 
   return (
-    // Course routes need a viewport-sized shell for independently scrolling content and chat.
-    <div className={`app-shell${pathname.startsWith("/courses/") ? " app-shell-course" : ""}`}>
-      <aside className="sidebar">
-        <Link to="/" className="brand">
+    <div className={shellClass(pathname, navOpen)} onKeyDown={handleKeyDown}>
+      <aside id="app-sidebar" className="sidebar" role={navOpen ? "dialog" : undefined} aria-modal={navOpen ? "true" : undefined} aria-label={navOpen ? "Navigation" : undefined}>
+        <Link to="/" className="brand" ref={brandRef}>
           <BrandMark />
           StudyForge
         </Link>
         <nav className="sidebar-nav" aria-label="Main">
-          <Link to="/" className={navClass(onDashboard && hash !== "#courses" && hash !== "#tasks")} aria-current={onDashboard && hash !== "#courses" && hash !== "#tasks" ? "page" : undefined}>
+          <Link to="/" className={navClass(onHome)} aria-current={onHome ? "page" : undefined}>
             <HomeIcon /> Home
           </Link>
           <Link className={navClass(onDashboard && hash === "#courses")} to="/#courses" aria-current={onDashboard && hash === "#courses" ? "page" : undefined}>
@@ -49,8 +95,20 @@ export default function AppShell({
         </nav>
       </aside>
 
-      <main className="workspace">
+      <main className="workspace" inert={navOpen}>
         <header className="topbar">
+          {/* Only shown on phones, where the sidebar becomes a drawer. */}
+          <button
+            ref={menuButtonRef}
+            type="button"
+            className="nav-toggle"
+            aria-label="Navigation menu"
+            aria-expanded={navOpen}
+            aria-controls="app-sidebar"
+            onClick={() => setNavOpenAt(navOpen ? null : key)}
+          >
+            <MenuIcon />
+          </button>
           <h1>{pageTitle(pathname)}</h1>
           <div className="topbar-meta">
             <p className={`health health-${health.status}`}>
@@ -63,8 +121,19 @@ export default function AppShell({
         </header>
         {children}
       </main>
+
+      {/* Tapping outside the open drawer closes it. Placed last so it never takes a desktop grid cell. */}
+      <div className="sidebar-backdrop" aria-hidden="true" onClick={closeNav} />
     </div>
   );
+}
+
+function shellClass(pathname: string, navOpen: boolean) {
+  let name = "app-shell";
+  // Course routes need a viewport-sized shell for independently scrolling content and chat.
+  if (pathname.startsWith("/courses/")) name += " app-shell-course";
+  if (navOpen) name += " app-shell-nav-open";
+  return name;
 }
 
 function pageTitle(pathname: string): string {
@@ -107,6 +176,13 @@ function TasksIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M5 7h14M5 12h14M5 17h9" />
       <path d="M4 7.2 5.2 8.4 7.4 6M4 12.2 5.2 13.4 7.4 11" />
+    </svg>
+  );
+}
+function MenuIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 7h16M4 12h16M4 17h16" />
     </svg>
   );
 }

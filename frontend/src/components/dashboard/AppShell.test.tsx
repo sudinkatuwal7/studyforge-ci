@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { describe, expect, it } from "vitest";
 import AppShell from "./AppShell";
@@ -40,5 +40,26 @@ describe("AppShell calendar navigation", () => {
 
     expect(screen.getByRole("button", { name: "Account menu for Sam Student" })).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: /Log out/ })).not.toBeInTheDocument();
+  });
+
+  it("opens and closes the drawer with focus contained in its links", () => {
+    renderShell("/");
+    const toggle = screen.getByRole("button", { name: "Navigation menu" });
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("main")).toHaveAttribute("inert");
+    expect(screen.getByRole("dialog", { name: "Navigation" })).toBeInTheDocument();
+    const brand = screen.getByRole("link", { name: "StudyForge" });
+    const calendar = screen.getByRole("link", { name: "Calendar" });
+    expect(brand).toHaveFocus();
+    calendar.focus();
+    fireEvent.keyDown(calendar, { key: "Tab" });
+    expect(brand).toHaveFocus();
+    fireEvent.keyDown(brand, { key: "Escape" });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(toggle).toHaveFocus();
+    fireEvent.click(toggle);
+    fireEvent.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
   });
 });

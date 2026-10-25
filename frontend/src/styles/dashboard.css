@@ -68,6 +68,11 @@
   background: #7387e833;
   color: white;
 }
+/* The menu button and backdrop only exist for the phone drawer. */
+.nav-toggle,
+.sidebar-backdrop {
+  display: none;
+}
 
 .workspace {
   box-sizing: border-box;
@@ -389,36 +394,103 @@
   background: white;
   box-shadow: 0 8px 24px #26334d0a;
 }
-
 @media (max-width: 64rem) {
   .app-shell {
-    grid-template-columns: 1fr;
+    grid-template-columns: minmax(0, 1fr);
   }
 
+  /* The sidebar becomes an off-canvas drawer. visibility keeps the closed
+     drawer's links out of the Tab order and away from screen readers. */
   .sidebar {
-    position: static;
-    height: auto;
+    position: fixed;
+    inset: 0 auto 0 0;
+    z-index: 30;
+    width: min(17rem, 85vw);
+    height: 100dvh;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    transform: translateX(-100%);
+    visibility: hidden;
+    transition: transform 0.2s ease, visibility 0.2s;
   }
 
-  .sidebar-nav {
-    flex-direction: row;
-    flex-wrap: wrap;
+  .app-shell-nav-open .sidebar {
+    transform: none;
+    visibility: visible;
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 20;
+    background: #26334d66;
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.2s ease;
+  }
+
+  .app-shell-nav-open .sidebar-backdrop {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Stop the page behind the open drawer from scrolling. */
+  body:has(.app-shell-nav-open) {
+    overflow: hidden;
+  }
+
+  /* Keep the menu button and profile menu reachable while the dashboard scrolls. */
+  .topbar {
+    position: sticky;
+    top: 0;
+    z-index: 10;
+    gap: 0.75rem;
+    padding: 0.5rem 0;
+    background: var(--cream);
+  }
+
+  .topbar h1 {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    font-size: 1.3rem;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .nav-toggle {
+    display: grid;
+    place-items: center;
+    flex: none;
+    width: 2.75rem;
+    height: 2.75rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0.7rem;
+    background: white;
+    color: var(--navy);
+    cursor: pointer;
+    box-shadow: 0 4px 14px #26334d14;
+  }
+
+  .nav-toggle svg {
+    width: 1.25rem;
+    height: 1.25rem;
+    fill: none;
+    stroke: currentColor;
+    stroke-width: 1.8;
+    stroke-linecap: round;
+  }
+
+  html {
+    scroll-padding-top: 5rem;
   }
 
   .stat-row,
   .dashboard-columns,
   .dashboard-page .course-list ul {
     grid-template-columns: 1fr;
-  }
-
-  .topbar {
-    align-items: flex-start;
-    flex-direction: column;
-  }
-
-  .profile-panel {
-    right: auto;
-    left: 0;
   }
 }
 
@@ -430,5 +502,37 @@
   .welcome-banner {
     align-items: flex-start;
     flex-direction: column;
+  }
+
+  .topbar {
+    flex-wrap: wrap;
+  }
+
+  .topbar-meta {
+    display: contents;
+  }
+
+  .topbar .health-error {
+    order: 4;
+    flex-basis: 100%;
+    overflow-wrap: anywhere;
+  }
+
+  /* On a phone the header only has room for the menu, title, and avatar.
+     The backend status is a developer check, so it is dropped here. */
+  .topbar .health:not(.health-error),
+  .profile-trigger-name {
+    display: none;
+  }
+
+  .profile-trigger {
+    padding-right: 0.45rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar,
+  .sidebar-backdrop {
+    transition: none;
   }
 }
