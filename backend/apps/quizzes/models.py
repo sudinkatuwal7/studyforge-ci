@@ -84,3 +84,72 @@ class Question(models.Model):
 
     def __str__(self):
         return f"Question {self.position} of quiz {self.quiz_id}"
+
+
+class QuizSubmission(models.Model):
+    """A student's final, graded answers to a quiz.
+
+    One per quiz: submitting reveals the answers and explanations, so a
+    second attempt at the same questions would not measure anything. A
+    retake is a newly generated quiz.
+    """
+
+    quiz = models.OneToOneField(
+        Quiz,
+        on_delete=models.CASCADE,
+        related_name="submission",
+    )
+    # Stored so a list of past results needs no join over every answer.
+    score = models.PositiveSmallIntegerField()
+    total_questions = models.PositiveSmallIntegerField()
+    submitted_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(score__lte=models.F("total_questions")),
+                name="submission_score_within_total",
+            ),
+        ]
+
+    @property
+    def percentage(self):
+        if not self.total_questions:
+            return 0
+        return round(100 * self.score / self.total_questions)
+
+    def __str__(self):
+        return f"Submission for quiz {self.quiz_id}: {self.score}/{self.total_questions}"
+
+
+class SubmittedAnswer(models.Model):
+    """The option a student chose for one question, graded at submission.
+
+    A null selection means the question was left unanswered; it counts as
+    incorrect.
+    """
+
+    submission = models.ForeignKey(
+        QuizSubmission,
+        on_delete=models.CASCADE,
+        related_name="answers",
+    )
+    question = models.ForeignKey(
+        Question,
+        on_delete=models.CASCADE,
+        related_name="submitted_answers",
+    )
+    selected_option_index = models.PositiveSmallIntegerField(null=True, blank=True)
+    is_correct = models.BooleanField()
+
+    class Meta:
+        ordering = ["question__position"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["submission", "question"],
+                name="submitted_answer_unique_per_question",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Answer to question {self.question_id} in submission {self.submission_id}"
