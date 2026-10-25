@@ -32,7 +32,7 @@ def get_owned_course_documents(user, course, document_ids):
 
 def get_owned_quiz(user, quiz_id):
     return get_object_or_404(
-        Quiz.objects.prefetch_related("questions", "source_documents"),
+        Quiz.objects.select_related("submission").prefetch_related("questions", "source_documents"),
         pk=quiz_id,
         owner=user,
     )

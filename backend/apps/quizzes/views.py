@@ -126,3 +126,12 @@ class QuizSubmitView(APIView):
         submission = get_owned_submission(request.user, quiz.pk)
         return Response(QuizResultSerializer(submission).data, status=status.HTTP_201_CREATED)
 
+
+class QuizResultsView(APIView):
+    """GET /api/v1/quizzes/{quiz_id}/results/"""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, quiz_id):
+        submission = get_owned_submission(request.user, quiz_id)
+        return Response(QuizResultSerializer(submission).data, status=status.HTTP_200_OK)

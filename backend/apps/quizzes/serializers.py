@@ -36,11 +36,25 @@ class QuestionPublicSerializer(serializers.ModelSerializer):
 
 class QuizSerializer(serializers.ModelSerializer):
     questions = QuestionPublicSerializer(many=True, read_only=True)
+    # Lets the quiz player send a student who reloads a finished quiz
+    # straight to the results instead of a player that cannot submit.
+    is_submitted = serializers.SerializerMethodField()
 
     class Meta:
         model = Quiz
-        fields = ["id", "title", "course", "source_documents", "created_at", "questions"]
+        fields = [
+            "id",
+            "title",
+            "course",
+            "source_documents",
+            "created_at",
+            "is_submitted",
+            "questions",
+        ]
         read_only_fields = fields
+
+    def get_is_submitted(self, quiz):
+        return hasattr(quiz, "submission")
 
 
 class AnswerInputSerializer(serializers.Serializer):
