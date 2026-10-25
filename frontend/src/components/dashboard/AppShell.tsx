@@ -36,17 +36,27 @@ export default function AppShell({
   const menuButtonRef = useRef<HTMLButtonElement>(null);
   const brandRef = useRef<HTMLAnchorElement>(null);
   const wasNavOpen = useRef(false);
+  // Desktop keeps the focused drawer link visible in the sidebar.
+  const returnFocusOnClose = useRef(true);
 
   useEffect(() => {
-    if (navOpen) brandRef.current?.focus();
-    else if (wasNavOpen.current) menuButtonRef.current?.focus();
+    if (navOpen) {
+      returnFocusOnClose.current = true;
+      brandRef.current?.focus();
+    } else if (wasNavOpen.current && returnFocusOnClose.current) {
+      menuButtonRef.current?.focus();
+    }
     wasNavOpen.current = navOpen;
   }, [navOpen]);
 
   useEffect(() => {
     const desktop = window.matchMedia?.("(min-width: 64.0625rem)");
     if (!desktop) return;
-    const close = () => { if (desktop.matches) setNavOpenAt(null); };
+    const close = () => {
+      if (!desktop.matches) return;
+      returnFocusOnClose.current = false;
+      setNavOpenAt(null);
+    };
     desktop.addEventListener("change", close);
     return () => desktop.removeEventListener("change", close);
   }, []);
