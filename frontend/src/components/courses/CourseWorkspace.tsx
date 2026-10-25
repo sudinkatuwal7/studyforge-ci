@@ -7,16 +7,18 @@ import CourseMaterials from "./CourseMaterials";
 import "../../styles/course-workspace.css";
 
 const tabs = ["Materials", "Notes", "Quizzes"] as const;
+// Matches the compact breakpoint in course-workspace.css and dashboard.css.
+const compactQuery = "(max-width: 64rem)";
 export default function CourseWorkspace({ course }: { course: Course }) {
   // Materials is the default workspace section for every course visit.
   const [tab, setTab] = useState<typeof tabs[number]>("Materials");
   // Start with the assistant collapsed at the mobile and tablet breakpoint.
-  const [assistantOpen, setAssistantOpen] = useState(() => !window.matchMedia?.("(max-width: 64rem)").matches);
+  const [assistantOpen, setAssistantOpen] = useState(() => !window.matchMedia?.(compactQuery).matches);
   const toggleRef = useRef<HTMLButtonElement>(null);
   const contentRef = useRef<HTMLElement>(null);
   // Resizing into the compact view can hide a focused course control.
   useEffect(() => {
-    const compact = window.matchMedia?.("(max-width: 64rem)");
+    const compact = window.matchMedia?.(compactQuery);
     if (!compact || !assistantOpen) return;
     const rescueFocus = () => {
       if (compact.matches && contentRef.current?.contains(document.activeElement)) toggleRef.current?.focus();
@@ -55,7 +57,7 @@ export default function CourseWorkspace({ course }: { course: Course }) {
         toggleRef.current?.focus();
       }}>
         AI Assistant
-        <svg className="assistant-toggle-icon" viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
           <path d={assistantOpen ? "M6 15l6-6 6 6" : "M6 9l6 6 6-6"} />
         </svg>
       </button>

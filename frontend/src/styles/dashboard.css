@@ -504,22 +504,8 @@
     flex-direction: column;
   }
 
-  .topbar {
-    flex-wrap: wrap;
-  }
-
-  .topbar-meta {
-    display: contents;
-  }
-
-  .topbar .health-error {
-    order: 4;
-    flex-basis: 100%;
-    overflow-wrap: anywhere;
-  }
-
   /* On a phone the header only has room for the menu, title, and avatar.
-     The backend status is a developer check, so it is dropped here. */
+     Only a backend error stays (on its own row); the routine status is dropped. */
   .topbar .health:not(.health-error),
   .profile-trigger-name {
     display: none;

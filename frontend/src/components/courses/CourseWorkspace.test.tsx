@@ -53,14 +53,10 @@ it("collapses and restores the assistant without losing the course content", asy
 });
 
 it("starts with the assistant collapsed at the narrow breakpoint", () => {
-  vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
-  try {
-    render(<MemoryRouter><CourseWorkspace course={course} /></MemoryRouter>);
-    expect(screen.getByRole("button", { name: "AI Assistant" })).toHaveAttribute("aria-expanded", "false");
-    expect(document.getElementById("course-assistant")).toHaveAttribute("inert");
-  } finally {
-    vi.unstubAllGlobals();
-  }
+  mockCompactScreen(true);
+  render(<MemoryRouter><CourseWorkspace course={course} /></MemoryRouter>);
+  expect(screen.getByRole("button", { name: "AI Assistant" })).toHaveAttribute("aria-expanded", "false");
+  expect(document.getElementById("course-assistant")).toHaveAttribute("inert");
 });
 
 it("keeps the draft, conversation, and a pending reply while Pandu is hidden", async () => {

@@ -189,6 +189,7 @@ function TasksIcon() {
     </svg>
   );
 }
+
 function MenuIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
