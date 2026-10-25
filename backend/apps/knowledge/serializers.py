@@ -9,6 +9,7 @@ from rest_framework import serializers
 
 from apps.documents.models import Document
 from apps.knowledge.models import Chunk
+from apps.knowledge.scope import question_documents
 
 
 MAX_IDENTIFIER = 9_223_372_036_854_775_807
@@ -66,10 +67,13 @@ class CitationSerializer(serializers.Serializer):
         if attrs["document_id"] not in set(authorized_document_ids):
             raise serializers.ValidationError("Citation document is not authorized for this query.")
 
+        allowed_documents = question_documents(user, self.context.get("conversation")).filter(
+            pk=attrs["document_id"], status=Document.Status.READY
+        ).values("pk")
         chunk = Chunk.objects.filter(
             pk=attrs["chunk_id"],
             owner=user,
-            document_id=attrs["document_id"],
+            document_id__in=allowed_documents,
             document__owner=user,
             document__status=Document.Status.READY,
         ).only("page_number", "content").first()
@@ -106,8 +110,8 @@ class AnswerResultSerializer(serializers.Serializer):
         # Run after nested citation validation, including for abstentions and
         # selected documents that did not contribute a cited top-K chunk.
         authorized_ids = set(
-            Document.objects.filter(
-                pk__in=selected_ids, owner=user, status=Document.Status.READY
+            question_documents(user, self.context.get("conversation")).filter(
+                pk__in=selected_ids, status=Document.Status.READY
             ).values_list("pk", flat=True)
         )
         if authorized_ids != set(selected_ids):

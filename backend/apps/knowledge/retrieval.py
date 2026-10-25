@@ -12,6 +12,7 @@ from pgvector.django import CosineDistance
 
 from apps.documents.models import Document
 from apps.knowledge.models import Chunk
+from apps.knowledge.scope import question_documents
 from apps.processing.embedding_service import embed_texts
 
 
@@ -54,7 +55,7 @@ def retrieve_chunks(user, document_id: int, question: str, top_k: int = 5) -> li
         raise ValueError(f"top_k must be an integer between 1 and {MAX_TOP_K}")
 
     document = get_object_or_404(
-        Document,
+        question_documents(user),
         pk=document_id,
         owner=user,
         status=Document.Status.READY,
@@ -63,7 +64,7 @@ def retrieve_chunks(user, document_id: int, question: str, top_k: int = 5) -> li
 
 
 def retrieve_chunks_for_documents(
-    user, document_ids: list[int], question: str, top_k: int = 5
+    user, document_ids: list[int], question: str, top_k: int = 5, *, conversation=None
 ) -> list[dict]:
     """Globally rank chunks from 1–20 unique, owned, READY documents.
 
@@ -83,16 +84,16 @@ def retrieve_chunks_for_documents(
         raise ValueError(f"top_k must be an integer between 1 and {MAX_TOP_K}")
 
     authorized_ids = list(
-        Document.objects.filter(
-            pk__in=document_ids, owner=user, status=Document.Status.READY
+        question_documents(user, conversation).filter(
+            pk__in=document_ids, status=Document.Status.READY
         ).values_list("pk", flat=True)
     )
     if len(authorized_ids) != len(document_ids):
         raise Http404("No such documents.")
-    return _retrieve_authorized_chunks(user, authorized_ids, question, top_k)
+    return _retrieve_authorized_chunks(user, authorized_ids, question, top_k, conversation)
 
 
-def _retrieve_authorized_chunks(user, document_ids, question, top_k):
+def _retrieve_authorized_chunks(user, document_ids, question, top_k, conversation=None):
     """Share embedding and ranking while rechecking ownership and readiness."""
     if settings.EMBEDDING_MODEL != EMBEDDING_MODEL or settings.EMBEDDING_DIMENSION != EMBEDDING_DIMENSION:
         raise ImproperlyConfigured("Retrieval requires gemini-embedding-2 with 768 dimensions.")
@@ -110,10 +111,13 @@ def _retrieve_authorized_chunks(user, document_ids, question, top_k):
     ):
         raise ValueError("The question embedding must be a finite, nonzero 768-dimensional vector.")
 
+    allowed_documents = question_documents(user, conversation).filter(
+        pk__in=document_ids, status=Document.Status.READY
+    ).values("pk")
     chunks = (
         Chunk.objects.filter(
             owner=user,
-            document_id__in=document_ids,
+            document_id__in=allowed_documents,
             document__owner=user,
             document__status=Document.Status.READY,
             embedding__isnull=False,

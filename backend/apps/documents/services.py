@@ -48,8 +48,12 @@ def delete_material(document_id, owner):
         raise DocumentAPIError("MATERIAL_UNAVAILABLE", 503) from exc
 
 
-def store_and_dispatch(*, course, upload, title, sha256, suffix=".pdf"):
-    document = Document(owner_id=course.owner_id, course=course, title=title, sha256=sha256)
+def store_and_dispatch(*, course=None, conversation=None, upload, title, sha256, suffix=".pdf"):
+    if (course is None) == (conversation is None):
+        raise ValueError("An upload needs exactly one scope")
+    owner_id = course.owner_id if course is not None else conversation.owner_id
+    document = Document(owner_id=owner_id, course=course, conversation=conversation,
+                        title=title, sha256=sha256)
     try:
         # The view opts out of ATOMIC_REQUESTS; durable=True prevents an accidental
         # outer transaction from allowing dispatch before this row is committed.
@@ -57,6 +61,8 @@ def store_and_dispatch(*, course, upload, title, sha256, suffix=".pdf"):
             document.file.save(f"{uuid4().hex}{suffix}", upload, save=False)
             document.save()
             job = Job.objects.create(document=document)
+            if conversation is not None:
+                conversation.save(update_fields=["updated_at"])
             snapshot = DocumentSerializer(document).data
     except Exception as exc:
         if document.file.name and document.file._committed:

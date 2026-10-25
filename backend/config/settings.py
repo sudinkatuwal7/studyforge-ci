@@ -27,6 +27,7 @@ INSTALLED_APPS = [
     "apps.knowledge",
     "apps.users.apps.UsersConfig",
     "apps.courses",
+    "apps.conversations.apps.ConversationsConfig",
     "apps.documents.apps.DocumentsConfig",
     "apps.notes",
     "apps.quizzes.apps.QuizzesConfig",

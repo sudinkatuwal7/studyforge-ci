@@ -29,6 +29,15 @@ class Document(models.Model):
         "courses.Course",
         on_delete=models.CASCADE,
         related_name="documents",
+        null=True,
+        blank=True,
+    )
+    conversation = models.ForeignKey(
+        "conversations.Conversation",
+        on_delete=models.CASCADE,
+        related_name="uploads",
+        null=True,
+        blank=True,
     )
     title = models.CharField(max_length=255)
     sha256 = models.CharField(
@@ -65,6 +74,11 @@ class Document(models.Model):
 
     class Meta:
         constraints = [
+            models.CheckConstraint(
+                condition=(models.Q(course__isnull=False, conversation__isnull=True)
+                           | models.Q(course__isnull=True, conversation__isnull=False)),
+                name="document_exactly_one_scope",
+            ),
             models.CheckConstraint(
                 condition=models.Q(status__in=["PENDING", "PROCESSING", "READY", "FAILED"]),
                 name="document_status_valid",

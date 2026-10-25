@@ -12,7 +12,8 @@ def get_owned_document(user, document_id):
     Document carries a direct `owner` FK (SCRUM-9), so ownership is a
     single field check, not a join through Course.
     """
-    return get_object_or_404(Document, pk=document_id, owner=user)
+    return get_object_or_404(Document, pk=document_id, owner=user,
+                             course__owner=user, conversation__isnull=True)
 
 def get_ordered_chunks(document):
     """Every chunk of a document, in reading order.
