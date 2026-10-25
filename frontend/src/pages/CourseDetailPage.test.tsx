@@ -1,17 +1,22 @@
-import { fireEvent, render, screen, waitFor } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import App from "../App";
+import CourseDetailPage from "./CourseDetailPage";
+
+const authState = vi.hoisted(() => ({
+  accessToken: "course-session-token",
+  user: { id: 9, email: "student@example.test", first_name: "", last_name: "" },
+}));
 
 vi.mock("../context/AuthContext", () => ({
   useAuth: () => ({
-    user: { id: 9, email: "student@example.test", first_name: "", last_name: "" },
-    accessToken: "course-session-token",
+    ...authState,
     isRestoring: false,
   }),
 }));
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); authState.accessToken = "course-session-token"; });
 
 const course = {
   id: 42, name: "Data Analysis", description: "Lecture notes", owner: 9,
@@ -77,4 +82,46 @@ it("keeps the upload form hidden when a direct course link returns 404", async (
 
   expect(await screen.findByRole("alert")).toHaveTextContent("Course not found or you do not have access to it.");
   expect(screen.queryByLabelText("Document file")).not.toBeInTheDocument();
+});
+
+it("keeps an in-flight course chat question mounted through an access-token refresh", async () => {
+  sessionStorage.clear();
+  let finishQuestion!: (response: Response) => void;
+  let questionSignal!: AbortSignal;
+  const fetch = vi.fn((input: RequestInfo | URL, options?: RequestInit): Promise<Response> => {
+    const path = new URL(String(input)).pathname;
+    if (path === `/api/v1/courses/${course.id}/`) return Promise.resolve(Response.json(course));
+    if (path === `/api/v1/courses/${course.id}/documents/`) return Promise.resolve(Response.json([{ ...document, status: "READY" }]));
+    if (path === "/api/v1/conversations/") return Promise.resolve(Response.json([
+      { id: 9, course_id: course.id, title: "", created_at: "2026-10-02", updated_at: "2026-10-02" },
+    ]));
+    if (path === "/api/v1/conversations/9/documents/") return Promise.resolve(Response.json([]));
+    if (path === "/api/v1/conversations/9/questions/") {
+      questionSignal = options?.signal as AbortSignal;
+      return new Promise((resolve) => { finishQuestion = resolve; });
+    }
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  vi.stubGlobal("fetch", fetch);
+  const route = () => <MemoryRouter initialEntries={[`/courses/${course.id}`]}>
+    <Routes><Route path="/courses/:courseId" element={<CourseDetailPage />} /></Routes>
+  </MemoryRouter>;
+  const { rerender } = render(route());
+  await screen.findByRole("checkbox", { name: /Lecture.pdf/ });
+  fireEvent.click(screen.getByRole("checkbox", { name: /Lecture.pdf/ }));
+  fireEvent.change(screen.getByRole("textbox", { name: "Message Pandu" }), { target: { value: "Explain this lecture" } });
+  fireEvent.click(screen.getByRole("button", { name: "Send to Pandu" }));
+  expect(screen.getByText("Explain this lecture")).toBeInTheDocument();
+  expect(questionSignal.aborted).toBe(false);
+  const chat = screen.getByRole("complementary", { name: "Pandu course chat" });
+
+  authState.accessToken = "refreshed-token";
+  rerender(route());
+  await waitFor(() => expect(fetch.mock.calls.some(([url, options]) =>
+    String(url).endsWith(`/courses/${course.id}/`) && new Headers(options?.headers).get("Authorization") === "Bearer refreshed-token")).toBe(true));
+  expect(screen.getByRole("complementary", { name: "Pandu course chat" })).toBe(chat);
+  expect(questionSignal.aborted).toBe(false);
+
+  await act(async () => finishQuestion(Response.json({ status: "INSUFFICIENT_CONTEXT", answer: null, citations: [] })));
+  expect(screen.getByText(/find enough information in the selected references/)).toBeInTheDocument();
 });
