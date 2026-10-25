@@ -1,4 +1,6 @@
-// Course references retain the real backend document ID needed for grounding.
+import type { ReactNode } from "react";
+
+// References retain the real backend document ID needed for grounding.
 export type CourseMaterialReference = {
   id: string;
   name: string;
@@ -6,15 +8,18 @@ export type CourseMaterialReference = {
   available: boolean;
   source: "course";
   documentId: number;
+  status: string;
 };
 
-// Chat uploads remain separate until SCRUM-75 defines their persistence contract.
+// Conversation uploads remain separate from ordinary course materials.
 export type ChatUploadReference = {
   id: string;
   name: string;
   detail: string;
   available: boolean;
   source: "upload";
+  documentId: number;
+  status: string;
 };
 
 export type ChatReference = CourseMaterialReference | ChatUploadReference;
@@ -23,7 +28,7 @@ export type ChatCitation = { id: string; label: string; detail: string };
 export type ChatMessage = { id: string; role: "user" | "assistant"; text: string; citations?: ChatCitation[] };
 export type ChatStatus = "idle" | "sending" | "streaming" | "error";
 
-// SCRUM-75 can replace the demo adapter by supplying real state and callbacks here.
+// The workspace supplies real conversation state through these callbacks.
 export type CourseChatProps = {
   courseId: number;
   messages: ChatMessage[];
@@ -38,4 +43,12 @@ export type CourseChatProps = {
   onReferencesChange: (ids: string[]) => void;
   onAddDocuments: (files: File[]) => void;
   onCitation: (citation: ChatCitation) => void;
+  uploadProgress?: number | null;
+  uploadError?: string;
+  uploading?: boolean;
+  loadingReferences?: boolean;
+  referenceError?: string;
+  onRetryReferences?: () => void;
+  uploadStatusViews?: ReactNode;
+  chatReady?: boolean;
 };
