@@ -6,7 +6,7 @@ from django.shortcuts import get_object_or_404
 from apps.courses.models import Course
 from apps.documents.models import Document
 from apps.notes.selectors import get_ordered_chunks
-from apps.quizzes.models import Quiz
+from apps.quizzes.models import Quiz, QuizSubmission
 
 
 def get_owned_course(user, course_id):
@@ -32,9 +32,20 @@ def get_owned_course_documents(user, course, document_ids):
 
 def get_owned_quiz(user, quiz_id):
     return get_object_or_404(
-        Quiz.objects.prefetch_related("questions", "source_documents"),
+        Quiz.objects.select_related("submission").prefetch_related("questions", "source_documents"),
         pk=quiz_id,
         owner=user,
+    )
+
+
+def get_owned_submission(user, quiz_id):
+    """The graded submission for a quiz, or 404 when the quiz is not the
+    user's or has not been submitted yet. The two cases look the same, so
+    the API never reveals another student's quiz."""
+    return get_object_or_404(
+        QuizSubmission.objects.select_related("quiz").prefetch_related("answers__question"),
+        quiz_id=quiz_id,
+        quiz__owner=user,
     )
 
 

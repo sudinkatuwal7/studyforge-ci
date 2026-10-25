@@ -7,9 +7,24 @@ from rest_framework.views import APIView
 
 from apps.documents.models import Document
 from apps.quizzes.llm import LLMError
-from apps.quizzes.selectors import get_owned_course, get_owned_course_documents, get_owned_quiz
-from apps.quizzes.serializers import GenerateQuizSerializer, QuizSerializer
-from apps.quizzes.services import EmptyDocumentError, generate_quiz
+from apps.quizzes.selectors import (
+    get_owned_course,
+    get_owned_course_documents,
+    get_owned_quiz,
+    get_owned_submission,
+)
+from apps.quizzes.serializers import (
+    GenerateQuizSerializer,
+    QuizResultSerializer,
+    QuizSerializer,
+    SubmitQuizSerializer,
+)
+from apps.quizzes.services import (
+    AlreadySubmittedError,
+    EmptyDocumentError,
+    generate_quiz,
+    submit_quiz,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -75,3 +90,48 @@ class QuizDetailView(APIView):
     def get(self, request, quiz_id):
         quiz = get_owned_quiz(request.user, quiz_id)
         return Response(QuizSerializer(quiz).data, status=status.HTTP_200_OK)
+
+
+def _already_submitted_response():
+    return Response(
+        {
+            "code": "QUIZ_ALREADY_SUBMITTED",
+            "detail": "This quiz has already been submitted.",
+        },
+        status=status.HTTP_409_CONFLICT,
+    )
+
+
+class QuizSubmitView(APIView):
+    """POST /api/v1/quizzes/{quiz_id}/submit/"""
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request, quiz_id):
+        quiz = get_owned_quiz(request.user, quiz_id)
+        # Checked before validation so a resubmitted stale form gets the
+        # real reason, not a field error.
+        if hasattr(quiz, "submission"):
+            return _already_submitted_response()
+
+        serializer = SubmitQuizSerializer(data=request.data, context={"quiz": quiz})
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            submit_quiz(quiz, serializer.validated_data["answers"])
+        except AlreadySubmittedError:
+            return _already_submitted_response()
+
+        # Re-read with answers and questions prefetched for the response.
+        submission = get_owned_submission(request.user, quiz.pk)
+        return Response(QuizResultSerializer(submission).data, status=status.HTTP_201_CREATED)
+
+
+class QuizResultsView(APIView):
+    """GET /api/v1/quizzes/{quiz_id}/results/"""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, quiz_id):
+        submission = get_owned_submission(request.user, quiz_id)
+        return Response(QuizResultSerializer(submission).data, status=status.HTTP_200_OK)

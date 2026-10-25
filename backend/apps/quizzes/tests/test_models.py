@@ -4,7 +4,7 @@ from django.db import IntegrityError, transaction
 from django.test import TestCase
 
 from apps.courses.models import Course
-from apps.quizzes.models import Question, Quiz
+from apps.quizzes.models import Question, Quiz, QuizSubmission, SubmittedAnswer
 
 
 class QuizModelTests(TestCase):
@@ -108,3 +108,62 @@ class QuestionModelTests(TestCase):
         with self.assertRaises(ValidationError) as ctx:
             self.make_question(correct_option_index=4).full_clean()
         self.assertIn("correct_option_index", ctx.exception.message_dict)
+
+
+class QuizSubmissionModelTests(TestCase):
+    def setUp(self):
+        user = get_user_model().objects.create_user(
+            email="student@example.edu", password="TestPassword123!"
+        )
+        course = Course.objects.create(owner=user, name="CS 3358")
+        self.quiz = Quiz.objects.create(owner=user, course=course, title="Week 3 review")
+        self.question = Question.objects.create(
+            quiz=self.quiz,
+            position=1,
+            text="What does a B-tree keep balanced?",
+            options=["Height", "Width"],
+            correct_option_index=0,
+        )
+
+    def make_submission(self, score=1, total_questions=1):
+        return QuizSubmission.objects.create(
+            quiz=self.quiz, score=score, total_questions=total_questions
+        )
+
+    def test_percentage_is_rounded_to_a_whole_number(self):
+        for score, total, percentage in ((2, 3, 67), (1, 3, 33), (5, 5, 100), (0, 10, 0)):
+            with self.subTest(score=score, total=total):
+                submission = QuizSubmission(score=score, total_questions=total)
+                self.assertEqual(submission.percentage, percentage)
+
+    def test_a_quiz_can_be_submitted_only_once(self):
+        self.make_submission()
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            self.make_submission()
+
+    def test_score_cannot_exceed_total(self):
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            self.make_submission(score=2, total_questions=1)
+
+    def test_one_answer_per_question(self):
+        submission = self.make_submission()
+        SubmittedAnswer.objects.create(
+            submission=submission, question=self.question, selected_option_index=0, is_correct=True
+        )
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            SubmittedAnswer.objects.create(
+                submission=submission,
+                question=self.question,
+                selected_option_index=1,
+                is_correct=False,
+            )
+
+    def test_deleting_a_quiz_deletes_its_submission_and_answers(self):
+        submission = self.make_submission()
+        SubmittedAnswer.objects.create(
+            submission=submission, question=self.question, selected_option_index=None,
+            is_correct=False,
+        )
+        self.quiz.delete()
+        self.assertFalse(QuizSubmission.objects.exists())
+        self.assertFalse(SubmittedAnswer.objects.exists())

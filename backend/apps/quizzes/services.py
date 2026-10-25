@@ -1,15 +1,19 @@
 import os
 import random
 
-from django.db import transaction
+from django.db import IntegrityError, transaction
 
 from apps.quizzes.llm import get_client
-from apps.quizzes.models import Question, Quiz
+from apps.quizzes.models import Question, Quiz, QuizSubmission, SubmittedAnswer
 from apps.quizzes.selectors import build_source_text
 
 # Small enough that a 10-question quiz comes back inside the 15-second
 # target (SCRUM-27). Overridable so sampling can be exercised in tests.
 DEFAULT_SOURCE_CHAR_LIMIT = 60_000
+
+
+class AlreadySubmittedError(Exception):
+    """The quiz already has a submission; answers cannot be changed."""
 
 
 class EmptyDocumentError(Exception):
@@ -66,3 +70,39 @@ def generate_quiz(owner, course, documents, num_questions, client=None, rng=None
             for position, question in enumerate(result["questions"], start=1)
         )
     return quiz
+
+
+def submit_quiz(quiz, answers):
+    """Grade and save a quiz's final answers.
+
+    `answers` is validated SubmitQuizSerializer data: every question in
+    `quiz` exactly once, each index null or in range. Grading happens here,
+    against the stored answer key, so nothing the client sends can affect
+    the score except the chosen options.
+    """
+    questions = {question.pk: question for question in quiz.questions.all()}
+    graded = [
+        SubmittedAnswer(
+            question=questions[answer["question_id"]],
+            selected_option_index=answer["selected_option_index"],
+            is_correct=answer["selected_option_index"]
+            == questions[answer["question_id"]].correct_option_index,
+        )
+        for answer in answers
+    ]
+
+    try:
+        with transaction.atomic():
+            submission = QuizSubmission.objects.create(
+                quiz=quiz,
+                score=sum(answer.is_correct for answer in graded),
+                total_questions=len(graded),
+            )
+            for answer in graded:
+                answer.submission = submission
+            SubmittedAnswer.objects.bulk_create(graded)
+    except IntegrityError as exc:
+        # Two submits racing (a double click, two tabs): the one-per-quiz
+        # constraint lets exactly one through.
+        raise AlreadySubmittedError from exc
+    return submission

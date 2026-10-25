@@ -1,6 +1,11 @@
 from django.urls import path
 
-from apps.quizzes.views import CourseQuizzesView, QuizDetailView
+from apps.quizzes.views import (
+    CourseQuizzesView,
+    QuizDetailView,
+    QuizResultsView,
+    QuizSubmitView,
+)
 
 urlpatterns = [
     path(
@@ -9,4 +14,6 @@ urlpatterns = [
         name="course-quizzes",
     ),
     path("quizzes/<int:quiz_id>/", QuizDetailView.as_view(), name="quiz-detail"),
+    path("quizzes/<int:quiz_id>/submit/", QuizSubmitView.as_view(), name="quiz-submit"),
+    path("quizzes/<int:quiz_id>/results/", QuizResultsView.as_view(), name="quiz-results"),
 ]
