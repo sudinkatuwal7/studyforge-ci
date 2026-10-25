@@ -7,13 +7,13 @@
 .course-workspace-header a { color: #56658a; font-size: .85rem; text-decoration: none; }
 .course-workspace-header h2 { margin: .4rem 0 .2rem; font-size: clamp(1.3rem, 2vw, 1.9rem); overflow-wrap: anywhere; }
 .course-workspace-header p { max-height: 3rem; overflow: auto; }
-/* Desktop gives Pandu a little more room while keeping course content primary. */
-.course-workspace-grid { position: relative; flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 2fr) minmax(20rem, 1fr); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: ". toggle" "content assistant"; gap: .5rem 1.2rem; }
+/* Keep the toggle row fixed so the closed assistant matches its open size. */
+.course-workspace-grid { --toggle-row: 2.75rem; position: relative; flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 2fr) minmax(20rem, 1fr); grid-template-rows: var(--toggle-row) minmax(0, 1fr); grid-template-areas: ". toggle" "content assistant"; gap: .5rem 1.2rem; }
 .course-workspace-grid-collapsed { grid-template-columns: minmax(0, 1fr); grid-template-areas: "toggle" "content"; }
-.assistant-toggle { grid-area: toggle; justify-self: end; }
+.assistant-toggle { display: inline-flex; align-items: center; gap: .35rem; grid-area: toggle; justify-self: end; align-self: center; height: var(--toggle-row); }
 .course-content { grid-area: content; }
 .course-assistant { grid-area: assistant; min-width: 0; min-height: 0; }
-.course-assistant[inert] { position: absolute; inset: 0; visibility: hidden; pointer-events: none; }
+.course-assistant[inert] { position: absolute; top: calc(var(--toggle-row) + .5rem); right: 0; bottom: 0; width: max(20rem, calc((100% - 1.2rem) / 3)); visibility: hidden; pointer-events: none; }
 .course-content, .course-chat { border: 1px solid #e7e6ee; border-radius: 1.2rem; background: white; min-width: 0; min-height: 0; overflow: hidden; }
 .course-content { display: flex; flex-direction: column; }
 .course-workspace button, .course-workspace select, .course-workspace textarea { font: inherit; }
@@ -92,10 +92,12 @@
   .course-workspace { gap: .5rem; }
   .course-workspace-header h2 { margin: .15rem 0; }
   .course-workspace-header p { display: none; }
-  .course-workspace-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "toggle" "assistant"; gap: .6rem; }
+  .course-workspace-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: var(--toggle-row) minmax(0, 1fr); grid-template-areas: "toggle" "assistant"; gap: .6rem; }
   .course-workspace-grid:not(.course-workspace-grid-collapsed) .course-content { position: absolute; inset: 0; visibility: hidden; pointer-events: none; }
   .course-workspace-grid-collapsed { grid-template-rows: minmax(0, 1fr); grid-template-areas: "content"; }
+  .course-assistant[inert] { top: calc(var(--toggle-row) + .6rem); left: 0; width: auto; }
   .course-workspace-grid-collapsed .assistant-toggle { position: absolute; right: 1rem; bottom: 1rem; z-index: 2; box-shadow: 0 8px 22px #26334d33; }
+  .course-workspace-grid-collapsed .course-content-scroll { padding-bottom: 4rem; }
   .course-tabs { padding: .35rem; }
   .course-content-scroll { padding: .8rem; }
   .chat-header { padding: .45rem .7rem; gap: .5rem; }
