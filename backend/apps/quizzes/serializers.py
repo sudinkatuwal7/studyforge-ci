@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from apps.quizzes.llm import ALLOWED_QUESTION_COUNTS
-from apps.quizzes.models import Question, Quiz
+from apps.quizzes.models import Question, Quiz, QuizSubmission
 
 MAX_SOURCE_DOCUMENTS = 20
 
@@ -40,4 +40,73 @@ class QuizSerializer(serializers.ModelSerializer):
     class Meta:
         model = Quiz
         fields = ["id", "title", "course", "source_documents", "created_at", "questions"]
+        read_only_fields = fields
+
+
+class AnswerInputSerializer(serializers.Serializer):
+    question_id = serializers.IntegerField(min_value=1)
+    # Null means the student left the question unanswered.
+    selected_option_index = serializers.IntegerField(min_value=0, allow_null=True)
+
+
+class SubmitQuizSerializer(serializers.Serializer):
+    """Checks a submission against the quiz passed in context["quiz"].
+
+    Every question must appear exactly once, so a client that loaded a
+    stale or different quiz is rejected rather than graded on a subset.
+    """
+
+    answers = AnswerInputSerializer(many=True, allow_empty=False)
+
+    def validate_answers(self, answers):
+        questions = {question.pk: question for question in self.context["quiz"].questions.all()}
+        question_ids = [answer["question_id"] for answer in answers]
+
+        if len(set(question_ids)) != len(question_ids):
+            raise serializers.ValidationError("Each question can be answered only once.")
+        if set(question_ids) != set(questions):
+            raise serializers.ValidationError("Answer every question in this quiz exactly once.")
+
+        for answer in answers:
+            index = answer["selected_option_index"]
+            if index is not None and index >= len(questions[answer["question_id"]].options):
+                raise serializers.ValidationError(
+                    f"Question {answer['question_id']} has no option {index}."
+                )
+        return answers
+
+
+class QuestionResultSerializer(serializers.Serializer):
+    """One reviewed question: the public fields plus what was chosen, what
+    was right, and why. Only ever built from a saved submission."""
+
+    id = serializers.IntegerField(source="question.id")
+    position = serializers.IntegerField(source="question.position")
+    text = serializers.CharField(source="question.text")
+    options = serializers.ListField(source="question.options", child=serializers.CharField())
+    selected_option_index = serializers.IntegerField(allow_null=True)
+    correct_option_index = serializers.IntegerField(source="question.correct_option_index")
+    is_correct = serializers.BooleanField()
+    explanation = serializers.CharField(source="question.explanation")
+
+
+class QuizResultSerializer(serializers.ModelSerializer):
+    quiz_id = serializers.IntegerField(source="quiz.id")
+    title = serializers.CharField(source="quiz.title")
+    course = serializers.IntegerField(source="quiz.course_id")
+    percentage = serializers.IntegerField()
+    questions = QuestionResultSerializer(source="answers", many=True)
+
+    class Meta:
+        model = QuizSubmission
+        fields = [
+            "quiz_id",
+            "title",
+            "course",
+            "score",
+            "total_questions",
+            "percentage",
+            "submitted_at",
+            "questions",
+        ]
         read_only_fields = fields
