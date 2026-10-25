@@ -49,6 +49,7 @@ def test_chat_upload_is_scoped_and_excluded_from_course_features(
     assert response.status_code == 201, response.content
     document = Document.objects.get(pk=response.json()["id"])
     assert document.course_id is None and document.conversation_id == conversation.pk
+    assert document.owner_id == owner.pk
     assert response.json()["conversation_id"] == conversation.pk
     assert owner_client.get(path).json()[0]["id"] == document.pk
     assert owner_client.get(f"/api/v1/courses/{course.pk}/documents/").json() == []
