@@ -4,6 +4,7 @@ import { useAuth } from "../../context/AuthContext";
 import type { TrackedDocument } from "../../types/document";
 import DocumentUpload from "../documents/DocumentUpload";
 import MaterialItem from "../documents/MaterialItem";
+import { reconcileSelection } from "../chat/chatReferences";
 
 // One material source powers both workspace tabs and Pandu's reference picker.
 type Props = { courseId: number; view?: "materials" | "notes"; onMaterialsChange?: (materials: TrackedDocument[]) => void };
@@ -47,7 +48,9 @@ function Materials({ courseId, accessToken, view, onMaterialsChange }: Props & {
   useEffect(() => { onMaterialsChange?.(materials); }, [materials, onMaterialsChange]);
 
   // Fall back to the first material if the previous selection was removed.
-  const selected = materials.find((item) => item.id === selectedId)?.id ?? materials[0]?.id;
+  const selectable = materials.map((item) => ({ id: String(item.id), documentId: item.id, available: true }));
+  const retained = reconcileSelection(selectable, selectedId === null ? [] : [String(selectedId)], 1)[0];
+  const selected = retained ? Number(retained) : materials[0]?.id;
 
   return <section className="course-materials" aria-labelledby={`course-${courseId}-materials`}>
     <h3 id={`course-${courseId}-materials`}>{view === "notes" ? "Study notes" : "Course materials"}</h3>

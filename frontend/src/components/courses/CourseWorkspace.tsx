@@ -2,7 +2,7 @@ import { useState } from "react";
 import { Link } from "react-router-dom";
 import type { Course } from "../../types/course";
 import type { TrackedDocument } from "../../types/document";
-import DemoCourseChat from "../chat/DemoCourseChat";
+import ConnectedCourseChat from "../chat/ConnectedCourseChat";
 import CourseMaterials from "./CourseMaterials";
 import "../../styles/course-workspace.css";
 
@@ -36,8 +36,7 @@ export default function CourseWorkspace({ course }: { course: Course }) {
           </div>
         </div>
       </section>
-      {/* The course key clears demo messages and attachments when navigation changes. */}
-      <DemoCourseChat key={course.id} courseId={course.id} materials={materials} />
+      <ConnectedCourseChat key={course.id} courseId={course.id} materials={materials} />
     </div>
   </section>;
 }
