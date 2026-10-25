@@ -1,18 +1,25 @@
 import { useEffect, useRef, useState } from "react";
 import { DocumentRequestError, getDocument } from "../../api/documents";
 import type { StudyDocument, TrackedDocument } from "../../types/document";
+import type { ConversationUpload } from "../../api/conversations";
 
 const POLL_DELAY_MS = 2000;
 const MAX_FAILURES = 3;
 
-function isTerminal(document: StudyDocument | null) {
+type StatusDocument = StudyDocument | ConversationUpload;
+function isTerminal(document: StatusDocument | null) {
   return document?.status === "READY" || document?.status === "FAILED";
 }
 
-type Props = { tracked: TrackedDocument; courseId: number; accessToken: string | null; onStatusChange?: (document: StudyDocument) => void };
+type Props<T extends StatusDocument> = {
+  tracked: TrackedDocument | { id: number; name: string; snapshot: T | null };
+  courseId?: number; conversationId?: number; accessToken: string | null;
+  onStatusChange?: (document: T) => void;
+  getStatus?: (id: number, token: string, signal: AbortSignal) => Promise<T>;
+};
 
-export default function DocumentStatus({ tracked, courseId, accessToken, onStatusChange }: Props) {
-  const [document, setDocument] = useState(tracked.snapshot);
+export default function DocumentStatus<T extends StatusDocument>({ tracked, courseId, conversationId, accessToken, onStatusChange, getStatus }: Props<T>) {
+  const [document, setDocument] = useState<StatusDocument | null>(tracked.snapshot);
   // Keep the latest callback available without restarting the status polling loop.
   const notify = useRef(onStatusChange);
   useEffect(() => { notify.current = onStatusChange; }, [onStatusChange]);
@@ -40,16 +47,17 @@ export default function DocumentStatus({ tracked, courseId, accessToken, onStatu
       setCanRefresh(false);
       setChecking(true);
       try {
-        const next = await getDocument(tracked.id, token, controller.signal);
+        const next = getStatus ? await getStatus(tracked.id, token, controller.signal) : await getDocument(tracked.id, token, controller.signal);
         if (cancelled) return;
-        if (next.id !== tracked.id || next.course_id !== courseId) {
-          throw new Error("The returned document does not match this course.");
+        if (next.id !== tracked.id || (conversationId !== undefined ?
+          !("conversation_id" in next) || next.conversation_id !== conversationId : next.course_id !== courseId)) {
+          throw new Error("The returned document does not match this source.");
         }
         failures = 0;
         latest.current = next;
         setDocument(next);
         // Share the fresh status with Notes and Pandu's course-material references.
-        notify.current?.(next);
+        notify.current?.(next as T);
         setNotice("");
         if (!isTerminal(next)) timer = setTimeout(poll, POLL_DELAY_MS);
       } catch (error) {
@@ -81,7 +89,7 @@ export default function DocumentStatus({ tracked, courseId, accessToken, onStatu
       clearTimeout(timer);
       controller?.abort();
     };
-  }, [accessToken, courseId, tracked, refreshRequest]);
+  }, [accessToken, courseId, conversationId, tracked.id, tracked.snapshot, refreshRequest, getStatus]);
 
   return (
     <section className="document-status" aria-label="Uploaded document">
