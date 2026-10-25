@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import type { Course } from "../../types/course";
 import type { TrackedDocument } from "../../types/document";
@@ -10,6 +10,9 @@ const tabs = ["Materials", "Notes", "Quizzes"] as const;
 export default function CourseWorkspace({ course }: { course: Course }) {
   // Materials is the default workspace section for every course visit.
   const [tab, setTab] = useState<typeof tabs[number]>("Materials");
+  // Start with the assistant collapsed at the mobile and tablet breakpoint.
+  const [assistantOpen, setAssistantOpen] = useState(() => !window.matchMedia?.("(max-width: 64rem)").matches);
+  const toggleRef = useRef<HTMLButtonElement>(null);
   // CourseMaterials owns fetching; this shared snapshot feeds Pandu's references.
   const [materials, setMaterials] = useState<TrackedDocument[]>([]);
   return <section className="course-workspace" aria-label={`${course.name} workspace`}>
@@ -18,7 +21,7 @@ export default function CourseWorkspace({ course }: { course: Course }) {
       <h2>{course.name}</h2>
       {course.description && <p>{course.description}</p>}
     </header>
-    <div className="course-workspace-grid">
+    <div className={`course-workspace-grid${assistantOpen ? "" : " course-workspace-grid-collapsed"}`}>
       <section className="course-content" aria-label="Course content">
         <div className="course-tabs" role="tablist" aria-label="Course sections">
           {/* Arrow, Home, and End keys follow the accessible tabs keyboard pattern. */}
@@ -36,8 +39,14 @@ export default function CourseWorkspace({ course }: { course: Course }) {
           </div>
         </div>
       </section>
+      <button ref={toggleRef} type="button" className="assistant-toggle" aria-expanded={assistantOpen} aria-controls="course-assistant" onClick={() => {
+        setAssistantOpen((open) => !open);
+        toggleRef.current?.focus();
+      }}>{assistantOpen ? "Hide AI Assistant" : "Show AI Assistant"}</button>
       {/* The course key clears demo messages and attachments when navigation changes. */}
-      <DemoCourseChat key={course.id} courseId={course.id} materials={materials} />
+      <div id="course-assistant" className="course-assistant" inert={!assistantOpen}>
+        <DemoCourseChat key={course.id} courseId={course.id} materials={materials} />
+      </div>
     </div>
   </section>;
 }

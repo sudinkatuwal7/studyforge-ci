@@ -21,3 +21,26 @@ it("switches sections without reloading materials or hiding chat and supports ke
   await waitFor(() => expect(screen.getByLabelText("Document file")).toBeVisible());
   expect(vi.mocked(listDocuments)).toHaveBeenCalledTimes(before);
 });
+
+it("collapses and restores the assistant without losing the course content", async () => {
+  render(<MemoryRouter><CourseWorkspace course={course} /></MemoryRouter>);
+  await screen.findByText("No materials uploaded yet.");
+  const toggle = screen.getByRole("button", { name: "Hide AI Assistant" });
+  fireEvent.click(toggle);
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+  expect(screen.getByRole("heading", { name: "Biology" })).toBeVisible();
+  expect(document.getElementById("course-assistant")).toHaveAttribute("inert");
+  fireEvent.click(screen.getByRole("button", { name: "Show AI Assistant" }));
+  expect(screen.getByRole("complementary", { name: "Pandu course chat" })).toBeVisible();
+});
+
+it("starts with the assistant collapsed at the narrow breakpoint", () => {
+  vi.stubGlobal("matchMedia", vi.fn(() => ({ matches: true })));
+  try {
+    render(<MemoryRouter><CourseWorkspace course={course} /></MemoryRouter>);
+    expect(screen.getByRole("button", { name: "Show AI Assistant" })).toHaveAttribute("aria-expanded", "false");
+    expect(document.getElementById("course-assistant")).toHaveAttribute("inert");
+  } finally {
+    vi.unstubAllGlobals();
+  }
+});
