@@ -80,7 +80,9 @@ it("distinguishes sending from streaming and lets the student stop a response", 
 
 it("cancels Pandu's pending demo response", async () => {
   vi.useFakeTimers();
-  render(<DemoCourseChat courseId={42} materials={[]} />);
+  render(<DemoCourseChat courseId={42} materials={[{ id: 1, name: "Lecture.pdf", snapshot: readyDocument }]} />);
+  fireEvent.click(screen.getByText("Sources · 0 selected"));
+  fireEvent.click(screen.getByRole("checkbox", { name: /Lecture.pdf/ }));
 
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "Explain this" } });
   fireEvent.click(screen.getByRole("button", { name: "Send to Pandu (demo)" }));
@@ -95,8 +97,8 @@ it("cancels Pandu's pending demo response", async () => {
 it("sends only selected and ready backend course document IDs", () => {
   const send = vi.fn();
   render(<CourseChat courseId={42} messages={[]} references={[
-    { id: "course-1", documentId: 1, name: "Ready.pdf", source: "course", detail: "READY", available: true },
-    { id: "course-2", documentId: 2, name: "Pending.pdf", source: "course", detail: "PROCESSING", available: false },
+    { id: "course-1", documentId: 1, name: "Ready.pdf", source: "course", detail: "READY", status: "READY", available: true },
+    { id: "course-2", documentId: 2, name: "Pending.pdf", source: "course", detail: "PROCESSING", status: "PROCESSING", available: false },
   ]} selectedReferences={["course-1", "course-2"]} status="idle" onRetry={vi.fn()} onSend={send}
     onReferencesChange={vi.fn()} onAddDocuments={vi.fn()} onCitation={vi.fn()} />);
 
@@ -118,4 +120,27 @@ it("fills the composer from a suggested prompt and marks the streamed message", 
     selectedReferences={[]} status="streaming" onStop={vi.fn()} onRetry={vi.fn()} onSend={vi.fn()}
     onReferencesChange={vi.fn()} onAddDocuments={vi.fn()} onCitation={vi.fn()} />);
   expect(screen.getByText("Partial answer").closest("article")).toHaveAttribute("aria-busy", "true");
+});
+
+it("keeps READY course materials and uploads in separate groups with all and clear actions", () => {
+  const change = vi.fn();
+  const references = [
+    { id: "course-1", documentId: 1, name: "One.pdf", source: "course" as const, detail: "READY", status: "READY", available: true },
+    { id: "course-2", documentId: 2, name: "Two.pdf", source: "course" as const, detail: "READY", status: "READY", available: true },
+    { id: "upload-3", documentId: 3, name: "Chat.pdf", source: "upload" as const, detail: "READY", status: "READY", available: true },
+    { id: "upload-4", documentId: 4, name: "Pending.pdf", source: "upload" as const, detail: "PROCESSING", status: "PROCESSING", available: false },
+  ];
+  const props = { courseId: 42, messages: [], references, selectedReferences: [], status: "idle" as const,
+    onRetry: vi.fn(), onSend: vi.fn(), onReferencesChange: change, onAddDocuments: vi.fn(), onCitation: vi.fn() };
+  const { rerender } = render(<CourseChat {...props} />);
+  expect(screen.getByRole("group", { name: "Course Materials" })).toHaveTextContent("One.pdf");
+  expect(screen.getByRole("group", { name: "Conversation Uploads" })).toHaveTextContent("Chat.pdf");
+  expect(screen.getByRole("checkbox", { name: /Pending.pdf/ })).toBeDisabled();
+  fireEvent.click(screen.getByRole("button", { name: "Select all READY" }));
+  expect(change).toHaveBeenCalledWith(["course-1", "course-2", "upload-3"]);
+  rerender(<CourseChat {...props} selectedReferences={["course-1", "course-2", "upload-3"]} />);
+  fireEvent.click(screen.getByRole("checkbox", { name: /Two.pdf/ }));
+  expect(change).toHaveBeenLastCalledWith(["course-1", "upload-3"]);
+  fireEvent.click(screen.getByRole("button", { name: "Clear selection" }));
+  expect(change).toHaveBeenLastCalledWith([]);
 });

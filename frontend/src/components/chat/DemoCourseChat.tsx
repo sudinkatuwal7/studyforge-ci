@@ -28,6 +28,7 @@ export default function DemoCourseChat({ courseId, materials }: { courseId: numb
       name: item.name,
       source: "course" as const,
       detail: item.snapshot?.status ?? "Not yet checked",
+      status: item.snapshot?.status ?? "PENDING",
       available: item.snapshot?.status === "READY",
     })),
     ...uploads,
@@ -71,7 +72,7 @@ export default function DemoCourseChat({ courseId, materials }: { courseId: numb
         // Store attachment names in memory only; no file contents leave the browser.
         const accepted = files.filter((file) => /\.pdf$/i.test(file.name));
         setNotice(accepted.length === files.length ? "Pandu demo attachments stay local — files are not uploaded or processed." : "Pandu’s demo attachment picker supports PDF files only.");
-        setUploads((current) => [...current, ...accepted.map((file) => ({ id: `upload-${++sequence.current}`, name: file.name, source: "upload" as const, detail: "Pandu demo attachment — local, not uploaded or processed", available: false }))]);
+        setUploads((current) => [...current, ...accepted.map((file) => ({ id: `upload-${++sequence.current}`, documentId: 0, name: file.name, source: "upload" as const, status: "LOCAL", detail: "Pandu demo attachment — local, not uploaded or processed", available: false }))]);
       }} />
     {notice && <div className="chat-detail" role="status"><p>{notice}</p><button onClick={() => setNotice("")}>Dismiss</button></div>}
     {citation && <div className="chat-detail" role="region" aria-label="Citation details"><strong>{citation.label}</strong><p>{citation.detail}</p><button autoFocus onClick={() => setCitation(null)}>Close citation</button></div>}

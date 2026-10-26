@@ -59,8 +59,8 @@ function CourseDetail({ courseId }: { courseId: string }) {
 export default function CourseDetailPage() {
   // For /courses/7, React Router provides courseId as the string "7".
   const { courseId = "" } = useParams();
-  const { accessToken } = useAuth();
+  const { user } = useAuth();
 
-  // Reset loading state when navigating between courses or changing sessions.
-  return <CourseDetail key={`${courseId}:${accessToken}`} courseId={courseId} />;
+  // Reset for another course or account, but preserve in-flight chat work when the token refreshes.
+  return <CourseDetail key={`${courseId}:${user?.id ?? "signed-out"}`} courseId={courseId} />;
 }

@@ -3,9 +3,11 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import CourseWorkspace from "./CourseWorkspace";
 import { listDocuments } from "../../api/documents";
+import { askConversationQuestion, listConversations, listConversationUploads } from "../../api/conversations";
 
 vi.mock("../../context/AuthContext", () => ({ useAuth: () => ({ user: { id: 1 }, accessToken: "token" }) }));
 vi.mock("../../api/documents", async (original) => ({ ...await original<typeof import("../../api/documents")>(), listDocuments: vi.fn().mockResolvedValue([]) }));
+vi.mock("../../api/conversations", () => ({ listConversations: vi.fn().mockResolvedValue([{ id: 9, course_id: 42, title: "", created_at: "2026-10-01", updated_at: "2026-10-01" }]), listConversationUploads: vi.fn().mockResolvedValue([]), askConversationQuestion: vi.fn() }));
 const course = { id: 42, name: "Biology", description: "Cell biology", owner: 1, created_at: "2026-10-01" };
 
 afterEach(() => vi.unstubAllGlobals());
@@ -33,6 +35,9 @@ it("switches sections without reloading materials or hiding chat and supports ke
   fireEvent.keyDown(screen.getByRole("tab", { name: "Notes" }), { key: "ArrowRight" });
   expect(screen.getByRole("button", { name: "Generate quiz" })).toBeDisabled();
   expect(screen.getByRole("complementary", { name: "Pandu course chat" })).toBeVisible();
+  expect(screen.queryByText("Demo")).not.toBeInTheDocument();
+  expect(listConversations).toHaveBeenCalled();
+  expect(listConversationUploads).toHaveBeenCalled();
   fireEvent.click(screen.getByRole("tab", { name: "Materials" }));
   await waitFor(() => expect(screen.getByLabelText("Document file")).toBeVisible());
   expect(vi.mocked(listDocuments)).toHaveBeenCalledTimes(before);
@@ -59,23 +64,39 @@ it("starts with the assistant collapsed at the narrow breakpoint", () => {
   expect(document.getElementById("course-assistant")).toHaveAttribute("inert");
 });
 
-it("keeps the draft, conversation, and a pending reply while Pandu is hidden", async () => {
+it("keeps the draft and an in-flight real reply while Pandu is hidden", async () => {
+  vi.mocked(listDocuments).mockResolvedValueOnce([{
+    id: 81, course_id: 42, name: "Lecture.pdf", status: "READY", error: null,
+    created_at: "2026-10-01", updated_at: "2026-10-01",
+  }]);
+  let finish!: (result: { status: "INSUFFICIENT_CONTEXT"; answer: null; citations: [] }) => void;
+  let questionSignal!: AbortSignal;
+  vi.mocked(askConversationQuestion).mockImplementationOnce((_id, _question, _ids, _token, signal) => {
+    questionSignal = signal;
+    return new Promise((resolve) => { finish = resolve; });
+  });
   render(<MemoryRouter><CourseWorkspace course={course} /></MemoryRouter>);
-  await screen.findByText("No materials uploaded yet.");
+  await screen.findByRole("checkbox", { name: /Lecture.pdf/ });
+  fireEvent.click(screen.getByRole("checkbox", { name: /Lecture.pdf/ }));
   const message = screen.getByLabelText("Message Pandu");
   fireEvent.change(message, { target: { value: "What is osmosis?" } });
-  fireEvent.click(screen.getByRole("button", { name: "Send to Pandu (demo)" }));
+  fireEvent.click(screen.getByRole("button", { name: "Send to Pandu" }));
+  expect(askConversationQuestion).toHaveBeenCalledWith(9, "What is osmosis?", [81], "token", questionSignal);
   fireEvent.change(message, { target: { value: "Unsent follow-up" } });
 
   const toggle = screen.getByRole("button", { name: "AI Assistant" });
+  const assistant = document.getElementById("course-assistant");
   fireEvent.click(toggle);
-  await waitFor(() => expect(screen.getAllByRole("article", { hidden: true })).toHaveLength(2));
+  expect(assistant).toHaveAttribute("inert");
+  expect(questionSignal.aborted).toBe(false);
+  await act(async () => finish({ status: "INSUFFICIENT_CONTEXT", answer: null, citations: [] }));
+  expect(within(assistant!).getByText(/find enough information/)).toBeInTheDocument();
   fireEvent.click(toggle);
 
-  const [question, reply] = screen.getAllByRole("article");
+  expect(document.getElementById("course-assistant")).toBe(assistant);
+  const [question, reply] = within(assistant!).getAllByRole("article");
   expect(within(question).getByText("What is osmosis?")).toBeInTheDocument();
   expect(within(reply).getByText("Pandu")).toBeInTheDocument();
-  expect(screen.queryByText(/preparing a demo reply/i)).not.toBeInTheDocument();
   expect(screen.getByLabelText("Message Pandu")).toBe(message);
   expect(message).toHaveValue("Unsent follow-up");
 });
