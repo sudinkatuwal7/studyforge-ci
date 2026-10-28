@@ -1,0 +1,76 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: studyforge-processing-worker
+data:
+  PROCESSING_DB_NAME: studyforge_processing
+  PROCESSING_DB_USER: studyforge_processing
+  PROCESSING_DB_HOST: host.docker.internal
+  PROCESSING_DB_PORT: "5432"
+  PROCESSING_REDIS_URL: redis://host.docker.internal:6379/0
+  PROCESSING_DJANGO_API_URL: http://host.docker.internal:8000
+  PROCESSING_ALLOWED_HOSTS: localhost,127.0.0.1,document-processing
+  EMBEDDING_MODEL: gemini-embedding-2
+  EMBEDDING_DIMENSION: "768"
+  EMBEDDING_BATCH_SIZE: "16"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: processing-worker
+  labels:
+    app: processing-worker
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: processing-worker
+  template:
+    metadata:
+      labels:
+        app: processing-worker
+    spec:
+      terminationGracePeriodSeconds: 30
+      containers:
+        - name: processing-worker
+          image: studyforge-document-processing:kind
+          imagePullPolicy: IfNotPresent
+          command:
+            - celery
+            - -A
+            - processing_service.celery:app
+            - worker
+            - --loglevel=INFO
+            - --queues=document-processing
+            - --hostname=processing-worker@%h
+          envFrom:
+            - configMapRef:
+                name: studyforge-processing-worker
+          env:
+            - name: PROCESSING_SECRET_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: studyforge-processing-secrets
+                  key: PROCESSING_SECRET_KEY
+            - name: PROCESSING_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: studyforge-processing-secrets
+                  key: PROCESSING_DB_PASSWORD
+            - name: PROCESSING_SERVICE_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: studyforge-processing-secrets
+                  key: PROCESSING_SERVICE_TOKEN
+            - name: GEMINI_API_KEY
+              valueFrom:
+                secretKeyRef:
+                  name: studyforge-processing-secrets
+                  key: GEMINI_API_KEY
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 768Mi
