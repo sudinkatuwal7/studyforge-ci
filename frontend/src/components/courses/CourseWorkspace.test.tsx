@@ -33,7 +33,7 @@ it("switches sections without reloading materials or hiding chat and supports ke
   fireEvent.click(screen.getByRole("tab", { name: "Notes" }));
   expect(screen.getByRole("heading", { name: "Study notes" })).toBeVisible();
   fireEvent.keyDown(screen.getByRole("tab", { name: "Notes" }), { key: "ArrowRight" });
-  expect(screen.getByRole("button", { name: "Generate quiz" })).toBeDisabled();
+  expect(screen.getByRole("heading", { name: "Generate a quiz" })).toBeVisible();
   expect(screen.getByRole("complementary", { name: "Pandu course chat" })).toBeVisible();
   expect(screen.queryByText("Demo")).not.toBeInTheDocument();
   expect(listConversations).toHaveBeenCalled();
