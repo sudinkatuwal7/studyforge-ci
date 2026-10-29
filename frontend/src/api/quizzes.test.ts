@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { generateQuiz, getQuizResults, QuizRequestError, submitQuiz } from "./quizzes";
+import { generateQuiz, getQuiz, getQuizResults, QuizRequestError, submitQuiz } from "./quizzes";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -40,4 +40,12 @@ it("falls back to an empty code when the error body is not JSON", async () => {
   const error = await generateQuiz(7, [2], 5, "tok").catch((cause: unknown) => cause);
   expect(error).toBeInstanceOf(QuizRequestError);
   expect(error).toMatchObject({ status: 502, code: "" });
+});
+
+it("reads a quiz by id without caching", async () => {
+  const fetchMock = reply(200, { id: 3, is_submitted: true });
+  vi.stubGlobal("fetch", fetchMock);
+  await expect(getQuiz(3, "tok")).resolves.toMatchObject({ is_submitted: true });
+  expect(fetchMock.mock.calls[0][0]).toBe("http://api.test/api/v1/quizzes/3/");
+  expect(fetchMock.mock.calls[0][1].cache).toBe("no-store");
 });

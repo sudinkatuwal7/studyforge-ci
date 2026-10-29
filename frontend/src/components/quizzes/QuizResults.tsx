@@ -1,3 +1,4 @@
+import { useEffect, useRef } from "react";
 import type { QuizResult } from "../../types/quiz";
 
 type Props = { result: QuizResult; onRestart: () => void };
@@ -6,8 +7,11 @@ type Props = { result: QuizResult; onRestart: () => void };
 // and explanations here cannot leak anything mid-quiz.
 export default function QuizResults({ result, onRestart }: Props) {
   const questions = [...result.questions].sort((a, b) => a.position - b.position);
+  const heading = useRef<HTMLHeadingElement>(null);
+  // The Submit button that had focus is gone, so start keyboard and screen reader users here.
+  useEffect(() => heading.current?.focus(), []);
   return <section className="quiz-results" aria-label="Quiz results">
-    <h3>{result.title}</h3>
+    <h3 ref={heading} tabIndex={-1}>{result.title}</h3>
     <p className="quiz-score" role="status">
       You scored {result.score} out of {result.total_questions} ({result.percentage}%)
     </p>

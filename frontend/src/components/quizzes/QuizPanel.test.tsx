@@ -1,6 +1,6 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, expect, it, vi } from "vitest";
-import { generateQuiz, getQuizResults, QuizRequestError, submitQuiz } from "../../api/quizzes";
+import { generateQuiz, getQuiz, getQuizResults, QuizRequestError, submitQuiz } from "../../api/quizzes";
 import type { TrackedDocument } from "../../types/document";
 import type { Quiz, QuizResult } from "../../types/quiz";
 import QuizPanel from "./QuizPanel";
@@ -8,10 +8,10 @@ import QuizPanel from "./QuizPanel";
 vi.mock("../../context/AuthContext", () => ({ useAuth: () => ({ user: { id: 1 }, accessToken: "tok" }) }));
 vi.mock("../../api/quizzes", async (original) => ({
   ...await original<typeof import("../../api/quizzes")>(),
-  generateQuiz: vi.fn(), submitQuiz: vi.fn(), getQuizResults: vi.fn(),
+  generateQuiz: vi.fn(), submitQuiz: vi.fn(), getQuiz: vi.fn(), getQuizResults: vi.fn(),
 }));
 
-afterEach(() => vi.clearAllMocks());
+afterEach(() => { vi.clearAllMocks(); sessionStorage.clear(); });
 
 const doc = (id: number, name: string, status: "READY" | "PROCESSING" | "FAILED"): TrackedDocument => ({
   id, name, snapshot: { id, course_id: 42, name, status, created_at: "", updated_at: "", error: status === "FAILED" ? { code: "x", message: "x" } : null },
@@ -108,4 +108,57 @@ it("shows the saved grade when the quiz was already submitted", async () => {
   fireEvent.click(screen.getByRole("button", { name: "Submit Quiz" }));
   await waitFor(() => expect(getQuizResults).toHaveBeenCalledWith(5, "tok", expect.any(AbortSignal)));
   expect(await screen.findByText(/You scored 1 out of 1/)).toBeVisible();
+});
+
+const savedKey = "studyforge:quiz:1:42";
+
+it("remembers the open quiz and forgets it on Take another quiz", async () => {
+  vi.mocked(generateQuiz).mockResolvedValue(quiz);
+  vi.mocked(submitQuiz).mockResolvedValue(result);
+  renderPanel();
+  fireEvent.click(screen.getByLabelText("Cells.pdf"));
+  fireEvent.click(screen.getByRole("button", { name: "Generate quiz" }));
+  await screen.findByText("What is a cell?");
+  expect(sessionStorage.getItem(savedKey)).toBe("5");
+  fireEvent.click(screen.getByLabelText("A"));
+  fireEvent.click(screen.getByRole("button", { name: "Submit Quiz" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Take another quiz" }));
+  expect(sessionStorage.getItem(savedKey)).toBeNull();
+});
+
+it("shows the saved results again after a reload", async () => {
+  sessionStorage.setItem(savedKey, "5");
+  vi.mocked(getQuiz).mockResolvedValue({ ...quiz, is_submitted: true });
+  vi.mocked(getQuizResults).mockResolvedValue(result);
+  renderPanel();
+  expect(screen.getByRole("status")).toHaveTextContent("Loading your quiz");
+  expect(await screen.findByText(/You scored 1 out of 1 \(100%\)/)).toBeVisible();
+  expect(getQuiz).toHaveBeenCalledWith(5, "tok", expect.any(AbortSignal));
+  expect(getQuizResults).toHaveBeenCalledWith(5, "tok", expect.any(AbortSignal));
+});
+
+it("reopens an unsubmitted quiz after a reload without showing answers", async () => {
+  sessionStorage.setItem(savedKey, "5");
+  vi.mocked(getQuiz).mockResolvedValue(quiz);
+  renderPanel();
+  expect(await screen.findByText("What is a cell?")).toBeVisible();
+  expect(getQuizResults).not.toHaveBeenCalled();
+  expect(screen.queryByText("Cells are the unit of life.")).not.toBeInTheDocument();
+});
+
+it("forgets a saved quiz that no longer exists and shows setup", async () => {
+  sessionStorage.setItem(savedKey, "5");
+  vi.mocked(getQuiz).mockRejectedValue(new QuizRequestError(404));
+  renderPanel();
+  expect(await screen.findByRole("button", { name: "Generate quiz" })).toBeVisible();
+  expect(sessionStorage.getItem(savedKey)).toBeNull();
+  expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+});
+
+it("keeps the saved quiz and explains when it cannot be loaded", async () => {
+  sessionStorage.setItem(savedKey, "5");
+  vi.mocked(getQuiz).mockRejectedValue(new QuizRequestError(500));
+  renderPanel();
+  expect(await screen.findByText(/Your last quiz could not be loaded/)).toBeVisible();
+  expect(sessionStorage.getItem(savedKey)).toBe("5");
 });

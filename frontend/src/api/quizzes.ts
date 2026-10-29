@@ -76,3 +76,8 @@ export async function submitQuiz(
 export async function getQuizResults(quizId: number, accessToken: string, signal?: AbortSignal): Promise<QuizResult> {
   return readJson<QuizResult>(await request(`/quizzes/${quizId}/results/`, { signal, cache: "no-store" }, accessToken));
 }
+
+// GET /quizzes/{id}/. Never includes answers or explanations, even once submitted.
+export async function getQuiz(quizId: number, accessToken: string, signal?: AbortSignal): Promise<Quiz> {
+  return readJson<Quiz>(await request(`/quizzes/${quizId}/`, { signal, cache: "no-store" }, accessToken));
+}
