@@ -13,17 +13,27 @@ function isDocumentError(value: unknown): value is DocumentError {
     typeof value.message === "string" && value.message.length > 0;
 }
 
+// Shared AI endpoints return { code, detail }; document endpoints use { code, message }.
+function structuredError(body: unknown): DocumentError | null {
+  if (isObject(body) && typeof body.code === "string" &&
+    typeof body.detail === "string" && body.detail.length > 0) {
+    return { code: body.code, message: body.detail };
+  }
+  const error = isObject(body) && isDocumentError(body.error) ? body.error : body;
+  return isDocumentError(error) ? error : null;
+}
+
 export class DocumentRequestError extends Error {
   status: number;
   code: string | null;
   documentId: number | null;
 
   constructor(status: number, body: unknown) {
-    const error = isObject(body) && isDocumentError(body.error) ? body.error : body;
-    super(isDocumentError(error) ? error.message : "The request could not be completed. Please try again later.");
+    const error = structuredError(body);
+    super(error ? error.message : "The request could not be completed. Please try again later.");
     this.name = "DocumentRequestError";
     this.status = status;
-    this.code = isDocumentError(error) ? error.code : null;
+    this.code = error ? error.code : null;
     this.documentId = isObject(body) && Number.isSafeInteger(body.document_id) &&
       typeof body.document_id === "number" && body.document_id > 0 ? body.document_id : null;
   }

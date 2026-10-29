@@ -34,8 +34,33 @@
 .course-workspace .document-status h3 { font-size: 1rem; }
 .course-workspace .document-status strong { background: #edf3fa; padding: .15rem .4rem; border-radius: .4rem; font-size: .8rem; }
 .course-workspace select { display: block; max-width: 100%; width: 100%; padding: .6rem; margin-top: .4rem; border: 1px solid #ddddeb; border-radius: .6rem; background: white; }
-.quiz-placeholder { padding: 2rem 1rem; text-align: center; }
-.quiz-placeholder button { margin-top: 1rem; }
+.course-quizzes h3 { margin-top: 0; }
+.quiz-setup fieldset, .quiz-question { border: 1px solid #e3e6ed; border-radius: 1rem; margin: 0 0 1rem; padding: .8rem 1rem; min-width: 0; }
+.quiz-setup legend, .quiz-question legend { padding: 0 .35rem; font-weight: 600; }
+.quiz-question legend { font-size: 1.05rem; line-height: 1.4; }
+.quiz-material-list { list-style: none; margin: 0; padding: 0; }
+.quiz-material-list label, .quiz-option, .quiz-length label { display: flex; align-items: center; gap: .6rem; padding: .45rem 0; }
+.quiz-material-list small { color: #707a91; }
+.quiz-setup-bulk, .quiz-nav, .quiz-dots, .quiz-length { display: flex; flex-wrap: wrap; gap: .5rem; }
+.quiz-option { border: 1px solid #e3e6ed; border-radius: .8rem; padding: .7rem .9rem; margin-bottom: .5rem; cursor: pointer; }
+.quiz-option:has(input:checked) { border-color: #5f52b5; background: #f0edff; }
+.quiz-progress { margin: .2rem 0; color: #707a91; font-size: .9rem; }
+.quiz-player progress { width: 100%; margin-bottom: 1rem; }
+.quiz-dots { margin: 1rem 0; }
+.quiz-dot { min-width: 2.2rem; min-height: 2.2rem; border-radius: 50%; border: 1px solid #c5c4db; background: #fff; }
+.quiz-dot-answered { background: #e6f0eb; border-color: #416353; }
+.quiz-dot[aria-current="step"] { outline: 2px solid #5f52b5; outline-offset: 2px; }
+.quiz-confirm { margin-top: 1rem; padding: .8rem 1rem; border-radius: .8rem; background: #fff7e6; }
+.quiz-error { color: #b3261e; }
+.quiz-hint { color: #707a91; }
+.quiz-score { font-size: 1.3rem; font-weight: 700; }
+.quiz-review { padding-left: 1.2rem; }
+.quiz-review > li { margin-bottom: 1rem; padding: .8rem 1rem; border-radius: 1rem; border: 1px solid #e3e6ed; }
+.quiz-review > li.quiz-correct { border-left: 4px solid #2e7d32; }
+.quiz-review > li.quiz-incorrect { border-left: 4px solid #b3261e; }
+.quiz-option-correct { color: #1b5e20; font-weight: 600; }
+.quiz-option-wrong { color: #b3261e; }
+.quiz-explanation { color: #4a5368; }
 .demo-chat-container { position: relative; width: 100%; height: 100%; min-height: 0; min-width: 0; }
 /* Pandu's message history expands while sources and the composer remain reachable. */
 .course-chat { height: 100%; display: flex; flex-direction: column; border-radius: 1rem; }

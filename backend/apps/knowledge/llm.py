@@ -35,6 +35,16 @@ and an exact, nonblank excerpt copied from that passage. Never invent sources,
 identifiers, page numbers, or quotations. If the passages do not support an answer,
 return status INSUFFICIENT_CONTEXT, answer null, and citations []."""
 
+# Sent once, only after a citation failed exact-match validation. It is a trusted
+# instruction, so it rides in a system message, never inside the data envelope.
+CITATION_REPAIR_PROMPT = """Your previous response was rejected because a citation
+did not match its passage exactly. Answer again from the same passages.
+Every citation excerpt must be copied verbatim, character for character, from the
+content of the passage identified by its chunk_id. Do not paraphrase, reword,
+abbreviate, join, or correct excerpts. Cite only the supplied chunk_id,
+document_id, and page_number values. If you cannot produce an exact supporting
+citation, return status INSUFFICIENT_CONTEXT, answer null, and citations []."""
+
 ANSWER_SCHEMA = {
     "type": "object",
     "additionalProperties": False,
@@ -70,6 +80,10 @@ class RAGProviderError(LLMError):
 
 class InvalidLLMOutput(LLMError):
     """The response was malformed or did not cite the supplied evidence."""
+
+
+class InvalidCitation(InvalidLLMOutput):
+    """A well-formed citation does not match its supplied passage exactly."""
 
 
 def _positive_identifier(value):
@@ -141,7 +155,7 @@ def validate_answer(payload, passages):
             or citation["page_number"] != source["page_number"]
             or citation["excerpt"] not in source["content"]
         ):
-            raise InvalidLLMOutput(invalid)
+            raise InvalidCitation(invalid)
         checked.append(dict(citation))
     return {"status": status, "answer": answer.strip(), "citations": checked}
 
@@ -174,6 +188,22 @@ class OpenAIRAGLLM:
         question, sources = _prepare(question, passages)
         if not sources:
             return {"status": "INSUFFICIENT_CONTEXT", "answer": None, "citations": []}
+        messages = [
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": json.dumps({"question": question, "passages": sources})},
+        ]
+        raw, payload = self._complete(messages)
+        try:
+            return validate_answer(payload, sources)
+        except InvalidCitation:
+            # Exactly one repair attempt; a second failure takes the normal error path.
+            messages = messages + [
+                {"role": "assistant", "content": raw},
+                {"role": "system", "content": CITATION_REPAIR_PROMPT},
+            ]
+        return validate_answer(self._complete(messages)[1], sources)
+
+    def _complete(self, messages):
         try:
             response = self._client.chat.completions.create(
                 model=self.name,
@@ -181,10 +211,7 @@ class OpenAIRAGLLM:
                     "type": "json_schema",
                     "json_schema": {"name": "rag_answer", "strict": True, "schema": ANSWER_SCHEMA},
                 },
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": json.dumps({"question": question, "passages": sources})},
-                ],
+                messages=messages,
                 max_completion_tokens=4_000,
             )
         except APIError:
@@ -199,10 +226,9 @@ class OpenAIRAGLLM:
             raw = choice.message.content
             if not isinstance(raw, str) or len(raw) > MAX_RESPONSE_CHARS:
                 raise ValueError("Invalid response body")
-            payload = json.loads(raw, object_pairs_hook=_unique_object)
+            return raw, json.loads(raw, object_pairs_hook=_unique_object)
         except (AttributeError, TypeError, ValueError, RecursionError):
             raise InvalidLLMOutput("The RAG provider returned an invalid response.") from None
-        return validate_answer(payload, sources)
 
 
 class FakeRAGLLM:

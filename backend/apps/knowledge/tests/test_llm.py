@@ -12,6 +12,7 @@ from openai import APIConnectionError, APIStatusError, APITimeoutError, RateLimi
 
 from apps.knowledge.llm import (
     ANSWER_SCHEMA,
+    CITATION_REPAIR_PROMPT,
     MAX_CONTEXT_CHARS,
     MAX_PASSAGE_CHARS,
     FakeRAGLLM,
@@ -212,6 +213,64 @@ class OpenAIRAGTests(SimpleTestCase):
                 with self.assertRaises(InvalidLLMOutput) as caught:
                     OpenAIRAGLLM(sdk).generate("question", PASSAGES)
                 self.assertNotIn("SECRET", str(caught.exception))
+
+    def test_invalid_citation_gets_one_verbatim_repair_attempt(self):
+        paraphrased = {**ANSWER, "citations": [{**ANSWER["citations"][0], "excerpt": "page is absent from RAM"}]}
+        sdk = Mock()
+        sdk.chat.completions.create.side_effect = [response(paraphrased), response(ANSWER)]
+        self.assertEqual(generate_answer("question", PASSAGES, OpenAIRAGLLM(sdk)), ANSWER)
+        first, repair = (call.kwargs["messages"] for call in sdk.chat.completions.create.call_args_list)
+        self.assertEqual([message["role"] for message in first], ["system", "user"])
+        self.assertEqual(repair[:2], first)
+        self.assertEqual([message["role"] for message in repair], ["system", "user", "assistant", "system"])
+        self.assertEqual(json.loads(repair[2]["content"]), paraphrased)
+        self.assertEqual(repair[3]["content"], CITATION_REPAIR_PROMPT)
+        for rule in ("copied verbatim", "Do not paraphrase", "Cite only the supplied", "INSUFFICIENT_CONTEXT"):
+            self.assertIn(rule, CITATION_REPAIR_PROMPT)
+
+    def test_repair_may_abstain(self):
+        invented = {**ANSWER, "citations": [{**ANSWER["citations"][0], "excerpt": "invented quote"}]}
+        sdk = Mock()
+        sdk.chat.completions.create.side_effect = [response(invented), response(ABSTENTION)]
+        self.assertEqual(generate_answer("question", PASSAGES, OpenAIRAGLLM(sdk)), ABSTENTION)
+        self.assertEqual(sdk.chat.completions.create.call_count, 2)
+
+    def test_second_invalid_response_fails_without_another_retry(self):
+        invented = {**ANSWER, "citations": [{**ANSWER["citations"][0], "excerpt": "invented SECRET quote"}]}
+        for second in (response(invented),
+                       response({**ANSWER, "citations": [{**ANSWER["citations"][0], "chunk_id": 999}]}),
+                       response(raw="SECRET not JSON")):
+            with self.subTest(second=second):
+                sdk = Mock()
+                sdk.chat.completions.create.side_effect = [response(invented), second, response(ANSWER)]
+                with self.assertRaises(InvalidLLMOutput) as caught:
+                    generate_answer("question", PASSAGES, OpenAIRAGLLM(sdk))
+                self.assertEqual(sdk.chat.completions.create.call_count, 2)
+                self.assertNotIn("SECRET", str(caught.exception))
+
+    def test_repair_provider_failure_is_sanitized(self):
+        request = httpx.Request("POST", "https://api.openai.com/v1/chat/completions")
+        invented = {**ANSWER, "citations": [{**ANSWER["citations"][0], "excerpt": "invented quote"}]}
+        sdk = Mock()
+        sdk.chat.completions.create.side_effect = [response(invented), APITimeoutError(request)]
+        with self.assertRaises(RAGProviderError):
+            generate_answer("question", PASSAGES, OpenAIRAGLLM(sdk))
+        self.assertEqual(sdk.chat.completions.create.call_count, 2)
+
+    def test_valid_or_non_citation_failures_are_not_retried(self):
+        sdk = Mock()
+        sdk.chat.completions.create.return_value = response(ANSWER)
+        self.assertEqual(generate_answer("question", PASSAGES, OpenAIRAGLLM(sdk)), ANSWER)
+        sdk.chat.completions.create.assert_called_once()
+        for bad in (response(raw="not JSON"), response({**ANSWER, "citations": []}),
+                    response({**ANSWER, "status": "UNKNOWN"}), response(finish_reason="length"),
+                    response({**ANSWER, "citations": [{**ANSWER["citations"][0], "excerpt": " "}]})):
+            with self.subTest(response=bad):
+                sdk = Mock()
+                sdk.chat.completions.create.return_value = bad
+                with self.assertRaises(InvalidLLMOutput):
+                    generate_answer("question", PASSAGES, OpenAIRAGLLM(sdk))
+                sdk.chat.completions.create.assert_called_once()
 
     def test_fake_is_default_and_never_builds_sdk_client(self):
         with patch.dict(os.environ, {"RAG_LLM_BACKEND": "fake"}), patch("apps.knowledge.llm.OpenAI") as sdk:

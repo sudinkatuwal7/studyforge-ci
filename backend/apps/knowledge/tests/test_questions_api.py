@@ -268,6 +268,24 @@ class QuestionsAPITests(TestCase):
                 self.sdk.chat.completions.create.return_value = completion({**self.answer, "citations": [citation]})
                 self.assert_safe_failure(self.post())
 
+    def test_repaired_citation_is_returned_instead_of_invented_one(self):
+        invented = {**self.answer, "citations": [{**self.citation(self.chunk), "excerpt": "invented SECRET"}]}
+        self.sdk.chat.completions.create.side_effect = [completion(invented), completion(self.answer)]
+        result = self.post()
+        self.assertEqual(result.status_code, 200, result.data)
+        self.assertEqual(result.json(), self.answer)
+        self.assertNotIn("SECRET", result.content.decode())
+        self.assertEqual(self.sdk.chat.completions.create.call_count, 2)
+
+    def test_unrepaired_citation_is_never_returned(self):
+        invented = {**self.answer, "citations": [{**self.citation(self.chunk), "excerpt": "invented SECRET"}]}
+        self.sdk.chat.completions.create.side_effect = [completion(invented), completion(invented),
+                                                        completion(self.answer)]
+        result = self.post()
+        self.assert_safe_failure(result)
+        self.assertNotIn("SECRET", result.content.decode())
+        self.assertEqual(self.sdk.chat.completions.create.call_count, 2)
+
     def test_selected_but_non_retrieved_chunk_cannot_be_cited(self):
         # Five better matches fill global top-K; a real owned/selected chunk is
         # still not a valid citation unless it actually reached the generator.
@@ -292,7 +310,7 @@ class QuestionsAPITests(TestCase):
             **self.answer, "citations": [{**self.citation(self.chunk), "chunk_id": 999999}],
         })
         self.assert_safe_failure(self.post())
-        arguments = self.sdk.chat.completions.create.call_args.kwargs
+        arguments = self.sdk.chat.completions.create.call_args_list[0].kwargs
         messages = arguments["messages"]
         self.assertEqual([message["role"] for message in messages], ["system", "user"])
         self.assertNotIn(attack, messages[0]["content"])
