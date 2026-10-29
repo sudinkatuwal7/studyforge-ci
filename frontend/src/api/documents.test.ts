@@ -93,6 +93,23 @@ describe("document API", () => {
     await expect(getDocument(12, "token", new AbortController().signal)).rejects.toThrow("invalid document response");
   });
 
+  it("shows the backend detail for structured AI errors", () => {
+    const error = new DocumentRequestError(503, {
+      code: "RAG_GENERATION_FAILED", detail: "The question could not be answered right now. Please try again.",
+    });
+    expect(error).toMatchObject({
+      status: 503, code: "RAG_GENERATION_FAILED", message: "The question could not be answered right now. Please try again.",
+    });
+  });
+
+  it("keeps the generic fallback for unstructured or incomplete detail errors", () => {
+    for (const body of [{ detail: "Authentication credentials were not provided." }, { code: "X", detail: "" }, null, "text"]) {
+      const error = new DocumentRequestError(503, body);
+      expect(error.message).toBe("The request could not be completed. Please try again later.");
+      expect(error.code).toBeNull();
+    }
+  });
+
   it("recognizes plain validation errors", () => {
     const error = new DocumentRequestError(400, { code: "INVALID_PDF", message: "Upload a valid, readable PDF." });
     expect(error.message).toBe("Upload a valid, readable PDF.");

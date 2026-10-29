@@ -1,6 +1,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import ConnectedCourseChat from "./ConnectedCourseChat";
+import { DocumentRequestError } from "../../api/documents";
 import { askConversationQuestion, createCourseConversation, getConversationUpload, listConversationUploads, listConversations, uploadConversationDocument } from "../../api/conversations";
 
 vi.mock("../../context/AuthContext", () => ({ useAuth: () => ({ user: { id: 1 }, accessToken: "token" }) }));
@@ -69,6 +70,18 @@ it("shows insufficient context, blocks empty selection, prevents duplicate reque
   fireEvent.change(screen.getByRole("textbox"), { target: { value: "Another question" } });
   fireEvent.click(screen.getByRole("button", { name: "Send to Pandu" }));
   expect(await screen.findByRole("alert")).toHaveTextContent("could not answer");
+});
+
+it("shows the backend detail when Pandu generation fails", async () => {
+  vi.mocked(askConversationQuestion).mockRejectedValue(new DocumentRequestError(503, {
+    code: "RAG_GENERATION_FAILED", detail: "The question could not be answered right now. Please try again.",
+  }));
+  render(<ConnectedCourseChat courseId={42} materials={[material(1, 42, "Lecture.pdf")]} />);
+  await screen.findByRole("checkbox", { name: /Chat.docx/ });
+  fireEvent.click(screen.getByRole("checkbox", { name: /Lecture.pdf/ }));
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "Explain hazard management costs" } });
+  fireEvent.click(screen.getByRole("button", { name: "Send to Pandu" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("The question could not be answered right now. Please try again.");
 });
 
 it("uploads a conversation reference, follows processing to READY, and deselects without deletion", async () => {
