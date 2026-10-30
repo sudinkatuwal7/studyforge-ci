@@ -14,8 +14,6 @@ import type { StudySession } from "../types/studySession";
 import type { TodoItem } from "../types/todo";
 import Panda from "../components/shared/Panda";
 
-const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-
 export default function DashboardPage({
   refreshKey,
   onCourseCreated,
@@ -51,7 +49,8 @@ export default function DashboardPage({
   }, [accessToken]);
 
   return (
-    <div className="dashboard-page">
+    <div className="dashboard-page dashboard-columns">
+      <div className="dashboard-main">
       <section className="welcome-banner">
         <div>
           <h2>{greeting}</h2>
@@ -76,7 +75,6 @@ export default function DashboardPage({
         </article>
       </section>
 
-      <div className="dashboard-columns">
         <div className="dashboard-column">
           <div className="section-heading">
             <h2 id="courses">My Courses</h2>
@@ -85,13 +83,11 @@ export default function DashboardPage({
           <CourseList refreshKey={refreshKey} onCourses={setCourses} embedded />
           <CourseForm onCreated={onCourseCreated} />
         </div>
-
-        <div className="dashboard-column">
-          <DashboardCalendar events={events} calendarReady={calendarReady} sessionError={sessionError} />
-          <UpcomingActivities events={upcomingReady ? upcoming : null} />
-          <TodoPanel refreshKey={refreshKey} onTodos={setTodos} />
-        </div>
       </div>
+      <aside className="dashboard-sidebar" aria-label="Calendar and tasks">
+          <DashboardCalendar events={events} calendarReady={calendarReady} sessionError={sessionError} />
+          <TodoPanel refreshKey={refreshKey} onTodos={setTodos} />
+      </aside>
     </div>
   );
 }
@@ -120,36 +116,4 @@ function DashboardCalendar({
       )}
     </section>
   );
-}
-
-function UpcomingActivities({ events }: { events: CalendarEvent[] | null }) {
-  return (
-    <section className="upcoming-card" aria-labelledby="upcoming-heading">
-      <h2 id="upcoming-heading">Upcoming</h2>
-      {events === null && <p role="status">Loading upcoming activities...</p>}
-      {events?.length === 0 && <p className="upcoming-empty">No upcoming activities.</p>}
-      {events && events.length > 0 && (
-        <ul>
-          {events.slice(0, 3).map((event) => (
-            <li key={event.key}>
-              <strong>{event.title}</strong>
-              <span>
-                {event.source === "todo" ? "Task" : "Study session"}
-                {" · "}
-                {formatActivityDate(event)}
-              </span>
-            </li>
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-function formatActivityDate(event: CalendarEvent): string {
-  const [year, month, day] = event.date.split("-").map(Number);
-  const monthName = MONTHS[month - 1];
-  const dateLabel = year && monthName && day ? `${monthName} ${day}, ${year}` : event.date;
-  if (!event.time) return dateLabel;
-  return `${dateLabel}, ${event.time.slice(0, 5)}`;
 }

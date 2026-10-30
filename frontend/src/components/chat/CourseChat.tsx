@@ -2,6 +2,16 @@ import { useEffect, useId, useRef, useState } from "react";
 import type { ChatMessage, CourseChatProps } from "../../types/chat";
 import { reconcileSelection, selectAllReferences, selectedDocumentIds, toggleReference } from "./chatReferences";
 
+function PanduLogo({ size }: { size: "small" | "large" }) {
+  return (
+    <img
+      className={`pandu-avatar pandu-avatar-${size}`}
+      src={`${import.meta.env.BASE_URL}images/StudyForge.png`}
+      alt=""
+    />
+  );
+}
+
 export function ChatMessageView({ message, onCitation, streaming = false }: { message: ChatMessage; onCitation: CourseChatProps["onCitation"]; streaming?: boolean }) {
   return <article className={`chat-message chat-message-${message.role}`} aria-busy={streaming}>
     <strong>{message.role === "user" ? "You" : "Pandu"}</strong>
@@ -31,7 +41,7 @@ export function ReferencePicker({ references, selectedReferences, onReferencesCh
       <input ref={input} type="file" accept=".pdf,.docx,.pptx,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.presentationml.presentation" hidden aria-label="Add documents to Pandu" onChange={(event) => {
         onAddDocuments(Array.from(event.target.files ?? [])); event.target.value = "";
       }} />
-      <button type="button" disabled={uploading || chatReady === false} onClick={() => input.current?.click()}>+ Add conversation upload</button>
+      <button className="reference-upload" type="button" disabled={uploading || chatReady === false} onClick={() => input.current?.click()}>+ Add conversation upload</button>
       {uploading && <div role="status">Uploading {uploadProgress === null || uploadProgress === undefined ? "..." : `${uploadProgress}%`}<progress value={uploadProgress ?? undefined} max={100} /></div>}
       {uploadError && <p className="document-error" role="alert">{uploadError}</p>}
     </div>
@@ -53,13 +63,13 @@ export default function CourseChat(props: CourseChatProps) {
   const prompts = ["Summarize selected materials", "Explain a concept", "Generate practice questions"];
   return <aside className="course-chat" aria-label="Pandu course chat" aria-busy={busy} data-course-id={props.courseId}>
     <header className="chat-header">
-      <span className="pandu-avatar pandu-avatar-small" aria-hidden="true">✦</span>
+      <PanduLogo size="small" />
       <div><h3>Pandu</h3><p>Your study partner</p></div>
       {props.demo && <span className="chat-demo-badge">Demo</span>}
     </header>
     <div ref={log} className="chat-messages" role="log" aria-label="Messages with Pandu" aria-live="polite">
       {!props.messages.length && <div className="chat-empty">
-        <span className="pandu-avatar pandu-avatar-large" aria-hidden="true">✦</span>
+        <PanduLogo size="large" />
         <h4>Hi! I’m Pandu.</h4>
         <p>Ask me questions about your course materials.</p>
         <div className="chat-prompts" role="group" aria-label="Suggested prompts">

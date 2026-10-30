@@ -24,6 +24,9 @@ async function show() {
   await act(async () => { render(<StrictMode><CourseMaterials courseId={7} /></StrictMode>); });
 }
 async function click(name: string) {
+  if ((name === "Rename" || name === "Delete") && !screen.queryByRole("button", { name })) {
+    await act(async () => { fireEvent.click(screen.getByRole("button", { name: "Options for Lecture.pdf" })); });
+  }
   await act(async () => { fireEvent.click(screen.getByRole("button", { name })); });
 }
 async function upload() {
@@ -52,7 +55,8 @@ it("renders persistent materials, metadata, and all four processing statuses", a
     expect(screen.getByText(status)).toBeInTheDocument();
     expect(screen.getByRole("heading", { name: `${status}.pdf` })).toBeInTheDocument();
   }
-  expect(screen.getAllByText(/Uploaded/)).toHaveLength(4);
+  expect(screen.getAllByText("PDF")).toHaveLength(4);
+  expect(screen.getAllByRole("time")).toHaveLength(4);
 });
 
 it("shows an empty list and a recoverable safe API error", async () => {
@@ -99,11 +103,13 @@ it("requires delete confirmation, supports cancel, and removes only the selected
   vi.mocked(listDocuments).mockResolvedValue([document, { ...document, id: 13, name: "Keep.pdf" }]);
   await show();
   const item = within(screen.getByRole("article", { name: "Lecture.pdf" }));
+  fireEvent.click(item.getByRole("button", { name: "Options for Lecture.pdf" }));
   fireEvent.click(item.getByRole("button", { name: "Delete" }));
   expect(screen.getByRole("group", { name: "Confirm deletion" })).toBeInTheDocument();
   expect(deleteDocument).not.toHaveBeenCalled();
   await click("Cancel");
   expect(deleteDocument).not.toHaveBeenCalled();
+  fireEvent.click(item.getByRole("button", { name: "Options for Lecture.pdf" }));
   fireEvent.click(item.getByRole("button", { name: "Delete" }));
   await click("Confirm delete");
   expect(deleteDocument).toHaveBeenCalledWith(12, "token", expect.any(AbortSignal));
@@ -192,4 +198,18 @@ it.each(["rename", "delete"])("does not let a late initial list undo an upload f
   expect(screen.queryByRole("heading", { name: "Lecture.pdf" })).not.toBeInTheDocument();
   if (action === "rename") expect(screen.getByRole("heading", { name: "Renamed" })).toBeInTheDocument();
   else expect(screen.queryByRole("article")).not.toBeInTheDocument();
+});
+
+it("filters the materials list by name", async () => {
+  vi.mocked(listDocuments).mockResolvedValue([
+    document,
+    { ...document, id: 13, name: "Notes.docx" },
+  ]);
+  await show();
+  expect(screen.getByRole("heading", { name: "Materials", level: 4 })).toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Search materials"), { target: { value: "notes" } });
+  expect(screen.getByRole("heading", { name: "Notes.docx" })).toBeInTheDocument();
+  expect(screen.queryByRole("heading", { name: "Lecture.pdf" })).not.toBeInTheDocument();
+  fireEvent.change(screen.getByLabelText("Search materials"), { target: { value: "missing" } });
+  expect(screen.getByText("No materials match that search.")).toBeInTheDocument();
 });

@@ -25,7 +25,7 @@ class CourseCreateView(APIView):
     def get(self, request):
         # Only return this student's courses, with the newest first.
         courses = Course.objects.filter(owner=request.user).order_by("-created_at")
-        serializer = CourseSerializer(courses, many=True)
+        serializer = CourseSerializer(courses, many=True) # many=True is used to serialize multiple objects, in this case, courses 
         return Response(serializer.data)
 
     def post(self, request):

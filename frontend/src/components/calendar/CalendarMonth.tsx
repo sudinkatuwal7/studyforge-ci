@@ -1,4 +1,4 @@
-import { useEffect, useId, useMemo, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { CalendarEvent } from "../../types/calendar";
 import { groupActivitiesByDate, type ColoredActivity } from "./calendarActivities";
 import { buildMonthGrid, formatCalendarDate, shiftMonth } from "./calendarDates";
@@ -25,6 +25,34 @@ function formatCalendarDayLabel(date: string): string {
   // Split the stored YYYY-MM-DD string. Parsing it with Date would use UTC and can show the previous day.
   const [year, month, day] = date.split("-");
   return `${MONTH_NAMES[Number(month) - 1]} ${Number(day)}, ${year}`;
+}
+
+type PopupPlace = {
+  top: number;
+  left: number;
+  tail: number;
+  above: boolean;
+};
+
+// Place the dashboard cloud next to the clicked date instead of covering the screen.
+function placeCloud(button: HTMLButtonElement, popup: HTMLElement): PopupPlace {
+  const day = button.getBoundingClientRect();
+  const width = popup.offsetWidth;
+  const height = popup.offsetHeight;
+  const gap = 10;
+  const margin = 8;
+  // Keep the cloud on screen when the date is near the left or right edge.
+  const left = Math.max(margin, Math.min(day.left + day.width / 2 - width / 2, window.innerWidth - width - margin));
+  const belowTop = day.bottom + gap;
+  // Flip above the date only when the cloud would otherwise leave the viewport.
+  const above = belowTop + height > window.innerHeight - margin && day.top - gap - height > margin;
+  return {
+    top: above ? day.top - gap - height : belowTop,
+    left,
+    // The pointer still aims at the date after the cloud is shifted inward.
+    tail: Math.min(Math.max(day.left + day.width / 2 - left, 16), Math.max(width - 16, 16)),
+    above,
+  };
 }
 
 function formatActivityTime(time: string | null): string | null {
@@ -98,6 +126,11 @@ export default function CalendarMonth({
   onDeleteSession,
 }: CalendarMonthProps) {
   const selectedHeadingId = useId();
+  // Names the cloud for assistive technology through its date heading.
+  const popupHeadingId = useId();
+  const popupRef = useRef<HTMLDivElement>(null);
+  // The date button the cloud should stay attached to.
+  const anchorButtonRef = useRef<HTMLButtonElement | null>(null);
   const [visibleYear, setVisibleYear] = useState(year);
   const [visibleMonth, setVisibleMonth] = useState(month);
   // A parent can still choose the starting month. The buttons then move this copy.
@@ -109,6 +142,10 @@ export default function CalendarMonth({
   const weeks = buildMonthGrid(visibleYear, visibleMonth);
   const activitiesByDate = useMemo(() => groupActivitiesByDate(events), [events]);
   const [selectedDate, setSelectedDate] = useState<string | null>(null);
+  // The compact dashboard calendar opens a cloud. The full calendar uses the panel below.
+  const [popupOpen, setPopupOpen] = useState(false);
+  // Null until the cloud has been measured, so it is not painted at the corner first.
+  const [popupPlace, setPopupPlace] = useState<PopupPlace | null>(null);
   const [pendingDeleteId, setPendingDeleteId] = useState<number | null>(null);
   // After a save, show the session's own date without making the student click it.
   useEffect(() => {
@@ -124,6 +161,8 @@ export default function CalendarMonth({
       if (error instanceof RangeError) return;
       throw error;
     }
+    // A cloud for the old month should not stay open over the new one.
+    setPopupOpen(false);
     setVisibleYear(next.year);
     setVisibleMonth(next.month);
   }
@@ -135,6 +174,56 @@ export default function CalendarMonth({
     ? selectedDate
     : null;
   const selectedActivities = visibleDate ? activitiesByDate.get(visibleDate)?.activities ?? [] : [];
+  // The cloud grows with its list, so a new count means it must be measured again.
+  const popupActivityCount = selectedActivities.length;
+
+  // Measure before paint, then follow the date when the page resizes or scrolls.
+  useLayoutEffect(() => {
+    if (!popupOpen || !anchorButtonRef.current || !popupRef.current) return;
+    const button = anchorButtonRef.current;
+    const popup = popupRef.current;
+    const update = () => {
+      const next = placeCloud(button, popup);
+      // Reuse the same object when nothing moved, so measuring does not retrigger itself.
+      setPopupPlace((current) => (
+        current
+        && current.top === next.top
+        && current.left === next.left
+        && current.tail === next.tail
+        && current.above === next.above
+          ? current
+          : next
+      ));
+    };
+    update();
+    window.addEventListener("resize", update);
+    window.addEventListener("scroll", update, true);
+    return () => {
+      window.removeEventListener("resize", update);
+      window.removeEventListener("scroll", update, true);
+    };
+  }, [popupOpen, visibleDate, popupActivityCount]);
+
+  // Dismiss the cloud from outside it. Another date is handled by that date's own click.
+  useEffect(() => {
+    if (!popupOpen) return;
+    function onPointerDown(event: PointerEvent) {
+      const target = event.target;
+      if (!(target instanceof Node)) return;
+      if (popupRef.current?.contains(target) || anchorButtonRef.current?.contains(target)) return;
+      if (target instanceof Element && target.closest(".calendar-day-button")) return;
+      setPopupOpen(false);
+    }
+    function onKeyDown(event: KeyboardEvent) {
+      if (event.key === "Escape") setPopupOpen(false);
+    }
+    document.addEventListener("pointerdown", onPointerDown);
+    document.addEventListener("keydown", onKeyDown);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown);
+      document.removeEventListener("keydown", onKeyDown);
+    };
+  }, [popupOpen]);
 
   return (
     <div className={`calendar-month calendar-month-${variant}`}>
@@ -170,7 +259,15 @@ export default function CalendarMonth({
                   isToday ? "calendar-day-today" : "",
                   isSelected ? "calendar-day-selected" : "",
                 ].filter(Boolean).join(" ")}
-                onClick={() => setSelectedDate(day.date)}
+                onClick={(event) => {
+                  setSelectedDate(day.date);
+                  if (variant === "compact") {
+                    anchorButtonRef.current = event.currentTarget;
+                    // Clear the previous spot so the cloud is measured against this date.
+                    setPopupPlace(null);
+                    setPopupOpen(true);
+                  }
+                }}
               >
                 <span className="calendar-day-number">{day.dayNumber}</span>
                 {activities.length > 0 && (
@@ -198,6 +295,34 @@ export default function CalendarMonth({
           })}
         </div>
       ))}
+      {/* Stay hidden until placeCloud has a position, or the cloud flashes at the corner. */}
+      {variant === "compact" && popupOpen && visibleDate && (
+        <div
+          ref={popupRef}
+          className={popupPlace?.above ? "calendar-day-popup calendar-day-popup-above" : "calendar-day-popup"}
+          role="dialog"
+          aria-labelledby={popupHeadingId}
+          style={{
+            top: popupPlace?.top ?? 0,
+            left: popupPlace?.left ?? 0,
+            visibility: popupPlace ? "visible" : "hidden",
+            "--tail": popupPlace ? `${popupPlace.tail}px` : "50%",
+          }}
+        >
+          <div className="calendar-popup-header">
+            <h2 id={popupHeadingId}>{formatCalendarDayLabel(visibleDate)}</h2>
+            {/* The visible control is a cross. The label keeps the button name for assistive technology. */}
+            <button type="button" aria-label="Close" onClick={() => setPopupOpen(false)}>×</button>
+          </div>
+          {selectedActivities.length > 0 ? (
+            <ActivityList activities={selectedActivities} />
+          ) : (
+            <p>No activities on this day.</p>
+          )}
+        </div>
+      )}
+      {/* The full calendar lists the day under the grid, so it does not use the cloud. */}
+      {variant === "full" && (
       <section className="calendar-selected" aria-live="polite" aria-labelledby={selectedHeadingId}>
         {visibleDate ? (
           <>
@@ -225,6 +350,7 @@ export default function CalendarMonth({
           </>
         )}
       </section>
+      )}
     </div>
   );
 }

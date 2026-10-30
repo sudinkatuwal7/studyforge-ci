@@ -1,3 +1,4 @@
+import "../../test/dialogMock";
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
@@ -99,8 +100,12 @@ describe("CalendarMonth", () => {
     render(<CalendarMonth year={2026} month={10} events={[task]} variant="compact" />);
 
     await user.click(screen.getByRole("button", { name: /Sunday, October 18, 2026, 1 activity/ }));
-    const selected = screen.getByRole("region", { name: "October 18, 2026" });
+    const selected = screen.getByRole("dialog", { name: "October 18, 2026" });
     expect(within(selected).getByText("Read chapter")).toBeInTheDocument();
     expect(within(selected).getByText("Task")).toBeInTheDocument();
+    await user.click(within(selected).getByRole("button", { name: "Close" }));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Monday, October 19, 2026/ }));
+    expect(within(screen.getByRole("dialog")).getByText("No activities on this day.")).toBeInTheDocument();
   });
 });

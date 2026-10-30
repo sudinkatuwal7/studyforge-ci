@@ -3,6 +3,92 @@
   color: var(--muted);
 }
 
+/* A small cloud fixed to the clicked date. Fixed keeps it out of the calendar card's scroll box. */
+.calendar-day-popup {
+  position: fixed;
+  z-index: 30;
+  box-sizing: border-box;
+  width: 13.5rem;
+  margin: 0;
+  overflow: visible;
+  padding: 0.7rem 0.85rem 0.8rem;
+  border: 1px solid #efe6dc;
+  border-radius: 1.35rem;
+  background: #fffdfb;
+  color: var(--navy);
+  box-shadow: 0 10px 28px #26334d29;
+}
+
+/* A rotated square becomes the pointer. --tail aims it at the date. */
+.calendar-day-popup::before {
+  content: "";
+  position: absolute;
+  left: var(--tail, 50%);
+  width: 0.7rem;
+  height: 0.7rem;
+  background: #fffdfb;
+  border: 1px solid #efe6dc;
+  transform: translateX(-50%) rotate(45deg);
+}
+
+.calendar-day-popup:not(.calendar-day-popup-above)::before {
+  top: -0.4rem;
+  border-right: 0;
+  border-bottom: 0;
+}
+
+.calendar-day-popup-above::before {
+  bottom: -0.4rem;
+  border-top: 0;
+  border-left: 0;
+}
+
+.calendar-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.45rem;
+}
+
+.calendar-popup-header h2 {
+  margin: 0;
+  font-size: 0.85rem;
+}
+
+.calendar-popup-header button {
+  display: grid;
+  place-items: center;
+  width: 1.35rem;
+  height: 1.35rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: #f4efe8;
+  color: var(--muted);
+  font: inherit;
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+/* Scroll a long day inside the cloud so the pointer is not clipped. */
+.calendar-day-popup .calendar-activities {
+  gap: 0.45rem;
+  max-height: 9rem;
+  overflow-y: auto;
+}
+
+.calendar-day-popup .calendar-activity {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.95rem;
+}
+
+.calendar-day-popup .calendar-activity-title {
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
 .calendar-month {
   display: flex;
   flex-direction: column;

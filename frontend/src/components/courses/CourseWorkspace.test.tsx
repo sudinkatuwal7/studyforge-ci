@@ -39,7 +39,10 @@ it("switches sections without reloading materials or hiding chat and supports ke
   expect(listConversations).toHaveBeenCalled();
   expect(listConversationUploads).toHaveBeenCalled();
   fireEvent.click(screen.getByRole("tab", { name: "Materials" }));
-  await waitFor(() => expect(screen.getByLabelText("Document file")).toBeVisible());
+  await waitFor(() => expect(screen.getByRole("button", { name: "Choose files" })).toBeVisible());
+  expect(screen.queryByRole("heading", { name: "Course tasks" })).not.toBeInTheDocument();
+  fireEvent.click(screen.getByRole("tab", { name: "Tasks" }));
+  expect(screen.getByRole("heading", { name: "Course tasks" })).toBeVisible();
   expect(vi.mocked(listDocuments)).toHaveBeenCalledTimes(before);
 });
 

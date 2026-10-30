@@ -16,9 +16,10 @@ type Props<T extends StatusDocument> = {
   courseId?: number; conversationId?: number; accessToken: string | null;
   onStatusChange?: (document: T) => void;
   getStatus?: (id: number, token: string, signal: AbortSignal) => Promise<T>;
+  compact?: boolean;
 };
 
-export default function DocumentStatus<T extends StatusDocument>({ tracked, courseId, conversationId, accessToken, onStatusChange, getStatus }: Props<T>) {
+export default function DocumentStatus<T extends StatusDocument>({ tracked, courseId, conversationId, accessToken, onStatusChange, getStatus, compact }: Props<T>) {
   const [document, setDocument] = useState<StatusDocument | null>(tracked.snapshot);
   // Keep the latest callback available without restarting the status polling loop.
   const notify = useRef(onStatusChange);
@@ -91,11 +92,14 @@ export default function DocumentStatus<T extends StatusDocument>({ tracked, cour
     };
   }, [accessToken, courseId, conversationId, tracked.id, tracked.snapshot, refreshRequest, getStatus]);
 
-  return (
-    <section className="document-status" aria-label="Uploaded document">
-      <h3>{document?.name ?? tracked.name}</h3>
+  const refresh = canRefresh && accessToken ? <button type="button" disabled={checking} onClick={() => {
+    setNotice("");
+    setCanRefresh(false);
+    setRefreshRequest((value) => value + 1);
+  }}>Refresh status</button> : null;
+  const liveStatus = (
       <div role="status" aria-live="polite">
-        <p>Status: <strong>{document?.status ?? "Not yet checked"}</strong></p>
+        {!compact && <p>Status: <strong>{document?.status ?? "Not yet checked"}</strong></p>}
         {document?.status === "PENDING" && <p>Your document is saved and waiting to be processed.</p>}
         {document?.status === "PROCESSING" && <p>Your document is being processed.</p>}
         {document?.status === "READY" && <p>Your document is ready.</p>}
@@ -103,11 +107,20 @@ export default function DocumentStatus<T extends StatusDocument>({ tracked, cour
         {!accessToken ? <p className="document-error">Your session has ended. Sign in again to check this document.</p> : notice && <p className="document-error">{notice}</p>}
         {checking && accessToken && <p>Checking status…</p>}
       </div>
-      {canRefresh && accessToken && <button type="button" disabled={checking} onClick={() => {
-        setNotice("");
-        setCanRefresh(false);
-        setRefreshRequest((value) => value + 1);
-      }}>Refresh status</button>}
+  );
+
+  // The materials list shows a short status label, so the longer sentences stay out of the row.
+  if (compact) return <>
+    <div className="document-status document-status-compact">{liveStatus}</div>
+    {document?.status === "FAILED" && document.error?.message && <p className="document-error">{document.error.message}</p>}
+    {refresh}
+  </>;
+
+  return (
+    <section className="document-status" aria-label="Uploaded document">
+      <h3>{document?.name ?? tracked.name}</h3>
+      {liveStatus}
+      {refresh}
     </section>
   );
 }

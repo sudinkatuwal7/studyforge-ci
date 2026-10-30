@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { DocumentRequestError, listDocuments } from "../../api/documents";
 import { useAuth } from "../../context/AuthContext";
 import type { TrackedDocument } from "../../types/document";
@@ -22,6 +22,8 @@ function Materials({ courseId, accessToken, view, onMaterialsChange }: Props & {
   const [error, setError] = useState("");
   const [notice, setNotice] = useState("");
   const [reload, setReload] = useState(0);
+  const [query, setQuery] = useState("");
+  const searchId = useId();
   const removed = useRef(new Set<number>());
 
   useEffect(() => {
@@ -51,6 +53,9 @@ function Materials({ courseId, accessToken, view, onMaterialsChange }: Props & {
   const selectable = materials.map((item) => ({ id: String(item.id), documentId: item.id, available: true }));
   const retained = reconcileSelection(selectable, selectedId === null ? [] : [String(selectedId)], 1)[0];
   const selected = retained ? Number(retained) : materials[0]?.id;
+  const search = query.trim().toLowerCase();
+  const matchesSearch = (name: string) => !search || name.toLowerCase().includes(search);
+  const visibleMaterials = materials.filter((item) => matchesSearch(item.name));
 
   return <section className="course-materials" aria-labelledby={`course-${courseId}-materials`}>
     <h3 id={`course-${courseId}-materials`}>{view === "notes" ? "Study notes" : "Course materials"}</h3>
@@ -68,9 +73,16 @@ function Materials({ courseId, accessToken, view, onMaterialsChange }: Props & {
       setLoading(true); setReload((value) => value + 1);
     }}>Retry loading materials</button></div>}
     {!loading && !error && !materials.length && <p>No materials uploaded yet.</p>}
-    <ul className="material-list">
-      {/* Notes display only the selected material; Materials displays the entire list. */}
-      {materials.map((tracked) => <li key={tracked.id} hidden={view === "notes" && tracked.id !== selected}><MaterialItem view={view} tracked={tracked} courseId={courseId} accessToken={accessToken}
+    <div className="material-library">
+      <div className="material-library-toolbar" hidden={view === "notes" || materials.length === 0}>
+        <h4 id={`course-${courseId}-library`}>Materials</h4>
+        <label htmlFor={searchId}>Search materials</label>
+        <input id={searchId} type="search" value={query} placeholder="Search by name" onChange={(event) => setQuery(event.target.value)} />
+        {!loading && !error && materials.length > 0 && visibleMaterials.length === 0 && <p>No materials match that search.</p>}
+      </div>
+    <ul className="material-list" aria-labelledby={view === "notes" ? undefined : `course-${courseId}-library`}>
+      {/* Notes display only the selected material. Search hides other names without unmounting them. */}
+      {materials.map((tracked) => <li key={tracked.id} hidden={(view === "notes" && tracked.id !== selected) || (view !== "notes" && !matchesSearch(tracked.name))}><MaterialItem view={view} tracked={tracked} courseId={courseId} accessToken={accessToken}
         onStatusChange={(document) => setMaterials((current) => current.map((item) => item.id === document.id ? { ...item, snapshot: document } : item))}
         onRenamed={(document) => setMaterials((current) => current.map((item) => item.id === document.id ? document : item))}
         onDeleted={() => {
@@ -79,5 +91,6 @@ function Materials({ courseId, accessToken, view, onMaterialsChange }: Props & {
           setNotice("Material deleted.");
         }} /></li>)}
     </ul>
+    </div>
   </section>;
 }

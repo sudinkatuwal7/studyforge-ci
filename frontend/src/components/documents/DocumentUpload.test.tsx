@@ -47,6 +47,12 @@ describe("PDF upload and status", () => {
       "accept", expect.stringContaining(".pdf,.docx,.pptx"),
     );
   });
+  it("selects a file dropped on the upload area", () => {
+    render(tree());
+    const zone = screen.getByRole("heading", { name: "Upload course materials" }).closest(".document-drop");
+    fireEvent.drop(zone!, { dataTransfer: { files: [new File(["%PDF"], "Dropped.pdf", { type: "application/pdf" })] } });
+    expect(screen.getByText("Selected: Dropped.pdf")).toBeInTheDocument();
+  });
   it("requires a file and blocks invalid selections before a request", async () => {
     render(tree());
     fireEvent.click(screen.getByRole("button", { name: "Upload document" }));

@@ -12,6 +12,10 @@ type ListState =
   | { status: "ready"; courses: Course[] };
 
 const COURSE_TONES = ["lavender", "sage", "peach", "blue"] as const;
+const COURSE_IMAGES = [
+  "coding", "reading", "studying", "idea", "laptop",
+  "teaching", "graduate", "sleeping", "confused",
+] as const;
 
 function CourseList({
   refreshKey,
@@ -75,10 +79,21 @@ function CourseList({
           {state.courses.map((course, index) => (
             <li key={course.id}>
               <Link className="course-card" to={`/courses/${course.id}`}>
-                <span className={`course-icon course-icon-${COURSE_TONES[index % COURSE_TONES.length]}`} aria-hidden="true">
-                  <CourseGlyph index={index} />
-                </span>
-                <strong>{course.name}</strong>
+                {embedded ? (
+                  <img
+                    className="course-card-image"
+                    src={`${import.meta.env.BASE_URL}images/course-icons/pandu-${COURSE_IMAGES[course.id % COURSE_IMAGES.length]}.png`}
+                    alt=""
+                    loading="lazy"
+                    width="460"
+                    height="241"
+                  />
+                ) : (
+                  <span className={`course-icon course-icon-${COURSE_TONES[index % COURSE_TONES.length]}`} aria-hidden="true">
+                    <CourseGlyph index={index} />
+                  </span>
+                )}
+                <strong title={course.name}>{course.name}</strong>
                 {course.description !== "" && <p>{course.description}</p>}
                 <span className="course-card-action">Open course →</span>
               </Link>

@@ -16,4 +16,6 @@ export type TrackedDocument = {
   id: number;
   name: string;
   snapshot: StudyDocument | null;
+  // Present for a file chosen in this visit. The document API does not return a byte size.
+  sizeBytes?: number;
 };

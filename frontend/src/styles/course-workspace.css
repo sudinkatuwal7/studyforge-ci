@@ -1,24 +1,38 @@
 /* Keep the course route within the viewport so content and Pandu can scroll independently. */
 .app-shell-course { height: 100dvh; min-height: 0; overflow: hidden; }
-.app-shell-course > .workspace { display: flex; flex-direction: column; min-height: 0; padding-bottom: 1.5rem; }
-.course-workspace { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 1.1rem; }
+/* Less space above the course page so Pandu starts nearer the top bar. */
+.app-shell-course > .workspace { display: flex; flex-direction: column; min-height: 0; padding-top: .75rem; padding-bottom: .75rem; }
+.app-shell-course .topbar { margin-bottom: .5rem; }
+/* No gap here: the header used to sit above Pandu and push the panel down. */
+.course-workspace { display: flex; flex-direction: column; flex: 1; min-height: 0; gap: 0; }
 .course-workspace * { box-sizing: border-box; }
-.course-workspace-header { flex: none; }
-.course-workspace-header a { color: #56658a; font-size: .85rem; text-decoration: none; }
-.course-workspace-header h2 { margin: .4rem 0 .2rem; font-size: clamp(1.3rem, 2vw, 1.9rem); overflow-wrap: anywhere; }
+.course-workspace-header { grid-area: header; min-width: 0; }
+/* Pill treatment so the way back to the dashboard is easier to see than the course title. */
+.course-workspace-header a { display: inline-flex; align-items: center; padding: .4rem .85rem; border-radius: 999px; background: #e4def8; color: #32286e; font-size: 1rem; font-weight: 700; text-decoration: none; }
+.course-workspace-header a:hover { background: #d4cbf3; }
+.course-workspace-header h2 { margin: .55rem 0 .2rem; font-size: clamp(1.3rem, 2vw, 1.9rem); overflow-wrap: anywhere; }
 .course-workspace-header p { max-height: 3rem; overflow: auto; }
-/* Keep the toggle row fixed so the closed assistant matches its open size. */
-.course-workspace-grid { --toggle-row: 2.75rem; position: relative; flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 2fr) minmax(20rem, 1fr); grid-template-rows: var(--toggle-row) minmax(0, 1fr); grid-template-areas: ". toggle" "content assistant"; gap: .5rem 1.2rem; }
-.course-workspace-grid-collapsed { grid-template-columns: minmax(0, 1fr); grid-template-areas: "toggle" "content"; }
-.assistant-toggle { display: inline-flex; align-items: center; gap: .35rem; grid-area: toggle; justify-self: end; align-self: center; height: var(--toggle-row); }
+/* Pandu fills the right column from the top. The toggle sits on the panel instead of reserving a row above it. */
+.course-workspace-grid { position: relative; flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(0, 2fr) minmax(20rem, 1fr); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "header assistant" "content assistant"; gap: .75rem 1rem; }
+.course-workspace-grid-collapsed { grid-template-columns: minmax(0, 1fr); grid-template-areas: "header" "content"; }
+/* Leave room for the collapse control once it sits on the header instead of on Pandu. */
+.course-workspace-grid-collapsed .course-workspace-header { padding-right: 9.5rem; }
+/* Overlay the control so it does not add a blank row above the chat. */
+.assistant-toggle { position: absolute; top: .55rem; right: .55rem; z-index: 2; display: inline-flex; align-items: center; gap: .35rem; }
 .course-content { grid-area: content; }
-.course-assistant { grid-area: assistant; min-width: 0; min-height: 0; }
-.course-assistant[inert] { position: absolute; top: calc(var(--toggle-row) + .5rem); right: 0; bottom: 0; width: max(20rem, calc((100% - 1.2rem) / 3)); visibility: hidden; pointer-events: none; }
+.course-assistant { grid-area: assistant; min-width: 0; min-height: 0; margin: 0; }
+/* Stay mounted while closed, but do not take a column. */
+.course-assistant[inert] { position: absolute; top: 0; right: 0; bottom: 0; width: max(20rem, calc((100% - 1rem) / 3)); visibility: hidden; pointer-events: none; }
+/* Keep Pandu's name clear of the overlaid collapse control. */
+.course-chat .chat-header { padding-right: 9rem; }
 .course-content, .course-chat { border: 1px solid #e7e6ee; border-radius: 1.2rem; background: white; min-width: 0; min-height: 0; overflow: hidden; }
 .course-content { display: flex; flex-direction: column; }
 .course-workspace button, .course-workspace select, .course-workspace textarea { font: inherit; }
 .course-workspace button { border: 1px solid #ddddeb; border-radius: .65rem; padding: .5rem .8rem; background: #f5f3fc; color: #384466; cursor: pointer; }
 .course-workspace button:hover:not(:disabled) { background: #e9e3fa; }
+/* Match the Pandu panel so the control does not sit as a white chip on the cream. */
+.course-workspace .assistant-toggle { border-color: #f0e6cf; background: #FFF9ED; color: #3d3424; }
+.course-workspace .assistant-toggle:hover:not(:disabled) { background: #f6edd8; }
 .course-workspace button:disabled { opacity: .55; cursor: not-allowed; }
 .course-workspace :focus-visible { outline: 2px solid #6775c5; outline-offset: 3px; }
 .course-workspace [hidden] { display: none !important; }
@@ -27,14 +41,30 @@
 .course-tabs button[aria-selected="true"] { background: #e9e3fa; color: #473c70; }
 .soon-badge { display: inline-block; font-size: .7rem; background: #e6f0eb; color: #416353; border-radius: 2rem; padding: .15rem .45rem; margin-left: .35rem; }
 .course-content-scroll { overflow: auto; min-height: 0; padding: 1.2rem; overscroll-behavior: contain; }
+.course-workspace .course-materials { margin-top: 0; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; }
 .course-workspace .course-materials > h3 { margin-top: 0; }
-.course-workspace .document-upload { width: 100%; border: 1px dashed #c5c4db; background: #f8f7fc; border-radius: 1rem; }
-.course-workspace .material-item { border: 1px solid #e3e6ed; border-radius: 1rem; }
+.course-workspace .document-upload { width: 100%; max-width: none; margin: 0 0 .85rem; padding: 0; border: 0; background: transparent; }
+.course-workspace .document-choose { border-color: #4e448f; background: #5f52b5; color: #fff; }
+.course-workspace .document-choose:hover:not(:disabled) { background: #4e448f; }
+.course-workspace .document-add-link { border-color: #6f62c4; background: #ece7ff; color: #2c2460; }
+.course-workspace .document-add-link:hover:not(:disabled) { background: #ddd6fb; }
+.course-workspace .document-another { border-color: #4e448f; background: #5f52b5; color: #fff; }
+.course-workspace .document-another:hover:not(:disabled) { background: #4e448f; }
+.material-library { display: grid; gap: .55rem; }
+.material-library-toolbar { display: grid; gap: .35rem; }
+.material-library-toolbar h4 { margin: 0; font-size: .95rem; }
+.material-library-toolbar input { width: 100%; padding: .4rem .6rem; border: 1px solid #c5c4db; border-radius: .55rem; background: #fff; }
+.course-workspace .material-item { border: 1px solid #e3e6ed; border-radius: .7rem; padding: .35rem .65rem; }
+.course-workspace .material-options { padding: 0; border: 0; background: transparent; color: #5c657a; }
+.course-workspace .material-options:hover:not(:disabled) { background: #ece7ff; }
+.course-workspace .material-menu-panel button { border: 0; background: transparent; color: #384466; }
+.course-workspace .material-menu-panel button:hover:not(:disabled) { background: #f5f3fc; }
+.course-workspace .material-menu-panel .material-delete { color: #b3261e; background: transparent; }
 .course-workspace .document-status { border: 0; padding: 0; margin: 0 0 .5rem; }
 .course-workspace .document-status h3 { font-size: 1rem; }
 .course-workspace .document-status strong { background: #edf3fa; padding: .15rem .4rem; border-radius: .4rem; font-size: .8rem; }
 .course-workspace select { display: block; max-width: 100%; width: 100%; padding: .6rem; margin-top: .4rem; border: 1px solid #ddddeb; border-radius: .6rem; background: white; }
-.course-quizzes h3 { margin-top: 0; }
+.course-quizzes h3, .course-workspace .todo-list h2 { margin-top: 0; }
 .quiz-setup fieldset, .quiz-question { border: 1px solid #e3e6ed; border-radius: 1rem; margin: 0 0 1rem; padding: .8rem 1rem; min-width: 0; }
 .quiz-setup legend, .quiz-question legend { padding: 0 .35rem; font-weight: 600; }
 .quiz-question legend { font-size: 1.05rem; line-height: 1.4; }
@@ -63,13 +93,14 @@
 .quiz-explanation { color: #4a5368; }
 .demo-chat-container { position: relative; width: 100%; height: 100%; min-height: 0; min-width: 0; }
 /* Pandu's message history expands while sources and the composer remain reachable. */
-.course-chat { height: 100%; display: flex; flex-direction: column; border-radius: 1rem; }
-.chat-header { display: flex; align-items: center; gap: .7rem; padding: .85rem 1rem; background: #fff; border-bottom: 1px solid #eeedf3; flex: none; }
+.course-chat { height: 100%; display: flex; flex-direction: column; border-radius: 1rem; background: #FFF9ED; }
+.chat-header { display: flex; align-items: center; gap: .7rem; padding: .85rem 1rem; background: #FFF9ED; border-bottom: 1px solid #f0e6cf; flex: none; }
 .chat-header h3 { margin: 0; font-size: 1rem; line-height: 1.2; }
 .chat-header p { margin-top: .12rem; font-size: .72rem; color: #707a91; }
-.pandu-avatar { display: inline-grid; place-items: center; flex: none; color: #5f52b5; background: #f0edff; border-radius: 50%; }
-.pandu-avatar-small { width: 2.25rem; height: 2.25rem; font-size: 1.1rem; }
-.pandu-avatar-large { width: 5rem; height: 5rem; font-size: 2rem; box-shadow: inset 0 0 0 10px #f7f5ff; }
+/* The StudyForge panda is Pandu's logo in the header and above the greeting. */
+.pandu-avatar { display: block; flex: none; object-fit: contain; background: transparent; }
+.pandu-avatar-small { width: 3rem; height: 3rem; }
+.pandu-avatar-large { width: 9rem; height: 9rem; }
 .chat-demo-badge { margin-left: auto; padding: .2rem .5rem; color: #625a7c; background: #f4f2fa; border-radius: 999px; font-size: .67rem; font-weight: 700; letter-spacing: .02em; text-transform: uppercase; }
 .chat-messages { flex: 1; min-height: 0; overflow: auto; padding: 1rem; overscroll-behavior: contain; }
 .chat-empty { display: flex; align-items: center; flex-direction: column; justify-content: center; min-height: 100%; padding: 1.5rem .25rem; text-align: center; }
@@ -93,16 +124,21 @@
 .chat-references summary { width: fit-content; padding: .3rem .55rem; border-radius: 999px; color: #616b82; cursor: pointer; list-style: none; }
 .chat-references summary::-webkit-details-marker { display: none; }
 .chat-references summary:hover { background: #f4f2fa; }
-.reference-options { position: absolute; right: 0; bottom: calc(100% + .4rem); left: 0; z-index: 2; max-height: 14rem; padding: .75rem; border: 1px solid #e1e1ea; border-radius: .8rem; overflow: auto; background: #fff; box-shadow: 0 12px 30px #26334d1a; }
-.reference-options fieldset { border: 0; padding: .35rem 0; margin: 0; min-width: 0; }
-.reference-options legend { font-weight: 700; }
-.reference-options label { display: flex; gap: .45rem; margin-top: .45rem; overflow-wrap: anywhere; }
+.reference-options { position: absolute; right: 0; bottom: calc(100% + .4rem); left: 0; z-index: 2; max-height: 14rem; padding: .5rem .6rem; border: 1px solid #e1e1ea; border-radius: .8rem; overflow: auto; background: #fff; box-shadow: 0 12px 30px #26334d1a; }
+.reference-options fieldset { border: 0; padding: .2rem 0; margin: 0; min-width: 0; }
+.reference-options legend { font-weight: 700; font-size: .68rem; }
+.reference-options label { display: flex; gap: .35rem; margin-top: .3rem; overflow-wrap: anywhere; }
 .reference-options small { display: block; color: var(--muted); }
-.reference-actions { display: flex; flex-wrap: wrap; gap: .4rem; }
+.reference-actions { display: flex; flex-wrap: wrap; gap: .3rem; }
+.course-workspace .reference-options button { padding: .15rem .4rem; border: 1px solid #6f62c4; border-radius: .4rem; background: #ece7ff; color: #2c2460; font-size: .68rem; font-weight: 700; }
+.course-workspace .reference-options button:hover:not(:disabled) { background: #ddd6fb; }
+.course-workspace .reference-upload { padding: .1rem .35rem; border-color: #4e448f; background: #5f52b5; color: #fff; font-size: .62rem; }
+.course-workspace .reference-upload:hover:not(:disabled) { background: #4e448f; }
 .reference-options .document-status { margin-top: .4rem; padding: .45rem; border: 1px solid #e7e6ee; border-radius: .5rem; }
 .reference-options .document-status h3 { overflow-wrap: anywhere; }
 .reference-options progress { display: block; max-width: 100%; width: 100%; }
 .reference-options button { max-width: 100%; white-space: normal; }
+.reference-upload { width: fit-content; white-space: nowrap; }
 .course-workspace .chat-composer { display: grid; grid-template-columns: minmax(0, 1fr) 2.4rem; align-items: center; gap: .45rem; width: auto; margin: 0 .75rem .75rem; padding: .42rem; border: 1px solid #dedee8; border-radius: .8rem; background: #fff; box-shadow: 0 3px 14px #26334d0d; flex: none; }
 .chat-composer-label { position: absolute; width: 1px; height: 1px; padding: 0; border: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; }
 .chat-composer textarea { width: 100%; min-height: 2.35rem; max-height: 7rem; padding: .55rem .65rem; border: 0; resize: none; background: transparent; line-height: 1.25; }
@@ -119,22 +155,23 @@
   .app-shell-course { grid-template-rows: minmax(0, 1fr); }
   .app-shell-course > .workspace { padding: .6rem; }
   .app-shell-course .topbar { flex: none; }
-  .course-workspace { gap: .5rem; }
+  .course-workspace { gap: 0; }
   .course-workspace-header h2 { margin: .15rem 0; }
   .course-workspace-header p { display: none; }
-  .course-workspace-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: var(--toggle-row) minmax(0, 1fr); grid-template-areas: "toggle" "assistant"; gap: .6rem; }
+  /* On a narrow screen the header stays above Pandu so My courses remains reachable. */
+  .course-workspace-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "header" "assistant"; gap: .6rem; }
   .course-workspace-grid:not(.course-workspace-grid-collapsed) .course-content { position: absolute; inset: 0; visibility: hidden; pointer-events: none; }
-  .course-workspace-grid-collapsed { grid-template-rows: minmax(0, 1fr); grid-template-areas: "content"; }
-  .course-assistant[inert] { top: calc(var(--toggle-row) + .6rem); left: 0; width: auto; }
-  .course-workspace-grid-collapsed .assistant-toggle { position: absolute; right: 1rem; bottom: 1rem; z-index: 2; box-shadow: 0 8px 22px #26334d33; }
+  .course-workspace-grid-collapsed { grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "header" "content"; }
+  .course-assistant[inert] { top: 0; left: 0; width: auto; }
+  .course-workspace-grid-collapsed .assistant-toggle { top: auto; right: 1rem; bottom: 1rem; box-shadow: 0 8px 22px #26334d33; }
   .course-workspace-grid-collapsed .course-content-scroll { padding-bottom: 4rem; }
   .course-tabs { padding: .35rem; }
   .course-content-scroll { padding: .8rem; }
   .chat-header { padding: .45rem .7rem; gap: .5rem; }
   .chat-header h3 { font-size: .85rem; }
   .chat-messages { padding: .5rem .7rem; }
-  .pandu-avatar-small { width: 1.8rem; height: 1.8rem; }
-  .pandu-avatar-large { width: 2.5rem; height: 2.5rem; font-size: 1.1rem; }
+  .pandu-avatar-small { width: 3rem; height: 3rem; }
+  .pandu-avatar-large { width: 9rem; height: 9rem; }
   .chat-empty { min-height: auto; padding: .35rem; }
   .chat-empty h4 { margin: .3rem 0 .1rem; font-size: .9rem; }
   .chat-empty > p, .chat-empty > small { display: none; }

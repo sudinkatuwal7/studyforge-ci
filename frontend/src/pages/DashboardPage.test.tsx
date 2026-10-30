@@ -1,3 +1,4 @@
+import "../test/dialogMock";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
@@ -71,17 +72,17 @@ describe("dashboard calendar", () => {
     );
 
     await user.click(await screen.findByRole("button", { name: /October 22, 2026, 1 activity/ }));
-    const selected = screen.getByRole("region", { name: "October 22, 2026" });
+    const selected = screen.getByRole("dialog", { name: "October 22, 2026" });
     expect(within(selected).getByText("Task")).toBeInTheDocument();
     expect(within(selected).getByText("Read chapter")).toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /October 18, 2026, 1 activity/ }));
-    const sessionDay = screen.getByRole("region", { name: "October 18, 2026" });
+    const sessionDay = screen.getByRole("dialog", { name: "October 18, 2026" });
     expect(within(sessionDay).getByText("Study session")).toBeInTheDocument();
     expect(within(sessionDay).getByText("Review graphs")).toBeInTheDocument();
   });
 
-  it("shows the next three upcoming activities and follows to-do completion", async () => {
+  it("updates the upcoming count when a dated task is completed", async () => {
     const user = userEvent.setup();
     const later: TodoItem = { ...datedTask, id: 5, title: "Later assignment", due_date: "2026-10-30" };
     const quiz: TodoItem = { ...datedTask, id: 6, title: "Quiz prep", due_date: "2026-10-23" };
@@ -95,23 +96,15 @@ describe("dashboard calendar", () => {
       </MemoryRouter>,
     );
 
-    const upcoming = await screen.findByRole("region", { name: "Upcoming" });
-    await waitFor(() => expect(within(upcoming).getAllByRole("listitem")).toHaveLength(3));
-    const titles = within(upcoming).getAllByRole("listitem").map((item) => item.textContent);
-    expect(titles[0]).toContain("Review graphs");
-    expect(titles[1]).toContain("Read chapter");
-    expect(titles[2]).toContain("Quiz prep");
-    expect(within(upcoming).queryByText("Later assignment")).not.toBeInTheDocument();
-    expect(within(upcoming).queryByText("Old homework")).not.toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Study summary" })).toHaveTextContent("Upcoming4");
+    const summary = await screen.findByRole("region", { name: "Study summary" });
+    await waitFor(() => expect(summary).toHaveTextContent("Upcoming4"));
+    expect(screen.queryByRole("region", { name: "Upcoming" })).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("checkbox", { name: "Mark complete: Read chapter" }));
-    await waitFor(() => expect(within(upcoming).getByText("Later assignment")).toBeInTheDocument());
-    expect(within(upcoming).queryByText("Read chapter")).not.toBeInTheDocument();
-    expect(screen.getByRole("region", { name: "Study summary" })).toHaveTextContent("Upcoming3");
+    await waitFor(() => expect(summary).toHaveTextContent("Upcoming3"));
 
     await user.click(screen.getByRole("button", { name: /October 22, 2026, 1 activity/ }));
-    const selected = screen.getByRole("region", { name: "October 22, 2026" });
+    const selected = screen.getByRole("dialog", { name: "October 22, 2026" });
     expect(within(selected).getByText("Read chapter")).toBeInTheDocument();
     expect(selected.querySelector(".calendar-activity-completed")).not.toBeNull();
   });
