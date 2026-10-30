@@ -1,3 +1,5 @@
+from unittest import mock
+
 from django.contrib.auth import get_user_model
 from rest_framework.test import APITestCase
 
@@ -5,6 +7,7 @@ from apps.courses.models import Course
 from apps.documents.models import Document
 
 from apps.knowledge.models import Chunk
+from apps.notes.llm import LLMError
 
 
 class StudyGuideEndpointTests(APITestCase):
@@ -87,6 +90,22 @@ class StudyGuideEndpointTests(APITestCase):
 
         self.assertEqual(response.status_code, 409)
         self.assertEqual(response.json()["code"], "DOCUMENT_NOT_READY")
+
+    def test_model_failure_returns_503_instead_of_crashing(self):
+        Chunk.objects.create(
+            owner=self.user,
+            document=self.document,
+            page_number=1,
+            content="Normalization organises tables to remove redundant data.",
+        )
+
+        with mock.patch("apps.notes.services.get_client") as get_client:
+            get_client.return_value.generate.side_effect = LLMError("down")
+            with self.assertLogs("apps.notes.views", level="ERROR"):
+                response = self.client.post(self.url)
+
+        self.assertEqual(response.status_code, 503)
+        self.assertEqual(response.json()["code"], "STUDY_GUIDE_GENERATION_FAILED")
 
     def test_unauthenticated_request_is_rejected(self):
         """The endpoint must reject requests without an authenticated user."""

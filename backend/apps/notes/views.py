@@ -1,12 +1,16 @@
+import logging
+
 from rest_framework import status
 from rest_framework.permissions import IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from apps.documents.models import Document
 
+from apps.notes.llm import LLMError
 from apps.notes.selectors import get_owned_document
 from apps.notes.serializers import StudyGuideSerializer
 from apps.notes.services import EmptyDocumentError, generate_study_guide
+logger = logging.getLogger(__name__)
 
 
 class StudyGuideView(APIView):
@@ -38,6 +42,17 @@ class StudyGuideView(APIView):
                     "detail": "No readable text could be extracted from this document.",
                 },
                 status=status.HTTP_409_CONFLICT,
+            )
+        except LLMError:
+            # Upstream outage, rate limit, or output that failed validation.
+            # Nothing was saved, so the student can simply retry.
+            logger.exception("Study guide generation failed for document %s", document.pk)
+            return Response(
+                {
+                    "code": "STUDY_GUIDE_GENERATION_FAILED",
+                    "detail": "The study guide could not be generated right now. Please try again.",
+                },
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
 
         return Response(StudyGuideSerializer(guide).data, status=status.HTTP_200_OK)
