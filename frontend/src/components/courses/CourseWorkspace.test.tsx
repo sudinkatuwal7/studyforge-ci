@@ -46,6 +46,20 @@ it("switches sections without reloading materials or hiding chat and supports ke
   expect(vi.mocked(listDocuments)).toHaveBeenCalledTimes(before);
 });
 
+it("offers multi-material notes in the Notes tab, separate from material management", async () => {
+  vi.mocked(listDocuments).mockResolvedValueOnce([
+    { id: 81, course_id: 42, name: "Cells.pdf", status: "READY", error: null, created_at: "2026-10-01", updated_at: "2026-10-01" },
+    { id: 82, course_id: 42, name: "Genes.pdf", status: "READY", error: null, created_at: "2026-10-01", updated_at: "2026-10-01" },
+  ]);
+  render(<MemoryRouter><CourseWorkspace course={course} /></MemoryRouter>);
+  fireEvent.click(await screen.findByRole("tab", { name: "Notes" }));
+  const panel = within(screen.getByRole("tabpanel", { name: "Notes" }));
+  expect(await panel.findByRole("checkbox", { name: "Cells.pdf" })).toBeVisible();
+  expect(panel.getByRole("checkbox", { name: "Genes.pdf" })).toBeVisible();
+  expect(screen.queryByRole("button", { name: "Choose files" })).not.toBeInTheDocument();
+  expect(screen.getByRole("tab", { name: "Notes" })).toHaveAttribute("aria-controls", "panel-Notes");
+});
+
 it("collapses and restores the assistant without losing the course content", async () => {
   render(<MemoryRouter><CourseWorkspace course={course} /></MemoryRouter>);
   await screen.findByText("No materials uploaded yet.");

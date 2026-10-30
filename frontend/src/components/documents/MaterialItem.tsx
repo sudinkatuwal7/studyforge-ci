@@ -1,16 +1,15 @@
 import { useEffect, useId, useRef, useState, type SubmitEvent } from "react";
 import { deleteDocument, DocumentRequestError, renameDocument } from "../../api/documents";
 import type { StudyDocument, TrackedDocument } from "../../types/document";
-import StudyGuidePanel from "../notes/StudyGuidePanel";
 import DocumentStatus from "./DocumentStatus";
 
 type Props = {
   tracked: TrackedDocument; courseId: number; accessToken: string;
-  view?: "materials" | "notes"; onStatusChange?: (document: StudyDocument) => void;
+  onStatusChange?: (document: StudyDocument) => void;
   onRenamed: (document: TrackedDocument) => void; onDeleted: () => void;
 };
 
-export default function MaterialItem({ tracked, courseId, accessToken, onRenamed, onDeleted, view, onStatusChange }: Props) {
+export default function MaterialItem({ tracked, courseId, accessToken, onRenamed, onDeleted, onStatusChange }: Props) {
   const inputId = useId();
   const [mode, setMode] = useState<"view" | "rename" | "delete">("view");
   const [menuOpen, setMenuOpen] = useState(false);
@@ -70,8 +69,6 @@ export default function MaterialItem({ tracked, courseId, accessToken, onRenamed
   function submit(event: SubmitEvent<HTMLFormElement>) { event.preventDefault(); void mutate("rename"); }
 
   return <article className="material-item" aria-label={tracked.name} aria-busy={busy}>
-    {/* Material management stays mounted but is hidden while viewing study notes. */}
-    <div hidden={view === "notes"}>
     <DocumentStatus key={revision} compact tracked={tracked} courseId={courseId} accessToken={accessToken} onStatusChange={onStatusChange} />
     <div className="material-row">
       <FileTypeIcon />
@@ -97,16 +94,11 @@ export default function MaterialItem({ tracked, courseId, accessToken, onRenamed
       <div className="material-actions"><button disabled={busy} type="submit">{busy ? "Saving..." : "Save name"}</button><button type="button" disabled={busy} onClick={cancel}>Cancel</button></div>
     </form>}
     {mode === "delete" && <div role="group" aria-label="Confirm deletion">
-      <p>Delete {tracked.name}? This permanently removes its source file, processing results, and study notes. Existing quizzes are kept.</p>
+      <p>Delete {tracked.name}? This permanently removes its source file, processing results, and study notes, including combined notes made from it. Existing quizzes are kept.</p>
       <div className="material-actions"><button className="material-delete" disabled={busy} onClick={() => void mutate("delete")}>{busy ? "Deleting..." : "Confirm delete"}</button><button disabled={busy} onClick={cancel}>Cancel</button></div>
     </div>}
     {error && <p role="alert" className="document-error">{error}</p>}
     {notice && <p role="status">{notice}</p>}
-    </div>
-    {/* Notes use the real study-guide API only after processing completes. */}
-    <div hidden={view === "materials"}>
-    {view === "notes" && tracked.snapshot?.status !== "READY" ? <p>Study notes will be available when this material is ready.</p> : <StudyGuidePanel documentId={tracked.id} documentName={tracked.name} accessToken={accessToken} />}
-    </div>
     </article>;
 }
 

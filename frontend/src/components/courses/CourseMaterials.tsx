@@ -4,19 +4,17 @@ import { useAuth } from "../../context/AuthContext";
 import type { TrackedDocument } from "../../types/document";
 import DocumentUpload from "../documents/DocumentUpload";
 import MaterialItem from "../documents/MaterialItem";
-import { reconcileSelection } from "../chat/chatReferences";
 
-// One material source powers both workspace tabs and Pandu's reference picker.
-type Props = { courseId: number; view?: "materials" | "notes"; onMaterialsChange?: (materials: TrackedDocument[]) => void };
+// One material source powers the Materials, Notes, and Quizzes tabs and Pandu's reference picker.
+type Props = { courseId: number; onMaterialsChange?: (materials: TrackedDocument[]) => void };
 
-export default function CourseMaterials({ courseId, view, onMaterialsChange }: Props) {
+export default function CourseMaterials({ courseId, onMaterialsChange }: Props) {
   const { accessToken, user } = useAuth();
   if (!user || !accessToken) return <p role="alert">Sign in to view course materials.</p>;
-  return <Materials key={`${courseId}:${user.id}:${accessToken}`} courseId={courseId} accessToken={accessToken} view={view} onMaterialsChange={onMaterialsChange} />;
+  return <Materials key={`${courseId}:${user.id}:${accessToken}`} courseId={courseId} accessToken={accessToken} onMaterialsChange={onMaterialsChange} />;
 }
 
-function Materials({ courseId, accessToken, view, onMaterialsChange }: Props & { accessToken: string }) {
-  const [selectedId, setSelectedId] = useState<number | null>(null);
+function Materials({ courseId, accessToken, onMaterialsChange }: Props & { accessToken: string }) {
   const [materials, setMaterials] = useState<TrackedDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -49,24 +47,16 @@ function Materials({ courseId, accessToken, view, onMaterialsChange }: Props & {
   // Publish uploads, renames, deletions, and status updates without another API request.
   useEffect(() => { onMaterialsChange?.(materials); }, [materials, onMaterialsChange]);
 
-  // Fall back to the first material if the previous selection was removed.
-  const selectable = materials.map((item) => ({ id: String(item.id), documentId: item.id, available: true }));
-  const retained = reconcileSelection(selectable, selectedId === null ? [] : [String(selectedId)], 1)[0];
-  const selected = retained ? Number(retained) : materials[0]?.id;
   const search = query.trim().toLowerCase();
   const matchesSearch = (name: string) => !search || name.toLowerCase().includes(search);
   const visibleMaterials = materials.filter((item) => matchesSearch(item.name));
 
   return <section className="course-materials" aria-labelledby={`course-${courseId}-materials`}>
-    <h3 id={`course-${courseId}-materials`}>{view === "notes" ? "Study notes" : "Course materials"}</h3>
-    {view === "notes" && materials.length > 0 && <label>Choose a material<select value={selected} onChange={(event) => setSelectedId(Number(event.target.value))}>{materials.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>}
-    {/* Keep uploads in the Materials tab while preserving this mounted component. */}
-    <div hidden={view === "notes"}>
+    <h3 id={`course-${courseId}-materials`}>Course materials</h3>
     <DocumentUpload courseId={courseId} onDocumentSaved={(document) => {
       setNotice("");
       setMaterials((current) => [document, ...current.filter((item) => item.id !== document.id)]);
     }} />
-    </div>
     {loading && <p role="status">Loading materials...</p>}
     {notice && <p role="status">{notice}</p>}
     {error && <div><p role="alert" className="document-error">{error}</p><button disabled={loading} onClick={() => {
@@ -74,15 +64,15 @@ function Materials({ courseId, accessToken, view, onMaterialsChange }: Props & {
     }}>Retry loading materials</button></div>}
     {!loading && !error && !materials.length && <p>No materials uploaded yet.</p>}
     <div className="material-library">
-      <div className="material-library-toolbar" hidden={view === "notes" || materials.length === 0}>
+      <div className="material-library-toolbar" hidden={materials.length === 0}>
         <h4 id={`course-${courseId}-library`}>Materials</h4>
         <label htmlFor={searchId}>Search materials</label>
         <input id={searchId} type="search" value={query} placeholder="Search by name" onChange={(event) => setQuery(event.target.value)} />
         {!loading && !error && materials.length > 0 && visibleMaterials.length === 0 && <p>No materials match that search.</p>}
       </div>
-    <ul className="material-list" aria-labelledby={view === "notes" ? undefined : `course-${courseId}-library`}>
-      {/* Notes display only the selected material. Search hides other names without unmounting them. */}
-      {materials.map((tracked) => <li key={tracked.id} hidden={(view === "notes" && tracked.id !== selected) || (view !== "notes" && !matchesSearch(tracked.name))}><MaterialItem view={view} tracked={tracked} courseId={courseId} accessToken={accessToken}
+    <ul className="material-list" aria-labelledby={`course-${courseId}-library`}>
+      {/* Search hides other names without unmounting them. */}
+      {materials.map((tracked) => <li key={tracked.id} hidden={!matchesSearch(tracked.name)}><MaterialItem tracked={tracked} courseId={courseId} accessToken={accessToken}
         onStatusChange={(document) => setMaterials((current) => current.map((item) => item.id === document.id ? { ...item, snapshot: document } : item))}
         onRenamed={(document) => setMaterials((current) => current.map((item) => item.id === document.id ? document : item))}
         onDeleted={() => {

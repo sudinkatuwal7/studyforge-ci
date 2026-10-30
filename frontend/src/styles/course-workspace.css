@@ -64,7 +64,7 @@
 .course-workspace .document-status h3 { font-size: 1rem; }
 .course-workspace .document-status strong { background: #edf3fa; padding: .15rem .4rem; border-radius: .4rem; font-size: .8rem; }
 .course-workspace select { display: block; max-width: 100%; width: 100%; padding: .6rem; margin-top: .4rem; border: 1px solid #ddddeb; border-radius: .6rem; background: white; }
-.course-quizzes h3, .course-workspace .todo-list h2 { margin-top: 0; }
+.course-quizzes h3, .course-notes h3, .course-workspace .todo-list h2 { margin-top: 0; }
 .quiz-setup fieldset, .quiz-question { border: 1px solid #e3e6ed; border-radius: 1rem; margin: 0 0 1rem; padding: .8rem 1rem; min-width: 0; }
 .quiz-setup legend, .quiz-question legend { padding: 0 .35rem; font-weight: 600; }
 .quiz-question legend { font-size: 1.05rem; line-height: 1.4; }
@@ -91,6 +91,16 @@
 .quiz-option-correct { color: #1b5e20; font-weight: 600; }
 .quiz-option-wrong { color: #b3261e; }
 .quiz-explanation { color: #4a5368; }
+.notes-sources { margin: .2rem 0 1rem; color: #707a91; font-size: .9rem; overflow-wrap: anywhere; }
+.notes-overview { margin: 0 0 1rem; }
+.notes-section { margin-bottom: 1rem; padding: .8rem 1rem; border: 1px solid #e3e6ed; border-radius: 1rem; }
+.notes-section h4 { margin: 0 0 .5rem; font-size: 1.05rem; }
+.notes-section h5 { margin: .8rem 0 .3rem; font-size: .9rem; color: #4a5368; }
+.notes-section dl { margin: 0; }
+.notes-section dl > div { margin-bottom: .5rem; }
+.notes-section dt { font-weight: 600; }
+.notes-section dd { margin: 0; color: #4a5368; }
+.notes-section ul { margin: 0; padding-left: 1.2rem; }
 .demo-chat-container { position: relative; width: 100%; height: 100%; min-height: 0; min-width: 0; }
 /* Pandu's message history expands while sources and the composer remain reachable. */
 .course-chat { height: 100%; display: flex; flex-direction: column; border-radius: 1rem; background: #FFF9ED; }
