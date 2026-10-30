@@ -5,7 +5,12 @@ import os
 
 from openai import APIError, OpenAI, RateLimitError
 
-from apps.notes.llm.base import InvalidLLMOutput, LLMError, validate_study_guide
+from apps.notes.llm.base import (
+    InvalidLLMOutput,
+    LLMError,
+    validate_course_notes,
+    validate_study_guide,
+)
 
 DEFAULT_MODEL = "gpt-4o-mini"
 
@@ -52,6 +57,55 @@ Respond with a JSON object in exactly this shape:
 }"""
 
 
+NOTES_SYSTEM_PROMPT = """You write organized study notes from a student's own course
+materials. Each material appears under a "## " heading carrying its title. The
+materials may come from any subject and any format.
+
+Grounding rules:
+- Use ONLY the material text provided. Never add outside knowledge, even where
+  it is incomplete, or where you know more about the topic than it does.
+- Every item must be traceable to something the materials actually state.
+- If the materials are too thin to support many items, return fewer rather than
+  padding with generic knowledge about the topic.
+
+Organizing rules:
+- Group by topic. Where several materials cover the same topic, consolidate them
+  into one section instead of repeating it per material.
+- Keep distinct topics in the order the materials present them.
+
+Writing rules:
+- Write for a student revising this material for an exam.
+- Preserve the materials' own terminology, notation and symbols.
+- Reproduce formulas, dates, names, figures and citations exactly as written.
+- No meta-commentary. Never write "the document", "this lecture", "the material",
+  "the text", "the author", "covers", or "discusses".
+
+Respond with a JSON object in exactly this shape:
+
+{
+  "overview": "A short paragraph stating the main ideas across all materials.",
+  "sections": [
+    {
+      "heading": "A short topic heading",
+      "key_concepts": [
+        {"term": "A term the materials explain",
+         "explanation": "One or two sentences, as the materials define it."}
+      ],
+      "points": ["A specific claim worth remembering that is not already a key
+        concept: a rule, relationship, result, condition, exception, or date."]
+    }
+  ]
+}"""
+
+
+NOTES_SINGLE_INSTRUCTION = "Write study notes from the materials below."
+NOTES_MERGE_INSTRUCTION = (
+    "Below is a JSON list of partial notes taken from consecutive batches of the "
+    "same materials, in order. Consolidate them into one set of notes, merging "
+    "duplicate sections and concepts and keeping the most specific wording."
+)
+
+
 def _split_into_sections(text, limit):
     """Split text into chunks under `limit`, cutting on blank lines.
 
@@ -82,6 +136,38 @@ def _split_into_sections(text, limit):
     return sections
 
 
+def _labelled_parts(title, text, limit):
+    """One material as blocks under `limit`, each headed by the material's title."""
+    # Room for the "## title (part N)" line that goes on each part.
+    parts = _split_into_sections(text, max(limit - len(title) - 32, 1))
+    if len(parts) == 1:
+        return [f"## {title}\n\n{parts[0]}"]
+    return [f"## {title} (part {i})\n\n{part}" for i, part in enumerate(parts, start=1)]
+
+
+def _batch_materials(sources, limit):
+    """Group (title, text) materials into labelled batches under `limit`.
+
+    A long material is split first, and every part keeps its title, so the
+    model always knows which material it is reading. Small materials share a
+    batch, which keeps the number of calls close to total size / limit.
+    """
+    batches, current = [], ""
+
+    for title, text in sources:
+        for block in _labelled_parts(title, text, limit):
+            if current and len(current) + len(block) + 2 > limit:
+                batches.append(current)
+                current = block
+            else:
+                current = f"{current}\n\n{block}" if current else block
+
+    if current:
+        batches.append(current)
+
+    return batches
+
+
 class OpenAIStudyGuideLLM:
     def __init__(self):
         key = os.environ.get("OPENAI_API_KEY")
@@ -100,6 +186,34 @@ class OpenAIStudyGuideLLM:
         if len(text) <= self._single_pass_limit:
             return self._generate_once(text)
         return self._generate_staged(text)
+
+    def generate_notes(self, sources):
+        """Build notes from (title, text) materials, in the order given."""
+        batches = _batch_materials(sources, self._single_pass_limit)
+        print(f"[llm] notes: {len(batches)} batches", flush=True)
+
+        if len(batches) == 1:
+            return self._generate_notes_once(batches[0], NOTES_SINGLE_INSTRUCTION)
+
+        partials = [
+            self._generate_notes_once(batch, NOTES_SINGLE_INSTRUCTION)
+            for batch in batches
+        ]
+
+        combined = json.dumps(partials, ensure_ascii=False)
+        if len(combined) > self._single_pass_limit:
+            raise LLMError("Partial notes are too large to merge in one call")
+        return self._generate_notes_once(combined, NOTES_MERGE_INSTRUCTION)
+
+    def _generate_notes_once(self, text, instruction):
+        raw = self._complete(NOTES_SYSTEM_PROMPT, instruction, text, "materials")
+
+        try:
+            payload = json.loads(raw)
+        except json.JSONDecodeError as exc:
+            raise InvalidLLMOutput(f"Model did not return JSON: {raw[:200]}") from exc
+
+        return validate_course_notes(payload)
 
     def _generate_staged(self, text):
         """Summarise section by section, then summarise the summaries.
@@ -141,15 +255,18 @@ class OpenAIStudyGuideLLM:
         else:
             instruction = "Build a study guide from the document below."
 
+        return self._complete(SYSTEM_PROMPT, instruction, text, "document")
+
+    def _complete(self, system_prompt, instruction, text, tag):
         try:
             response = self._client.chat.completions.create(
                 model=self.name,
                 response_format={"type": "json_object"},
                 messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "system", "content": system_prompt},
                     {
                         "role": "user",
-                        "content": f"{instruction}\n\n<document>\n{text}\n</document>",
+                        "content": f"{instruction}\n\n<{tag}>\n{text}\n</{tag}>",
                     },
                 ],
             )
