@@ -10,10 +10,10 @@ from rest_framework_simplejwt.tokens import AccessToken
 
 from apps.conversations.models import Conversation
 from apps.documents.models import Document
+from apps.documents.selectors import get_owned_course_documents
 from apps.knowledge.scope import question_documents
 from apps.knowledge.services import _authorized_document_ids
 from apps.notes.selectors import get_owned_document
-from apps.quizzes.selectors import get_owned_course_documents
 
 pytestmark = pytest.mark.django_db(transaction=True)
 

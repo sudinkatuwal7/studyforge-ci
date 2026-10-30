@@ -6,10 +6,10 @@ from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from apps.documents.models import Document
+from apps.documents.selectors import get_owned_course_documents
 from apps.quizzes.llm import LLMError
 from apps.quizzes.selectors import (
     get_owned_course,
-    get_owned_course_documents,
     get_owned_quiz,
     get_owned_submission,
 )
