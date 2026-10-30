@@ -1,4 +1,5 @@
 import { useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { CSSProperties } from "react";
 import type { CalendarEvent } from "../../types/calendar";
 import { groupActivitiesByDate, type ColoredActivity } from "./calendarActivities";
 import { buildMonthGrid, formatCalendarDate, shiftMonth } from "./calendarDates";
@@ -307,7 +308,7 @@ export default function CalendarMonth({
             left: popupPlace?.left ?? 0,
             visibility: popupPlace ? "visible" : "hidden",
             "--tail": popupPlace ? `${popupPlace.tail}px` : "50%",
-          }}
+          } as CSSProperties}
         >
           <div className="calendar-popup-header">
             <h2 id={popupHeadingId}>{formatCalendarDayLabel(visibleDate)}</h2>
