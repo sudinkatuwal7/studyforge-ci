@@ -56,8 +56,20 @@ Sizes are characters, roughly 4 per token. Generation runs inside one HTTP reque
 
 | Setting | Default | Effect |
 |---|---|---|
-| `NOTES_SINGLE_PASS_LIMIT` | 200000 | Maximum size of one model call. A larger selection is split into batches, summarized batch by batch, and merged in a final call. A material split across batches keeps its title on every part. |
-| `NOTES_TOTAL_CHAR_LIMIT` | 600000 | Maximum selection size. Larger selections are rejected, not sampled, so notes never silently omit content. |
+| `NOTES_BATCH_CHAR_LIMIT` | 60000 | Maximum size of one notes batch. A larger selection is split into batches, summarized batch by batch, and merged in a final call. A material split across batches keeps its title on every part. |
+| `NOTES_TOTAL_CHAR_LIMIT` | 300000 | Maximum selection size. Larger selections are rejected, not sampled, so notes never knowingly omit content. |
+
+A batch of about 200,000 characters occasionally came back as a brief summary
+that dropped most topics while still being valid, which is why batches are small.
+
+### Output checks
+
+Each model call is repeated once if its output is invalid or too short for its
+input (under 2% of a batch, or 25% of a merge, for input of 20,000 characters or
+more). If the repeat also fails, the request returns 503 and saves nothing.
+
+The length check catches a model that skimmed. It cannot prove that every topic
+was covered, so a selection can still lose individual details.
 
 ## Read saved notes
 

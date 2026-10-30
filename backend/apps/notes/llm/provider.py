@@ -19,6 +19,18 @@ DEFAULT_MODEL = "gpt-4o-mini"
 # staged path can be exercised without a 200-page PDF.
 DEFAULT_SINGLE_PASS_LIMIT = 200_000
 
+# One notes call. Against gpt-4o-mini, batches near 200,000 characters sometimes
+# came back as a brief summary that dropped most topics. 60,000 did not.
+DEFAULT_NOTES_BATCH_LIMIT = 60_000
+
+# Output shorter than this share of the input means the model skimmed instead
+# of taking notes. Healthy batches ran near 5%; the one that lost its topics, 1%.
+# Merging condenses far less, so healthy merges stayed close to their input.
+NOTES_BATCH_MIN_OUTPUT_RATIO = 0.02
+NOTES_MERGE_MIN_OUTPUT_RATIO = 0.25
+# Short input can legitimately produce short notes, so it is not checked.
+NOTES_MIN_CHECKED_INPUT = 20_000
+
 SYSTEM_PROMPT = """You build study guides from a student's own course materials.
 The material may come from any subject and any format — lecture slides, prose
 readings, problem sets, lab handouts, transcripts.
@@ -73,17 +85,24 @@ Organizing rules:
   into one section instead of repeating it per material.
 - Keep distinct topics in the order the materials present them.
 
+Coverage rules:
+- Cover every topic the materials explain, including those near the end. Longer
+  input needs more sections and items, never a shorter summary.
+- Keep every distinct definition, rule, value, date and name.
+
 Writing rules:
 - Write for a student revising this material for an exam.
 - Preserve the materials' own terminology, notation and symbols.
 - Reproduce formulas, dates, names, figures and citations exactly as written.
 - No meta-commentary. Never write "the document", "this lecture", "the material",
-  "the text", "the author", "covers", or "discusses".
+  "the materials", "these notes", "the text", "the author", "covers", "focuses",
+  or "discusses".
 
 Respond with a JSON object in exactly this shape:
 
 {
-  "overview": "A short paragraph stating the main ideas across all materials.",
+  "overview": "A short paragraph stating the main ideas themselves, not what the
+    materials are about.",
   "sections": [
     {
       "heading": "A short topic heading",
@@ -102,7 +121,8 @@ NOTES_SINGLE_INSTRUCTION = "Write study notes from the materials below."
 NOTES_MERGE_INSTRUCTION = (
     "Below is a JSON list of partial notes taken from consecutive batches of the "
     "same materials, in order. Consolidate them into one set of notes, merging "
-    "duplicate sections and concepts and keeping the most specific wording."
+    "duplicate sections and concepts and keeping the most specific wording. Remove "
+    "only true duplicates: keep every distinct concept, value, and point."
 )
 
 
@@ -178,6 +198,9 @@ class OpenAIStudyGuideLLM:
         self._single_pass_limit = int(
             os.environ.get("NOTES_SINGLE_PASS_LIMIT", DEFAULT_SINGLE_PASS_LIMIT)
         )
+        self._notes_batch_limit = int(
+            os.environ.get("NOTES_BATCH_CHAR_LIMIT", DEFAULT_NOTES_BATCH_LIMIT)
+        )
         # A hung request must not hang a worker forever. max_retries handles
         # transient 429s and 5xx without us writing a retry loop.
         self._client = OpenAI(api_key=key, timeout=60.0, max_retries=2)
@@ -189,7 +212,7 @@ class OpenAIStudyGuideLLM:
 
     def generate_notes(self, sources):
         """Build notes from (title, text) materials, in the order given."""
-        batches = _batch_materials(sources, self._single_pass_limit)
+        batches = _batch_materials(sources, self._notes_batch_limit)
         print(f"[llm] notes: {len(batches)} batches", flush=True)
 
         if len(batches) == 1:
@@ -200,13 +223,37 @@ class OpenAIStudyGuideLLM:
             for batch in batches
         ]
 
+        # Partial notes are short, so one merge call has far more room than a
+        # batch does. The batch limit guards coverage, not the model's capacity.
         combined = json.dumps(partials, ensure_ascii=False)
         if len(combined) > self._single_pass_limit:
             raise LLMError("Partial notes are too large to merge in one call")
-        return self._generate_notes_once(combined, NOTES_MERGE_INSTRUCTION)
+        return self._generate_notes_once(
+            combined, NOTES_MERGE_INSTRUCTION, NOTES_MERGE_MIN_OUTPUT_RATIO
+        )
 
-    def _generate_notes_once(self, text, instruction):
+    def _generate_notes_once(self, text, instruction, min_output_ratio=NOTES_BATCH_MIN_OUTPUT_RATIO):
+        """One model call, repeated once if the output is unusable.
+
+        Model output varies from call to call, so a retry usually succeeds, and
+        one bad item should not throw away every batch before it. Provider
+        failures are not repeated here; the client already retried those.
+        """
+        try:
+            return self._read_notes(text, instruction, min_output_ratio)
+        except InvalidLLMOutput as exc:
+            print(f"[llm] retrying notes call: {str(exc)[:120]}", flush=True)
+            return self._read_notes(text, instruction, min_output_ratio)
+
+    def _read_notes(self, text, instruction, min_output_ratio):
         raw = self._complete(NOTES_SYSTEM_PROMPT, instruction, text, "materials")
+
+        # Valid notes that dropped most topics pass every shape check, so a
+        # failed request is the only signal the student would ever get.
+        if len(text) >= NOTES_MIN_CHECKED_INPUT and len(raw) < len(text) * min_output_ratio:
+            raise InvalidLLMOutput(
+                f"Output of {len(raw)} characters is too short for {len(text)} of input"
+            )
 
         try:
             payload = json.loads(raw)

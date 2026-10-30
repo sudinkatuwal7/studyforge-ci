@@ -1,4 +1,5 @@
 import hashlib
+import json
 import os
 from unittest import mock
 
@@ -15,6 +16,7 @@ from apps.knowledge.models import Chunk
 from apps.notes.llm import InvalidLLMOutput, LLMError, validate_course_notes
 from apps.notes.llm.provider import (
     NOTES_MERGE_INSTRUCTION,
+    NOTES_SINGLE_INSTRUCTION,
     OpenAIStudyGuideLLM,
     _batch_materials,
 )
@@ -105,8 +107,12 @@ class BatchMaterialsTests(SimpleTestCase):
 
 
 class ProviderNotesTests(SimpleTestCase):
-    def make_provider(self, limit):
-        env = {"OPENAI_API_KEY": "test", "NOTES_SINGLE_PASS_LIMIT": str(limit)}
+    def make_provider(self, batch_limit=60_000, single_pass_limit=200_000):
+        env = {
+            "OPENAI_API_KEY": "test",
+            "NOTES_BATCH_CHAR_LIMIT": str(batch_limit),
+            "NOTES_SINGLE_PASS_LIMIT": str(single_pass_limit),
+        }
         with mock.patch.dict(os.environ, env), mock.patch("apps.notes.llm.provider.OpenAI"):
             return OpenAIStudyGuideLLM()
 
@@ -129,11 +135,71 @@ class ProviderNotesTests(SimpleTestCase):
         self.assertIn("Membrane", merge.args[0])
         self.assertEqual(merge.args[1], NOTES_MERGE_INSTRUCTION)
 
+    def test_batches_use_the_notes_limit_not_the_study_guide_limit(self):
+        provider = self.make_provider(batch_limit=100, single_pass_limit=10_000)
+        with mock.patch.object(provider, "_generate_notes_once", return_value=VALID_NOTES) as once:
+            provider.generate_notes([("Cells", "a" * 50), ("Genes", "b" * 50)])
+        self.assertEqual(once.call_count, 3)
+
     def test_partial_notes_too_large_to_merge_fail_rather_than_overflow(self):
-        provider = self.make_provider(100)
+        provider = self.make_provider(batch_limit=100, single_pass_limit=100)
         with mock.patch.object(provider, "_generate_notes_once", return_value=VALID_NOTES):
             with self.assertRaises(LLMError):
                 provider.generate_notes([("Cells", "a" * 80), ("Genes", "b" * 80)])
+
+    def test_one_bad_item_is_retried_instead_of_failing_the_run(self):
+        """The real failure: one invalid point rejected a finished 5-call run."""
+        bad = {**VALID_NOTES, "sections": [{**VALID_NOTES["sections"][0], "points": [{"text": "x"}]}]}
+        provider = self.make_provider()
+        with mock.patch.object(provider, "_complete", side_effect=[json.dumps(bad), json.dumps(VALID_NOTES)]) as call:
+            result = provider._generate_notes_once("Cell text.", NOTES_MERGE_INSTRUCTION)
+        self.assertEqual(call.call_count, 2)
+        self.assertEqual(result, VALID_NOTES)
+
+    def test_output_that_stays_invalid_fails_after_one_retry(self):
+        provider = self.make_provider()
+        with mock.patch.object(provider, "_complete", return_value="not json") as call:
+            with self.assertRaises(InvalidLLMOutput):
+                provider._generate_notes_once("Cell text.", NOTES_SINGLE_INSTRUCTION)
+        self.assertEqual(call.call_count, 2)
+
+    def test_provider_failure_is_not_repeated(self):
+        provider = self.make_provider()
+        with mock.patch.object(provider, "_complete", side_effect=LLMError("down")) as call:
+            with self.assertRaises(LLMError):
+                provider._generate_notes_once("Cell text.", NOTES_SINGLE_INSTRUCTION)
+        self.assertEqual(call.call_count, 1)
+
+    def test_valid_but_thin_notes_are_retried(self):
+        """The real failure: 180,000 characters produced valid notes of about 1%."""
+        full = json.dumps({**VALID_NOTES, "overview": "x" * 5_000})
+        provider = self.make_provider()
+        with mock.patch.object(provider, "_complete", side_effect=[json.dumps(VALID_NOTES), full]) as call:
+            result = provider._generate_notes_once("a" * 100_000, NOTES_SINGLE_INSTRUCTION)
+        self.assertEqual(call.call_count, 2)
+        self.assertEqual(len(result["overview"]), 5_000)
+
+    def test_notes_that_stay_thin_fail_instead_of_looking_complete(self):
+        provider = self.make_provider()
+        with mock.patch.object(provider, "_complete", return_value=json.dumps(VALID_NOTES)) as call:
+            with self.assertRaises(InvalidLLMOutput):
+                provider._generate_notes_once("a" * 100_000, NOTES_SINGLE_INSTRUCTION)
+        self.assertEqual(call.call_count, 2)
+
+    def test_a_merge_that_drops_most_of_its_input_is_rejected(self):
+        partial = json.dumps({**VALID_NOTES, "overview": "x" * 15_000})
+        thin_merge = json.dumps({**VALID_NOTES, "overview": "x" * 2_000})
+        provider = self.make_provider(batch_limit=100)
+        with mock.patch.object(provider, "_complete", side_effect=[partial, partial, thin_merge, thin_merge]) as call:
+            with self.assertRaises(InvalidLLMOutput):
+                provider.generate_notes([("Cells", "a" * 50), ("Genes", "b" * 50)])
+        self.assertEqual(call.call_count, 4)
+
+    def test_short_input_may_produce_short_notes(self):
+        provider = self.make_provider()
+        with mock.patch.object(provider, "_complete", return_value=json.dumps(VALID_NOTES)) as call:
+            provider._generate_notes_once("a" * 19_999, NOTES_SINGLE_INSTRUCTION)
+        self.assertEqual(call.call_count, 1)
 
 
 class GenerateCourseNotesTests(TestCase):

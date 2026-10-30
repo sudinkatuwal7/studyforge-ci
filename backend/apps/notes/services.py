@@ -10,8 +10,9 @@ from apps.notes.selectors import build_note_sources, get_ordered_chunks
 
 # Characters, roughly 4 per token. Generation runs inside one HTTP request, so
 # this bounds how many model calls a student can wait on (and the class key can
-# pay for). Overridable so the limit can be tuned without a release.
-DEFAULT_NOTES_TOTAL_CHAR_LIMIT = 600_000
+# pay for): about 6 batches and a merge. Overridable so it can be tuned without
+# a release.
+DEFAULT_NOTES_TOTAL_CHAR_LIMIT = 300_000
 
 
 class EmptyDocumentError(Exception):
