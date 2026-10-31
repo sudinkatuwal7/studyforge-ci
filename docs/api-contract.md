@@ -142,9 +142,12 @@ GET    /api/v1/courses/{id}/
 PATCH  /api/v1/courses/{id}/
 DELETE /api/v1/courses/{id}/
 
-POST   /api/v1/documents/{id}/notes/
-GET    /api/v1/documents/{id}/notes/
+POST   /api/v1/documents/{id}/study-guide/
+POST   /api/v1/courses/{id}/notes/
+GET    /api/v1/notes/{id}/
 ```
+
+Notes and study guides are specified in [notes-api.md](notes-api.md).
 
 ## Course material management (SCRUM-61)
 
@@ -173,7 +176,8 @@ DELETE /api/v1/documents/{id}/
 - **Delete:** returns an empty `204` only after the database transaction commits.
   Locks the Document row before cascading deletion, matching SCRUM-118's
   Document-before-Job lock order. Existing cascades remove application Jobs,
-  Chunks (including their vectors), StudyGuide, and quiz-source join rows.
+  Chunks (including their vectors), StudyGuide, quiz-source join rows, and all
+  CourseNotes built from the document, even when other materials also fed them.
   Quiz records/questions, Course, User, other documents and their resources
   remain. Processing-service Execution rows are not accessed. A callback that
   commits first is subsequently deleted with the document; one that loses the
@@ -730,7 +734,7 @@ Requests without a valid JWT return 401.
 Each Document has exactly one scope: a course material has `course_id` and no
 conversation; a chat upload has `conversation_id` and no `course_id`. A chat upload
 is never returned by normal course material lists or accepted by study-guide,
-quiz, or ordinary RAG document selection. Moving a chat upload into course
+course notes, quiz, or ordinary RAG document selection. Moving a chat upload into course
 materials requires a separate, explicit action; this API does not provide one.
 Deleting a conversation or its course cascades to its uploads. Chat upload files
 are deleted from private storage as part of the database deletion transaction.

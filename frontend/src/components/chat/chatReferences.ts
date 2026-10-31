@@ -1,8 +1,20 @@
 import type { ChatReference } from "../../types/chat";
+import type { TrackedDocument } from "../../types/document";
 
 export type SelectableReference = Pick<ChatReference, "id" | "documentId" | "available">;
 
-// Shared by the single-source Notes picker and multi-source Course Chat/Quiz pickers.
+// Only READY materials have text to work from, so the others stay visible but disabled.
+export function materialReferences(materials: TrackedDocument[]): (SelectableReference & { name: string; status: string })[] {
+  return materials.map((item) => ({
+    id: String(item.id),
+    documentId: item.id,
+    available: item.snapshot?.status === "READY",
+    name: item.name,
+    status: item.snapshot?.status ?? "PENDING",
+  }));
+}
+
+// Shared by the Course Chat, Quiz, and Notes pickers.
 export function reconcileSelection(references: SelectableReference[], selected: string[], limit = 20) {
   const eligible = new Set(references.filter((item) => item.available).map((item) => item.id));
   return [...new Set(selected)].filter((id) => eligible.has(id)).slice(0, limit);

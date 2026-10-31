@@ -4,11 +4,28 @@ The default everywhere except a real run: free, instant, deterministic.
 A failing test then means our code broke, not that a model wandered.
 """
 
-from apps.notes.llm.base import validate_study_guide
+from apps.notes.llm.base import validate_course_notes, validate_study_guide
 
 
 class FakeStudyGuideLLM:
     name = "fake"
+
+    def generate_notes(self, sources):
+        return validate_course_notes(
+            {
+                "overview": f"Fake overview of {len(sources)} materials.",
+                "sections": [
+                    {
+                        "heading": title,
+                        "key_concepts": [
+                            {"term": "Fake term", "explanation": "Fake explanation."}
+                        ],
+                        "points": [f"Fake point from {len(text.split())} words."],
+                    }
+                    for title, text in sources
+                ],
+            }
+        )
 
     def generate(self, text):
         return validate_study_guide(

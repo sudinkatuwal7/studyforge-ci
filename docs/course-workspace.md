@@ -1,8 +1,8 @@
 # Course workspace
 
-The authenticated `/courses/:courseId` page renders Materials, Notes, and Quizzes beside the always-visible course chat partner **Pandu**. Desktop uses a roughly 70/30 content-to-chat split. At 1024px and below, independently scrollable course content is stacked above Pandu. The styling is scoped to course routes.
+The authenticated `/courses/:courseId` page renders Materials, Notes, Quizzes, and Tasks beside the always-visible course chat partner **Pandu**. Desktop uses a roughly 70/30 content-to-chat split. At 1024px and below, independently scrollable course content is stacked above Pandu. The styling is scoped to course routes.
 
-Materials retain real upload, rename, delete, and processing-status polling. Notes reuse the real study-guide endpoint and become available when the selected material reaches `READY`. Tab changes keep the material component mounted, preserving its data and generated notes. Quizzes remain explicitly labeled as unavailable.
+Materials retain real upload, rename, delete, and processing-status polling. Notes and Quizzes each pick from the course's `READY` materials with the shared `MaterialPicker`. Notes call the course notes endpoint in [notes-api.md](notes-api.md), and the open notes are restored after a reload without generating again. Tab changes keep every panel mounted, preserving material data, selections, and generated notes.
 
 ## Pandu presentation
 

@@ -5,6 +5,7 @@ import type { TrackedDocument } from "../../types/document";
 import ConnectedCourseChat from "../chat/ConnectedCourseChat";
 import CourseMaterials from "./CourseMaterials";
 import CourseTasks from "./CourseTasks";
+import NotesPanel from "../notes/NotesPanel";
 import QuizPanel from "../quizzes/QuizPanel";
 import "../../styles/course-workspace.css";
 
@@ -41,14 +42,18 @@ export default function CourseWorkspace({ course }: { course: Course }) {
       <section ref={contentRef} className="course-content" aria-label="Course content">
         <div className="course-tabs" role="tablist" aria-label="Course sections">
           {/* Arrow, Home, and End keys follow the accessible tabs keyboard pattern. */}
-          {tabs.map((name, index) => <button key={name} id={`tab-${name}`} role="tab" aria-selected={tab === name} aria-controls={name === "Quizzes" || name === "Tasks" ? `panel-${name}` : "panel-study"} tabIndex={tab === name ? 0 : -1} onClick={() => setTab(name)} onKeyDown={(event) => {
+          {tabs.map((name, index) => <button key={name} id={`tab-${name}`} role="tab" aria-selected={tab === name} aria-controls={`panel-${name}`} tabIndex={tab === name ? 0 : -1} onClick={() => setTab(name)} onKeyDown={(event) => {
             const next = event.key === "ArrowRight" ? (index + 1) % tabs.length : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : -1;
             if (next >= 0) { event.preventDefault(); setTab(tabs[next]); document.getElementById(`tab-${tabs[next]}`)?.focus(); }
           }}>{name}</button>)}
         </div>
         <div className="course-content-scroll">
-          <div role="tabpanel" id="panel-study" aria-labelledby={tab === "Notes" ? "tab-Notes" : "tab-Materials"} hidden={tab !== "Materials" && tab !== "Notes"}>
-            <CourseMaterials courseId={course.id} view={tab === "Notes" ? "notes" : "materials"} onMaterialsChange={setMaterials} />
+          <div role="tabpanel" id="panel-Materials" aria-labelledby="tab-Materials" hidden={tab !== "Materials"}>
+            <CourseMaterials courseId={course.id} onMaterialsChange={setMaterials} />
+          </div>
+          {/* Stays mounted while hidden so a selection or generation in progress survives a tab switch. */}
+          <div role="tabpanel" id="panel-Notes" aria-labelledby="tab-Notes" hidden={tab !== "Notes"} className="course-notes">
+            <NotesPanel courseId={course.id} materials={materials} />
           </div>
           {/* Stays mounted while hidden so a quiz in progress survives a tab switch. */}
           <div role="tabpanel" id="panel-Quizzes" aria-labelledby="tab-Quizzes" hidden={tab !== "Quizzes"} className="course-quizzes">

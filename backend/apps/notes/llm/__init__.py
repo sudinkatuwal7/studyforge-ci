@@ -3,9 +3,20 @@ names a provider directly."""
 
 import os
 
-from apps.notes.llm.base import InvalidLLMOutput, LLMError, validate_study_guide
+from apps.notes.llm.base import (
+    InvalidLLMOutput,
+    LLMError,
+    validate_course_notes,
+    validate_study_guide,
+)
 
-__all__ = ["get_client", "LLMError", "InvalidLLMOutput", "validate_study_guide"]
+__all__ = [
+    "get_client",
+    "LLMError",
+    "InvalidLLMOutput",
+    "validate_course_notes",
+    "validate_study_guide",
+]
 
 
 def get_client():
