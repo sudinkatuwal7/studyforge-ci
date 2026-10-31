@@ -419,6 +419,37 @@
   font-weight: 500;
 }
 
+.auth-google-signin {
+  display: grid;
+  gap: 0.75rem;
+}
+
+/* Google draws its button in an iframe; keep its height while the script loads. */
+.auth-google-slot {
+  display: flex;
+  justify-content: center;
+  min-height: 2.75rem;
+}
+
+/* Block a second click while a Google sign-in is being sent. */
+.auth-google-slot[aria-busy="true"] {
+  opacity: 0.6;
+  pointer-events: none;
+}
+
+.auth-google-status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  color: var(--ink-soft);
+}
+
+.auth-google-status .spinner {
+  border-color: var(--line);
+  border-top-color: var(--ink);
+}
+
 /* Keep icons full size when a narrow screen squeezes the text. */
 .auth-page button svg,
 .field-icon svg {

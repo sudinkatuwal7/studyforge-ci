@@ -4,6 +4,7 @@ import { getHealth } from "./api/health";
 import { useAuth } from "./context/AuthContext";
 import AppShell from "./components/dashboard/AppShell";
 import AuthLayout from "./components/auth/AuthLayout";
+import { useSignInLock } from "./components/auth/useSignInLock";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import CourseDetailPage from "./pages/CourseDetailPage";
@@ -25,11 +26,20 @@ function App() {
 
   // Which card the signed-out page shows.
   const [authView, setAuthView] = useState<"login" | "register">("login");
+  // Lives here so a request started on one card still blocks the other card.
+  const signInLock = useSignInLock();
+
+  // The new account's email, when sign-up worked but its automatic login did not.
+  const [createdEmail, setCreatedEmail] = useState("");
 
   // Reset to the log in card while signed in, so whenever the session ends the
   // user lands where the signed-out message is shown.
   if (user && authView !== "login") {
     setAuthView("login");
+  }
+  // Forget it once signed in, so the next person on this computer does not see it.
+  if (user && createdEmail) {
+    setCreatedEmail("");
   }
 
   useEffect(() => {
@@ -115,9 +125,17 @@ function App() {
         footer={healthMessage}
       >
         {isRegister ? (
-          <RegisterPage onSignIn={() => setAuthView("login")} />
+          <RegisterPage
+            onSignIn={() => setAuthView("login")}
+            onAccountCreated={setCreatedEmail}
+            signInLock={signInLock}
+          />
         ) : (
-          <LoginPage onCreateAccount={() => setAuthView("register")} />
+          <LoginPage
+            initialEmail={createdEmail}
+            onCreateAccount={() => setAuthView("register")}
+            signInLock={signInLock}
+          />
         )}
       </AuthLayout>
     );
