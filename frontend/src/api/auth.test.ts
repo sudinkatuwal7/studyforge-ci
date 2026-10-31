@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { RefreshRejectedError, accessTokenLifetimeMs, refreshAccessToken } from "./auth";
+import {
+  AuthError,
+  RefreshRejectedError,
+  accessTokenLifetimeMs,
+  loginWithGoogle,
+  refreshAccessToken,
+} from "./auth";
 
 function stubAuthServer(refreshStatus = 200) {
   document.cookie = "csrftoken=test-csrf";
@@ -55,6 +61,113 @@ describe("refreshAccessToken", () => {
     await expect(refreshAccessToken()).rejects.toBeInstanceOf(RefreshRejectedError);
   });
 });
+
+describe("loginWithGoogle", () => {
+  const loginResult = {
+    access: "access-token",
+    user: { id: 7, email: "sam.student@gmail.com", first_name: "Sam", last_name: "Student" },
+  };
+
+  function stubGoogleEndpoint(response: Response) {
+    document.cookie = "csrftoken=test-csrf";
+    const fetch = vi.fn(async (url: string) => {
+      if (url.endsWith("/auth/csrf/")) return Response.json({ status: "ok" });
+      return response;
+    });
+    vi.stubGlobal("fetch", fetch);
+    return fetch;
+  }
+
+  async function googleError(response: Response) {
+    stubGoogleEndpoint(response);
+    const error = await loginWithGoogle("google-id-token").catch((caught: unknown) => caught);
+    expect(error).toBeInstanceOf(AuthError);
+    return error as AuthError;
+  }
+
+  it("posts the Google credential with the CSRF token and returns the session", async () => {
+    const fetch = stubGoogleEndpoint(Response.json(loginResult));
+
+    await expect(loginWithGoogle("google-id-token")).resolves.toEqual(loginResult);
+
+    expect(fetch).toHaveBeenLastCalledWith("http://api.test/api/v1/auth/google/", {
+      method: "POST",
+      credentials: "include",
+      headers: { "Content-Type": "application/json", "X-CSRFToken": "test-csrf" },
+      body: JSON.stringify({ credential: "google-id-token" }),
+    });
+  });
+
+  it.each([
+    [401, { detail: "Google sign-in failed." }, "credentials", "Google sign-in failed. Please try again."],
+    [400, { credential: ["This field may not be blank."] }, "credentials", "Google sign-in failed. Please try again."],
+    [403, { detail: "This account has been deactivated." }, "credentials", "This account has been deactivated."],
+    [409, { detail: "An account with this email already exists." }, "credentials", "An account with this email already exists."],
+    [503, { detail: "Google sign-in is not available right now." }, "unavailable", "Google sign-in is not available right now."],
+    [500, {}, "unavailable", "Something went wrong on our side. Please try again."],
+  ])("turns a %i response into a %s error", async (status, body, kind, message) => {
+    const error = await googleError(Response.json(body, { status }));
+
+    expect(error.kind).toBe(kind);
+    expect(error.message).toBe(message);
+  });
+
+  it("does not call a failed CSRF check a deactivated account", async () => {
+    const error = await googleError(
+      Response.json({ detail: "CSRF Failed: CSRF token missing." }, { status: 403 }),
+    );
+
+    expect(error.kind).toBe("unavailable");
+    expect(error.message).not.toMatch(/deactivated/);
+  });
+
+  describe("when the CSRF step fails", () => {
+    function stubCsrfResponse(response: Response) {
+      const fetch = vi.fn(async () => response);
+      vi.stubGlobal("fetch", fetch);
+      return fetch;
+    }
+
+    function clearCsrfCookie() {
+      document.cookie = "csrftoken=; expires=Thu, 01 Jan 1970 00:00:00 GMT";
+    }
+
+    it("never sends the credential after a non-200 response, even with an old cookie", async () => {
+      document.cookie = "csrftoken=old-csrf";
+      const fetch = stubCsrfResponse(new Response("{}", { status: 500 }));
+
+      const error = await loginWithGoogle("google-id-token").catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(AuthError);
+      expect((error as AuthError).kind).toBe("unavailable");
+      expect((error as AuthError).message).toBe("Something went wrong on our side. Please try again.");
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("never sends the credential when no CSRF cookie was set", async () => {
+      clearCsrfCookie();
+      const fetch = stubCsrfResponse(Response.json({ status: "ok" }));
+
+      const error = await loginWithGoogle("google-id-token").catch((caught: unknown) => caught);
+
+      expect(error).toBeInstanceOf(AuthError);
+      expect((error as AuthError).kind).toBe("unavailable");
+      expect((error as AuthError).message).toBe("Something went wrong on our side. Please try again.");
+      expect(fetch).toHaveBeenCalledTimes(1);
+    });
+  });
+
+
+  it("reports a network failure as unavailable", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Failed to fetch")));
+
+    const error = await loginWithGoogle("google-id-token").catch((caught: unknown) => caught);
+
+    expect(error).toBeInstanceOf(AuthError);
+    expect((error as AuthError).kind).toBe("unavailable");
+  });
+});
+
 
 describe("accessTokenLifetimeMs", () => {
   function token(payload: object) {
