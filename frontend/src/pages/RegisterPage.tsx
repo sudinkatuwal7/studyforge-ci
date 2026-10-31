@@ -1,6 +1,7 @@
 import { type ChangeEvent, type SubmitEvent, useRef, useState } from "react";
 import { AuthError, login, register } from "../api/auth";
 import FormField from "../components/auth/FormField";
+import GoogleSignIn from "../components/auth/GoogleSignIn";
 import {
   ArrowRightIcon,
   EyeIcon,
@@ -9,6 +10,7 @@ import {
   MailIcon,
   UserIcon,
 } from "../components/auth/icons";
+import type { SignInLock } from "../components/auth/useSignInLock";
 import {
   validateEmail,
   validatePassword,
@@ -20,6 +22,10 @@ import { useAuth } from "../context/AuthContext";
 type RegisterPageProps = {
   // Switches back to the log in card.
   onSignIn: () => void;
+  // Reports the saved email when the account exists but automatic login failed.
+  onAccountCreated?: (email: string) => void;
+  // Shared with the other card, so only one sign-in request runs at a time.
+  signInLock: SignInLock;
 };
 
 type Field = "firstName" | "lastName" | "email" | "password" | "confirmPassword";
@@ -60,12 +66,17 @@ const ALL_TOUCHED: Record<Field, boolean> = {
   confirmPassword: true,
 };
 
-export default function RegisterPage({ onSignIn }: RegisterPageProps) {
+export default function RegisterPage({
+  onSignIn,
+  onAccountCreated,
+  signInLock,
+}: RegisterPageProps) {
   const [values, setValues] = useState(EMPTY_VALUES);
   const [touched, setTouched] = useState(UNTOUCHED);
   // Errors returned by the backend, shown until the user edits that field.
   const [serverErrors, setServerErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState("");
+  const [googleError, setGoogleError] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const inputs = useRef<Partial<Record<Field, HTMLInputElement | null>>>({});
@@ -135,10 +146,17 @@ export default function RegisterPage({ onSignIn }: RegisterPageProps) {
     focusFirst(byField);
   }
 
+  // A new Google attempt or error replaces any error from the form.
+  function showGoogleError(message: string) {
+    setGoogleError(message);
+    setFormError("");
+  }
+
   async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setTouched(ALL_TOUCHED);
     setFormError("");
+    setGoogleError("");
     setServerErrors({});
 
     if (Object.values(clientErrors).some(Boolean)) {
@@ -146,6 +164,7 @@ export default function RegisterPage({ onSignIn }: RegisterPageProps) {
       return;
     }
 
+    if (!signInLock.acquire()) return;
     setSubmitting(true);
 
     let email: string;
@@ -160,6 +179,7 @@ export default function RegisterPage({ onSignIn }: RegisterPageProps) {
       email = user.email;
     } catch (error) {
       showRegisterError(error);
+      signInLock.release();
       setSubmitting(false);
       return;
     }
@@ -168,10 +188,13 @@ export default function RegisterPage({ onSignIn }: RegisterPageProps) {
     try {
       saveLogin(await login(email, values.password));
     } catch {
+      onAccountCreated?.(email);
       setFormError(
         "Your account was created, but we couldn't log you in automatically. Please log in.",
       );
       setSubmitting(false);
+    } finally {
+      signInLock.release();
     }
   }
 
@@ -254,7 +277,7 @@ export default function RegisterPage({ onSignIn }: RegisterPageProps) {
         <button
           type="submit"
           className="auth-submit"
-          disabled={submitting}
+          disabled={signInLock.locked}
           aria-busy={submitting}
         >
           {submitting ? (
@@ -270,6 +293,17 @@ export default function RegisterPage({ onSignIn }: RegisterPageProps) {
           )}
         </button>
       </form>
+
+      <div className="auth-divider">
+        <span>or</span>
+      </div>
+
+      <GoogleSignIn
+        text="signup_with"
+        error={googleError}
+        onError={showGoogleError}
+        signInLock={signInLock}
+      />
 
       <p className="auth-switch">
         Already have an account?{" "}

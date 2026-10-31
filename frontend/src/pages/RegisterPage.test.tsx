@@ -1,13 +1,27 @@
-import { render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it, vi } from "vitest";
-import { AuthError, type LoginResult, type PublicUser, login, register } from "../api/auth";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  AuthError,
+  type LoginResult,
+  type PublicUser,
+  login,
+  loginWithGoogle,
+  register,
+} from "../api/auth";
+import { useSignInLock } from "../components/auth/useSignInLock";
 import RegisterPage from "./RegisterPage";
+
+// App owns the lock in the real page, so give the page a parent that does too.
+function RegisterCard({ onSignIn }: { onSignIn: () => void }) {
+  const signInLock = useSignInLock();
+  return <RegisterPage onSignIn={onSignIn} signInLock={signInLock} />;
+}
 
 // Keep the real AuthError class so the page's instanceof checks still work.
 vi.mock("../api/auth", async () => {
   const actual = await vi.importActual<typeof import("../api/auth")>("../api/auth");
-  return { ...actual, login: vi.fn(), register: vi.fn() };
+  return { ...actual, login: vi.fn(), loginWithGoogle: vi.fn(), register: vi.fn() };
 });
 const { saveLogin } = vi.hoisted(() => ({ saveLogin: vi.fn() }));
 vi.mock("../context/AuthContext", () => ({ useAuth: () => ({ saveLogin }) }));
@@ -51,9 +65,139 @@ const validForm: FormValues = {
   confirmPassword: "analytical-engine",
 };
 
+describe("RegisterPage errors from Google and the form", () => {
+  // A fake window.google, so the test can play the part of Google's popup.
+  async function renderWithGoogle() {
+    vi.stubEnv("VITE_GOOGLE_CLIENT_ID", "client-id.apps.googleusercontent.com");
+    const initialize = vi.fn<GoogleAccountsId["initialize"]>();
+    const renderButton = vi.fn<GoogleAccountsId["renderButton"]>();
+    window.google = { accounts: { id: { initialize, renderButton } } };
+
+    render(<RegisterCard onSignIn={vi.fn()} />);
+    await vi.waitFor(() => expect(renderButton).toHaveBeenCalled());
+
+    return {
+      async chooseGoogleAccount() {
+        const { callback } = initialize.mock.calls[0][0];
+        await act(async () => callback({ credential: "google-id-token" }));
+      },
+    };
+  }
+
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    delete window.google;
+  });
+
+  it("sends nothing to Google's endpoint while the form's requests are running", async () => {
+    let finishRegister: (user: PublicUser) => void = () => {};
+    vi.mocked(register).mockReturnValue(
+      new Promise((resolve) => {
+        finishRegister = resolve;
+      }),
+    );
+    vi.mocked(login).mockResolvedValue(loginResult);
+    const { chooseGoogleAccount } = await renderWithGoogle();
+    const slot = document.querySelector(".auth-google-slot");
+
+    await fillAndSubmit(validForm);
+    expect(slot).toHaveAttribute("inert");
+    await chooseGoogleAccount();
+    expect(loginWithGoogle).not.toHaveBeenCalled();
+
+    await act(async () => finishRegister(newUser));
+    expect(saveLogin).toHaveBeenCalledTimes(1);
+    expect(saveLogin).toHaveBeenCalledWith(loginResult);
+    // App outlives this card, so a later sign-in after signing out must not be blocked.
+    expect(slot).not.toHaveAttribute("inert");
+  });
+
+  it("keeps Google blocked from register() succeeding until automatic login finishes", async () => {
+    vi.mocked(register).mockResolvedValue(newUser);
+    let finishLogin: (result: LoginResult) => void = () => {};
+    vi.mocked(login).mockReturnValue(
+      new Promise((resolve) => {
+        finishLogin = resolve;
+      }),
+    );
+    const { chooseGoogleAccount } = await renderWithGoogle();
+    const slot = document.querySelector(".auth-google-slot");
+
+    await fillAndSubmit(validForm);
+
+    // The account exists and login() is running: this is when its cookie arrives.
+    expect(login).toHaveBeenCalledTimes(1);
+    expect(slot).toHaveAttribute("inert");
+    await chooseGoogleAccount();
+    expect(loginWithGoogle).not.toHaveBeenCalled();
+
+    await act(async () => finishLogin(loginResult));
+    expect(saveLogin).toHaveBeenCalledTimes(1);
+    expect(saveLogin).toHaveBeenCalledWith(loginResult);
+    expect(slot).not.toHaveAttribute("inert");
+  });
+
+
+  it("sends no sign-up while a Google request is running", async () => {
+    let finishGoogle: (result: LoginResult) => void = () => {};
+    vi.mocked(loginWithGoogle).mockReturnValue(
+      new Promise((resolve) => {
+        finishGoogle = resolve;
+      }),
+    );
+    const { chooseGoogleAccount } = await renderWithGoogle();
+
+    await chooseGoogleAccount();
+    const createAccount = screen.getByRole("button", { name: "Create account" });
+    expect(createAccount).toBeDisabled();
+    // Fill in a valid form and submit it directly, so only the lock can stop it.
+    await fillAndSubmit(validForm);
+    await act(async () => fireEvent.submit(createAccount.closest("form")!));
+    expect(register).not.toHaveBeenCalled();
+
+    await act(async () => finishGoogle(loginResult));
+    expect(saveLogin).toHaveBeenCalledTimes(1);
+  });
+
+  it("clears a Google error when the form is submitted", async () => {
+    vi.mocked(loginWithGoogle).mockRejectedValue(
+      new AuthError("credentials", "An account with this email already exists."),
+    );
+    const { chooseGoogleAccount } = await renderWithGoogle();
+
+    await chooseGoogleAccount();
+    expect(screen.getByRole("alert")).toHaveTextContent("An account with this email already exists.");
+
+    await fillAndSubmit({});
+
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+  });
+
+  it("replaces a form error when a Google sign-in fails", async () => {
+    vi.mocked(register).mockRejectedValue(new AuthError("unavailable", "Something went wrong on our side."));
+    vi.mocked(loginWithGoogle).mockRejectedValue(
+      new AuthError("credentials", "An account with this email already exists."),
+    );
+    const { chooseGoogleAccount } = await renderWithGoogle();
+
+    await fillAndSubmit({
+      firstName: "Ada",
+      lastName: "Lovelace",
+      email: "new@example.test",
+      password: "EveningRivers!8462",
+      confirmPassword: "EveningRivers!8462",
+    });
+    expect(screen.getByRole("alert")).toHaveTextContent("Something went wrong on our side.");
+
+    await chooseGoogleAccount();
+
+    expect(screen.getByRole("alert")).toHaveTextContent("An account with this email already exists.");
+  });
+});
+
 describe("RegisterPage", () => {
   it("checks password length and match before calling the API", async () => {
-    render(<RegisterPage onSignIn={vi.fn()} />);
+    render(<RegisterCard onSignIn={vi.fn()} />);
 
     await fillAndSubmit({
       firstName: "Ada",
@@ -70,7 +214,7 @@ describe("RegisterPage", () => {
   });
 
   it("requires first and last name before calling the API", async () => {
-    render(<RegisterPage onSignIn={vi.fn()} />);
+    render(<RegisterCard onSignIn={vi.fn()} />);
 
     await fillAndSubmit({ ...validForm, firstName: "   ", lastName: undefined });
 
@@ -87,7 +231,7 @@ describe("RegisterPage", () => {
         password: ["This password is too common."],
       }),
     );
-    render(<RegisterPage onSignIn={vi.fn()} />);
+    render(<RegisterCard onSignIn={vi.fn()} />);
 
     const user = await fillAndSubmit(validForm);
 
@@ -107,7 +251,7 @@ describe("RegisterPage", () => {
         non_field_errors: ["Registration is closed."],
       }),
     );
-    render(<RegisterPage onSignIn={vi.fn()} />);
+    render(<RegisterCard onSignIn={vi.fn()} />);
 
     await fillAndSubmit(validForm);
 
@@ -118,7 +262,7 @@ describe("RegisterPage", () => {
     let finishRegister: (user: PublicUser) => void = () => undefined;
     vi.mocked(register).mockReturnValue(new Promise((resolve) => (finishRegister = resolve)));
     vi.mocked(login).mockResolvedValue(loginResult);
-    render(<RegisterPage onSignIn={vi.fn()} />);
+    render(<RegisterCard onSignIn={vi.fn()} />);
 
     await fillAndSubmit(validForm);
 
@@ -138,7 +282,7 @@ describe("RegisterPage", () => {
   it("asks the user to log in if automatic login fails", async () => {
     vi.mocked(register).mockResolvedValue(newUser);
     vi.mocked(login).mockRejectedValue(new AuthError("unavailable", "Something went wrong."));
-    render(<RegisterPage onSignIn={vi.fn()} />);
+    render(<RegisterCard onSignIn={vi.fn()} />);
 
     await fillAndSubmit(validForm);
 
@@ -150,7 +294,7 @@ describe("RegisterPage", () => {
   it("switches back to the log in card", async () => {
     const user = userEvent.setup();
     const onSignIn = vi.fn();
-    render(<RegisterPage onSignIn={onSignIn} />);
+    render(<RegisterCard onSignIn={onSignIn} />);
 
     await user.click(screen.getByRole("button", { name: "Log in" }));
 

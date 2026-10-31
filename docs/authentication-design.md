@@ -9,7 +9,7 @@ Status: design baseline for SCRUM-56. The endpoints and frontend behavior descri
 - Give each account ownership of its courses and, through them, its documents and notes.
 - Keep authentication APIs under the versioned `/api/v1/` namespace.
 
-Password reset, email verification, social sign-in, roles beyond the student account, and multi-factor authentication are outside this task unless separately agreed.
+Password reset, email verification, roles beyond the student account, and multi-factor authentication are outside this task unless separately agreed. Google sign-in was added later by SCRUM-114; see `docs/api-contract.md`.
 
 ## User account model
 

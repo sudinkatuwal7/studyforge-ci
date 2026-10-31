@@ -1,20 +1,25 @@
 import { type SubmitEvent, useRef, useState } from "react";
 import { AuthError, login } from "../api/auth";
 import FormField from "../components/auth/FormField";
+import GoogleSignIn from "../components/auth/GoogleSignIn";
 import {
   ArrowRightIcon,
   EyeIcon,
   EyeOffIcon,
-  GoogleIcon,
   LockIcon,
   MailIcon,
 } from "../components/auth/icons";
+import type { SignInLock } from "../components/auth/useSignInLock";
 import { validateEmail, validateRequired } from "../components/auth/validation";
 import { type SignedOutReason, useAuth } from "../context/AuthContext";
 
 type LoginPageProps = {
   // Shows the "Sign up" link when provided.
   onCreateAccount?: () => void;
+  // Fills in the email field, after a sign-up whose automatic login failed.
+  initialEmail?: string;
+  // Shared with the other card, so only one sign-in request runs at a time.
+  signInLock: SignInLock;
 };
 
 type Field = "email" | "password";
@@ -24,8 +29,12 @@ const SIGNED_OUT_MESSAGES: Record<SignedOutReason, string> = {
   expired: "Your session expired. Please sign in again.",
 };
 
-export default function LoginPage({ onCreateAccount }: LoginPageProps) {
-  const [email, setEmail] = useState("");
+export default function LoginPage({
+  onCreateAccount,
+  initialEmail = "",
+  signInLock,
+}: LoginPageProps) {
+  const [email, setEmail] = useState(initialEmail);
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   // A field shows its error only after the user leaves it or submits the form.
@@ -34,6 +43,7 @@ export default function LoginPage({ onCreateAccount }: LoginPageProps) {
     password: false,
   });
   const [formError, setFormError] = useState("");
+  const [googleError, setGoogleError] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const emailRef = useRef<HTMLInputElement>(null);
   const passwordRef = useRef<HTMLInputElement>(null);
@@ -52,10 +62,17 @@ export default function LoginPage({ onCreateAccount }: LoginPageProps) {
     setTouched((current) => ({ ...current, [field]: true }));
   }
 
+  // A new Google attempt or error replaces any error from the form.
+  function showGoogleError(message: string) {
+    setGoogleError(message);
+    setFormError("");
+  }
+
   async function handleSubmit(event: SubmitEvent<HTMLFormElement>) {
     event.preventDefault();
     setTouched({ email: true, password: true });
     setFormError("");
+    setGoogleError("");
 
     // Move focus to the first problem so keyboard and screen-reader users find it.
     if (fieldErrors.email) {
@@ -67,6 +84,7 @@ export default function LoginPage({ onCreateAccount }: LoginPageProps) {
       return;
     }
 
+    if (!signInLock.acquire()) return;
     setSubmitting(true);
     try {
       const result = await login(email.trim(), password);
@@ -81,6 +99,7 @@ export default function LoginPage({ onCreateAccount }: LoginPageProps) {
         passwordRef.current?.select();
       }
     } finally {
+      signInLock.release();
       setSubmitting(false);
     }
   }
@@ -163,7 +182,7 @@ export default function LoginPage({ onCreateAccount }: LoginPageProps) {
         <button
           type="submit"
           className="auth-submit"
-          disabled={submitting}
+          disabled={signInLock.locked}
           aria-busy={submitting}
         >
           {submitting ? (
@@ -184,12 +203,12 @@ export default function LoginPage({ onCreateAccount }: LoginPageProps) {
         <span>or</span>
       </div>
 
-      {/* Placeholder until Google sign-in ships in SCRUM-114. */}
-      <button type="button" className="auth-google" disabled>
-        <GoogleIcon />
-        Continue with Google
-        <span className="soon-badge">Coming soon</span>
-      </button>
+      <GoogleSignIn
+        text="continue_with"
+        error={googleError}
+        onError={showGoogleError}
+        signInLock={signInLock}
+      />
 
       {onCreateAccount && (
         <p className="auth-switch">

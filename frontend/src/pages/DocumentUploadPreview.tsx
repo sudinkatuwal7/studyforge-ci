@@ -1,11 +1,13 @@
 import { useState, type SubmitEvent } from "react";
 import { useAuth } from "../context/AuthContext";
+import { useSignInLock } from "../components/auth/useSignInLock";
 import DocumentUpload from "../components/documents/DocumentUpload";
 import LoginPage from "./LoginPage";
 import "../styles/index.css";
 
 export default function DocumentUploadPreview() {
   const { user, isRestoring } = useAuth();
+  const signInLock = useSignInLock();
   const initialCourse = new URLSearchParams(window.location.search).get("courseId") ?? "";
   const [courseInput, setCourseInput] = useState(initialCourse);
   const [courseId, setCourseId] = useState<number | null>(() => {
@@ -32,7 +34,7 @@ export default function DocumentUploadPreview() {
     <main>
       <h1>Document upload development preview</h1>
       <p>This separate preview is for testing before the course screen is integrated.</p>
-      {isRestoring ? <p role="status">Checking your session…</p> : !user ? <LoginPage /> : <>
+      {isRestoring ? <p role="status">Checking your session…</p> : !user ? <LoginPage signInLock={signInLock} /> : <>
         <p>Signed in as {user.email}</p>
         <form onSubmit={selectCourse} aria-label="Choose test course">
           <label htmlFor="preview-course-id">Course ID</label>

@@ -39,6 +39,10 @@ class RegisterSerializer(serializers.Serializer):
      return User.objects.create_user(**validated_data)
 
 
+class GoogleLoginSerializer(serializers.Serializer):
+    credential = serializers.CharField()
+
+
 class PublicUserSerializer(serializers.ModelSerializer):
     class Meta:
         model = User

@@ -127,6 +127,8 @@ RETRIEVAL_MIN_COSINE_SIMILARITY = (
     float(_retrieval_min_similarity) if _retrieval_min_similarity else None
 )
 PROCESSING_SERVICE_TOKEN = os.environ.get("PROCESSING_SERVICE_TOKEN", "")
+# OAuth client ID from Google Cloud; Google sign-in is refused while it is empty.
+GOOGLE_OAUTH_CLIENT_ID = os.environ.get("GOOGLE_OAUTH_CLIENT_ID", "")
 
 CELERY_BROKER_CONNECTION_TIMEOUT = 3
 CELERY_BROKER_TRANSPORT_OPTIONS = {

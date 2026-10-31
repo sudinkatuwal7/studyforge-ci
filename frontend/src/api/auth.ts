@@ -109,6 +109,63 @@ export async function login(
   return (await response.json()) as LoginResult;
 }
 
+const GOOGLE_FAILED_MESSAGE = "Google sign-in failed. Please try again.";
+// These match the backend's responses, so the page knows which one it got.
+const DEACTIVATED_MESSAGE = "This account has been deactivated.";
+const EMAIL_TAKEN_MESSAGE = "An account with this email already exists.";
+const GOOGLE_UNAVAILABLE_MESSAGE = "Google sign-in is not available right now.";
+
+// Signs in with the ID token from Google's button. A first sign-in creates the
+// account, so this is both "log in" and "sign up".
+export async function loginWithGoogle(credential: string): Promise<LoginResult> {
+  if (!API_BASE_URL) {
+    throw new Error("VITE_API_BASE_URL is not configured");
+  }
+
+  const csrfResponse = await sendAuthRequest(`${API_BASE_URL}/auth/csrf/`, {
+    credentials: "include",
+  });
+
+  const csrfToken = csrfResponse.ok ? getCsrfToken() : undefined;
+  if (!csrfToken) {
+    throw new AuthError("unavailable", SERVER_ERROR_MESSAGE);
+  }
+
+  const response = await sendAuthRequest(`${API_BASE_URL}/auth/google/`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      "X-CSRFToken": csrfToken,
+    },
+    body: JSON.stringify({ credential }),
+  });
+
+  if (response.ok) {
+    return (await response.json()) as LoginResult;
+  }
+
+  switch (response.status) {
+    case 400:
+    case 401:
+      throw new AuthError("credentials", GOOGLE_FAILED_MESSAGE);
+    case 403: {
+      // A failed CSRF check is also a 403, so check which one this is.
+      const body: unknown = await response.json().catch(() => ({}));
+      if (toFieldErrors(body).detail?.[0] === DEACTIVATED_MESSAGE) {
+        throw new AuthError("credentials", DEACTIVATED_MESSAGE);
+      }
+      throw new AuthError("unavailable", SERVER_ERROR_MESSAGE);
+    }
+    case 409:
+      throw new AuthError("credentials", EMAIL_TAKEN_MESSAGE);
+    case 503:
+      throw new AuthError("unavailable", GOOGLE_UNAVAILABLE_MESSAGE);
+    default:
+      throw new AuthError("unavailable", SERVER_ERROR_MESSAGE);
+  }
+}
+
 // Refresh tokens are single-use, so tabs take turns refreshing. A tab that waited
 // then sends the newest cookie instead of one another tab just used up.
 const REFRESH_LOCK = "studyforge-refresh";

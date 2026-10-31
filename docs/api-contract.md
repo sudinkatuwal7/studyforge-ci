@@ -135,6 +135,7 @@ PATCH/DELETE remain planned. Document collection GET is implemented by SCRUM-61.
 POST   /api/v1/auth/register/
 POST   /api/v1/auth/token/
 POST   /api/v1/auth/token/refresh/
+POST   /api/v1/auth/google/
 
 GET    /api/v1/courses/
 POST   /api/v1/courses/
@@ -148,6 +149,42 @@ GET    /api/v1/notes/{id}/
 ```
 
 Notes and study guides are specified in [notes-api.md](notes-api.md).
+
+## Google sign-in (SCRUM-114)
+
+`POST /api/v1/auth/google/` signs in with a Google ID token from Google Identity
+Services, and creates the account on first use. It is CSRF-protected, like login.
+
+```json
+{ "credential": "<google-id-token>" }
+```
+
+Success (`200 OK`) has the same shape as password login, and sets the same
+`studyforge_refresh` HttpOnly cookie:
+
+```json
+{
+  "access": "<short-lived-access-token>",
+  "user": { "id": 12, "email": "student@gmail.com", "first_name": "Sam", "last_name": "Student" }
+}
+```
+
+| Status | Body | Meaning |
+|---|---|---|
+| `400` | `{"credential": ["..."]}` | The credential is missing or blank |
+| `401` | `{"detail": "Google sign-in failed."}` | The token was rejected, or its email is not verified |
+| `403` | `{"detail": "This account has been deactivated."}` | The Google account is linked to an inactive user |
+| `403` | CSRF failure | The CSRF token is missing or invalid |
+| `409` | `{"detail": "An account with this email already exists."}` | The email belongs to an account not linked to this Google account |
+| `503` | `{"detail": "Google sign-in is not available right now."}` | `GOOGLE_OAUTH_CLIENT_ID` is not set, or Google's keys could not be fetched |
+
+Accounts are matched by Google's permanent `sub` id, stored as `User.google_sub`, not
+by email. A returning user's stored email is not changed if their Google email
+changes. An existing password account is never linked automatically, because
+registration does not verify email ownership, so that case returns `409`.
+
+Configuration: the backend reads `GOOGLE_OAUTH_CLIENT_ID`, and the frontend build
+reads `VITE_GOOGLE_CLIENT_ID`. Both hold the same OAuth Web client ID.
 
 ## Course material management (SCRUM-61)
 
