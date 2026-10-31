@@ -2,6 +2,7 @@
 
 from apps.documents.internal_views import InternalJobDocumentView, InternalJobResultView
 from apps.users.views import (
+    GoogleLoginView,
     LoginView,
     LogoutView,
     MeView,
@@ -43,6 +44,8 @@ urlpatterns = [
     path("api/v1/auth/csrf/", csrf_cookie),
 
     path("api/v1/auth/token/", LoginView.as_view()),
+
+    path("api/v1/auth/google/", GoogleLoginView.as_view()),
 
     path("api/v1/auth/token/refresh/", RefreshView.as_view()),
 

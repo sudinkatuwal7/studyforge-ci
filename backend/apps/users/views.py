@@ -1,5 +1,6 @@
 from django.conf import settings
 from django.contrib.auth import get_user_model
+from django.db import IntegrityError, transaction
 from django.http import JsonResponse
 from django.utils.decorators import method_decorator
 from django.views.decorators.csrf import csrf_protect, ensure_csrf_cookie
@@ -23,7 +24,16 @@ from rest_framework_simplejwt.token_blacklist.models import (
 )
 from rest_framework_simplejwt.tokens import RefreshToken
 
-from .serializers import PublicUserSerializer, RegisterSerializer
+from .google import (
+    GoogleSignInUnavailable,
+    InvalidGoogleCredential,
+    verify_google_credential,
+)
+from .serializers import (
+    GoogleLoginSerializer,
+    PublicUserSerializer,
+    RegisterSerializer,
+)
 
 
 User = get_user_model()
@@ -116,6 +126,91 @@ class LoginView(APIView):
 
     def get_authenticate_header(self, request):
         return 'Bearer realm="api"'
+
+
+GOOGLE_FAILED = "Google sign-in failed."
+GOOGLE_UNAVAILABLE = "Google sign-in is not available right now."
+EMAIL_TAKEN = "An account with this email already exists."
+ACCOUNT_DEACTIVATED = "This account has been deactivated."
+
+
+@method_decorator(csrf_protect, name="dispatch")
+class GoogleLoginView(APIView):
+    """Sign in or sign up with a Google ID token from Google Identity Services.
+
+    Accounts are matched by Google's permanent "sub" id, never by email, so a
+    changed Google email still reaches the same account. An email that already
+    belongs to an unlinked account is refused rather than linked: registration
+    does not verify email ownership, so linking would let whoever registered
+    that address first keep access to the Google user's account.
+    """
+
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get_authenticate_header(self, request):
+        return 'Bearer realm="api"'
+
+    def post(self, request):
+        serializer = GoogleLoginSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+
+        try:
+            claims = verify_google_credential(serializer.validated_data["credential"])
+        except GoogleSignInUnavailable:
+            return Response(
+                {"detail": GOOGLE_UNAVAILABLE},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        except InvalidGoogleCredential:
+            return Response(
+                {"detail": GOOGLE_FAILED},
+                status=status.HTTP_401_UNAUTHORIZED,
+                headers={"WWW-Authenticate": self.get_authenticate_header(request)},
+            )
+
+        user = User.objects.filter(google_sub=claims["sub"]).first()
+        if user is None:
+            user = self.create_user(claims)
+            if user is None:
+                return Response({"detail": EMAIL_TAKEN}, status=status.HTTP_409_CONFLICT)
+
+        # RefreshToken.for_user does not check is_active, so check it here.
+        if not user.is_active:
+            return Response(
+                {"detail": ACCOUNT_DEACTIVATED},
+                status=status.HTTP_403_FORBIDDEN,
+            )
+
+        refresh = RefreshToken.for_user(user)
+        response = Response(
+            {
+                "access": str(refresh.access_token),
+                "user": PublicUserSerializer(user).data,
+            },
+            status=status.HTTP_200_OK,
+        )
+        set_refresh_cookie(response, str(refresh))
+        return response
+
+    def create_user(self, claims):
+        """Create the Google user, or return None if the email is taken."""
+        email = claims["email"].strip().lower()
+        if User.objects.filter(email__iexact=email).exists():
+            return None
+
+        try:
+            with transaction.atomic():
+                # No password: create_user stores an unusable one.
+                return User.objects.create_user(
+                    email=email,
+                    first_name=claims.get("given_name", "")[:150],
+                    last_name=claims.get("family_name", "")[:150],
+                    google_sub=claims["sub"],
+                )
+        except IntegrityError:
+            # A concurrent request created this Google user or took the email.
+            return User.objects.filter(google_sub=claims["sub"]).first()
 
 
 @method_decorator(csrf_protect, name="dispatch")
