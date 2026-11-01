@@ -231,6 +231,27 @@ class OpenAIRAGLLM:
             raise InvalidLLMOutput("The RAG provider returned an invalid response.") from None
 
 
+class GeminiRAGLLM(OpenAIRAGLLM):
+    """Native Gemini transport retaining bounded evidence and citation repair."""
+
+    def __init__(self, client=None):
+        from apps.gemini import GeminiJSONClient
+
+        self._gemini = GeminiJSONClient(
+            "RAG_LLM_MODEL", RAGProviderError, InvalidLLMOutput, client=client,
+        )
+        self.name = self._gemini.name
+
+    def _complete(self, messages):
+        raw = self._gemini.complete(messages, schema=ANSWER_SCHEMA, max_output_tokens=8_192)
+        try:
+            if len(raw) > MAX_RESPONSE_CHARS:
+                raise ValueError("Invalid response body")
+            return raw, json.loads(raw, object_pairs_hook=_unique_object)
+        except (TypeError, ValueError, RecursionError):
+            raise InvalidLLMOutput("The RAG provider returned an invalid response.") from None
+
+
 class FakeRAGLLM:
     """Offline default: abstain rather than fabricate an answer or citation."""
 
@@ -245,6 +266,8 @@ def get_client():
     backend = os.environ.get("RAG_LLM_BACKEND", "fake")
     if backend == "fake":
         return FakeRAGLLM()
+    if backend == "gemini":
+        return GeminiRAGLLM()
     if backend == "openai":
         return OpenAIRAGLLM()
     raise RAGProviderError("RAG generation is not configured.")

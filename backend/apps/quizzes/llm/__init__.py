@@ -27,6 +27,11 @@ def get_client():
 
         return FakeQuizLLM()
 
+    if backend == "gemini":
+        from apps.quizzes.llm.gemini import GeminiQuizLLM
+
+        return GeminiQuizLLM()
+
     if backend == "openai":
         from apps.quizzes.llm.provider import OpenAIQuizLLM
 

@@ -28,6 +28,11 @@ def get_client():
 
         return FakeStudyGuideLLM()
 
+    if backend == "gemini":
+        from apps.notes.llm.gemini import GeminiStudyGuideLLM
+
+        return GeminiStudyGuideLLM()
+
     if backend == "openai":
         from apps.notes.llm.provider import OpenAIStudyGuideLLM
 
