@@ -352,7 +352,7 @@ From the repository root:
 docker compose up -d
 ```
 
-Defaults are in `docker-compose.yml`. Copy `.env.example` to `.env` only if you need to change them. Do not commit `.env`.
+Defaults are in `docker-compose.yml`. Copy `infrastructure/.env.example` to `.env` only if you need to change them. Do not commit `.env`.
 
 ### Check
 
@@ -799,55 +799,71 @@ These are planned follow-up items, not completed Sprint 2 work:
 
 ## Aashish Dhital — Sprint 2 Individual Contributions
 
-Evidence reviewed November 3, 2026. These contributions are supported by Aashish-authored implementation commits, PR merge messages, code, and tests. Each linked integration commit is an ancestor of the local `origin/development` snapshot (`c33c79a`). Squash commits link the integrated changes; they do not imply original task commits remain ancestors. Current remote state and live PR metadata remain unverified.
+Sprint 2 added course to-dos, a study calendar, the interactive course workspace, and dashboard widgets for courses, tasks, and the calendar. Those four tasks are Done in Jira and integrated into `development`. SCRUM-120 was added after Sprint 2, after the sprint had ended, to switch Notes, Quizzes, and Pandu Chat from the paid OpenAI API to the free Gemini API. Test counts below come from the task merge records and checked-in verification notes, and were not rerun for this README update.
 
-Task titles describe repository evidence. **TODO: verification required** — confirm exact Jira titles, Sprint 2 assignments/dates (especially SCRUM-120), and Jira completion status. Jira links follow the team's existing project URL.
+**Jira Task SCRUM-82: Implement Study Calendar**
 
-| Jira task and repository-supported title | Branch | Integrated commit | Pull request | Demo-branch merge status | Implementation |
-|---|---|---|---|---|---|
-| [SCRUM-87: Course To-Do List](https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-87) | `feature/SCRUM-87-course-todo-list` | [e33f914](https://bitbucket.org/mth115_super/studyforge/commits/e33f914e24af160532b448ca14046644e9305532) | [PR #58](https://bitbucket.org/mth115_super/studyforge/pull-requests/58) | Merged into `development`, 2026-10-17 (local history). | Course-linked tasks, due dates, completion/reopening, owner-protected API, retry-safe creation keys, and dashboard forms/sorting. |
-| [SCRUM-82: Basic Study Calendar](https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-82) | `feature/SCRUM-82-study-calendar` | [426d8e6](https://bitbucket.org/mth115_super/studyforge/commits/426d8e655bed05c39e0079705a18bfeeb8aa559b) | [PR #66](https://bitbucket.org/mth115_super/studyforge/pull-requests/66) | Merged into `development`, 2026-10-19 (local history). | StudySession model/migration and authenticated CRUD; monthly calendar combines dated tasks and sessions, with session forms and dashboard calendar. |
-| [SCRUM-103: Course Workspace and Pandu Chat](https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-103) | `feature/SCRUM-103-course-workspace-ui` | [a9af77b](https://bitbucket.org/mth115_super/studyforge/commits/a9af77b18fe3a04936dcb5eb80c8fba122447298) | [PR #72](https://bitbucket.org/mth115_super/studyforge/pull-requests/72) | Merged into `development`, 2026-10-24 (local history). | Materials/Notes/Quizzes workspace, keyboard tabs, split layout, Pandu sample controller, source-ID contracts, prompts, sending/streaming presentation, and cancellation. |
-| [SCRUM-104: Dashboard Widgets and Course UI](https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-104) | `feature/SCRUM-104-dashboard-widgets` | [eb2140f](https://bitbucket.org/mth115_super/studyforge/commits/eb2140f8e6d12dd479d569549059890247f452a2) | [PR #81](https://bitbucket.org/mth115_super/studyforge/pull-requests/81) | Merged into `development`, 2026-10-30 (local history). | Course-card artwork, sidebar calendar/day activities, course Tasks tab, compact upload UI, searchable materials, short status labels, and Pandu layout polish. |
-| [SCRUM-120: Gemini Support for Notes, Quizzes, and Pandu Chat](https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-120) | `feature/switch-openai-to-gemini` | [c33c79a](https://bitbucket.org/mth115_super/studyforge/commits/c33c79a7724b14efdc9773951198a8f2f7034160) | [PR #84](https://bitbucket.org/mth115_super/studyforge/pull-requests/84) | Merged into `development`, 2026-11-01 (local history). | Shared native Gemini JSON transport and provider adapters, bounded retries/timeouts, sanitized failures, response validation, and configuration documentation. |
+- Jira Link: [SCRUM-82](https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-82)
+- Branch: `feature/SCRUM-82-study-calendar`
+- Pull Request Link: [PR #66](https://bitbucket.org/mth115_super/studyforge/pull-requests/66)
+- Commit Links: [study-session API](https://bitbucket.org/mth115_super/studyforge/commits/2694140), [calendar events](https://bitbucket.org/mth115_super/studyforge/commits/86f091d), [monthly calendar](https://bitbucket.org/mth115_super/studyforge/commits/6c34e77), [calendar page](https://bitbucket.org/mth115_super/studyforge/commits/8da4022), [dashboard calendar](https://bitbucket.org/mth115_super/studyforge/commits/229c043), [API and schema docs](https://bitbucket.org/mth115_super/studyforge/commits/d2e9185), [integration merge](https://bitbucket.org/mth115_super/studyforge/commits/426d8e6).
+- Status: Merged into `development` on October 19.
+- Contribution: Added the StudySession model, migration, and authenticated create, read, update, and delete API. The monthly calendar combines dated to-dos and study sessions. Students can open a full calendar page or the compact dashboard calendar and add sessions from a reusable form. The session contract is documented in the [API contract](docs/api-contract.md) and [database schema](docs/database-schema.md).
+- Testing: The merge record includes 53 courses-app tests on isolated SQLite, 54 focused frontend tests, 24 calendar tests, and passing build and system checks. Those were separate runs.
+- Limitations: PostgreSQL verification for the session migrations was still open. Lint still reported an existing AuthContext warning.
 
-SCRUM-120 uses `feature/switch-openai-to-gemini`, matching the local branch and `origin` tracking ref at `e63515e`, and the PR #84 merge subject at `c33c79a`. The merge body contains a conflicting branch label. **TODO: verification required** — confirm the source branch displayed on PR #84; its metadata was inaccessible in the earlier review, so the table records the locally evidenced name.
+**Jira Task SCRUM-87: Implement Course To-Do List**
 
-### Aashish Dhital — Sprint 2 Testing Evidence
+- Jira Link: [SCRUM-87](https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-87)
+- Branch: `feature/SCRUM-87-course-todo-list`
+- Pull Request Link: [PR #58](https://bitbucket.org/mth115_super/studyforge/pull-requests/58)
+- Commit Links: [to-do model and migration](https://bitbucket.org/mth115_super/studyforge/commits/fe393d7), [API endpoints](https://bitbucket.org/mth115_super/studyforge/commits/ed86b84), [frontend API](https://bitbucket.org/mth115_super/studyforge/commits/6519145), [retry-safe creation](https://bitbucket.org/mth115_super/studyforge/commits/fa51c64), [dashboard task list](https://bitbucket.org/mth115_super/studyforge/commits/05af577), [dashboard restyle](https://bitbucket.org/mth115_super/studyforge/commits/9c806f4), [integration merge](https://bitbucket.org/mth115_super/studyforge/commits/e33f914).
+- Status: Merged into `development` on October 17.
+- Contribution: Added course-linked tasks with due dates, completion, and reopening, behind an owner-protected API. A creation key keeps a refresh from saving the same task twice. The dashboard shows the task form and list, with incomplete work and the nearest due dates first.
+- Testing: Backend tests cover validation, ownership, ordering, and completion. Frontend tests cover the form, retry keys, the task panel, and sorting. The merge record includes 19 passing frontend API tests plus TypeScript and lint checks.
+- Limitations: Task updates still cover completion only. Editing the title or due date, and deleting a task, remain follow-up work.
 
-These are historical records and checked-in coverage, not newly executed test results. No application tests were run for this README-only edit.
+**Jira Task SCRUM-103: Build Interactive Course Workspace UI**
 
-| Task | Relevant testing and limitations |
-|---|---|
-| SCRUM-87 | Merge message records 19 passing frontend API tests plus TypeScript/lint checks. Backend tests cover validation, ownership, ordering, and completion; frontend tests cover forms, retry keys, task panels, and sorting. **TODO: verification required** — final integrated CI result. |
-| SCRUM-82 | Merge message records 53 courses-app tests on isolated SQLite, 54 focused frontend tests, 24 calendar tests, and successful build/system checks. These are separate runs, not an additive total. PostgreSQL verification was pending; lint recorded an existing AuthContext warning. **TODO: verification required** — PostgreSQL and final CI evidence. |
-| SCRUM-103 | [Workspace verification](docs/course-workspace.md#verification) records 108 tests in 15 frontend files passing October 23. Coverage includes tabs, references, chat states, cancellation, and prompts; fixed the upload-label assertion. Browser viewport/mobile-keyboard checks remained manual. |
-| SCRUM-104 | Changed tests cover course-specific tasks, retry/empty states, compact calendar day selection, material search, uploads, workspace tabs, and dashboard behavior. **TODO: verification required** — passing execution/CI evidence for the final task revision. |
-| SCRUM-120 | [Offline verification](docs/gemini-generation.md#offline-verification) records 43 tests passing October 31 using mocked SDK calls and real SDK response objects, covering provider selection, validation, grounding, and sanitized errors. No live provider/database integration was performed. |
+- Jira Link: [SCRUM-103](https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-103)
+- Branch: `feature/SCRUM-103-course-workspace-ui`
+- Pull Request Link: [PR #72](https://bitbucket.org/mth115_super/studyforge/pull-requests/72)
+- Commit Links: [course workspace](https://bitbucket.org/mth115_super/studyforge/commits/dc10261), [split layout](https://bitbucket.org/mth115_super/studyforge/commits/57bc3f3), [workspace tests](https://bitbucket.org/mth115_super/studyforge/commits/d49990b), [sending and streaming](https://bitbucket.org/mth115_super/studyforge/commits/026f4ef), [request cancellation](https://bitbucket.org/mth115_super/studyforge/commits/9320368), [course references](https://bitbucket.org/mth115_super/studyforge/commits/cb1b28f), [prompts](https://bitbucket.org/mth115_super/studyforge/commits/75c613f), [integration squash](https://bitbucket.org/mth115_super/studyforge/commits/a9af77b).
+- Status: Squash-merged into `development` on October 24.
+- Contribution: Built the course workspace with Materials, Notes, and Quizzes tabs, keyboard access, and a side-by-side layout. Pandu can take prompts, show sending and streaming, cancel a request, and use course source ids. The behavior is documented in [course workspace](docs/course-workspace.md).
+- Testing: [Workspace verification](docs/course-workspace.md#verification) records 108 tests in 15 frontend files passing on October 23, covering tabs, references, chat states, cancellation, and prompts. The upload-label assertion was corrected in the same task.
+- Limitations: Viewport and mobile-keyboard checks were manual. This task reused the existing materials and study-guide screens. Live chat, quizzes, and multi-material notes were completed in later tasks.
 
-### Aashish Dhital — Sprint 2 Technical Contributions
+**Jira Task SCRUM-104: Build Dashboard Course, To-Do & Calendar Widgets**
 
-Frontend work includes the task dashboard, reusable calendar and session forms, course workspace, Pandu presentation/cancellation controls, and course/material UI refinements. Backend work includes To-Do and StudySession persistence, migrations, authenticated ownership checks, retry-safe creation, and Gemini provider adapters. SCRUM-104's backend change was a comment, not a new endpoint.
+- Jira Link: [SCRUM-104](https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-104)
+- Branch: `feature/SCRUM-104-dashboard-widgets`
+- Pull Request Link: [PR #81](https://bitbucket.org/mth115_super/studyforge/pull-requests/81)
+- Commit Links: [course cards](https://bitbucket.org/mth115_super/studyforge/commits/bbfedbc), [course tasks tab](https://bitbucket.org/mth115_super/studyforge/commits/cdf54ea), [sidebar calendar](https://bitbucket.org/mth115_super/studyforge/commits/d2591aa), [Pandu layout](https://bitbucket.org/mth115_super/studyforge/commits/68c4b4f), [upload and materials search](https://bitbucket.org/mth115_super/studyforge/commits/4af2d83), [integration squash](https://bitbucket.org/mth115_super/studyforge/commits/eb2140f).
+- Status: Squash-merged into `development` on October 30.
+- Contribution: Updated the dashboard course cards, moved the calendar into a sidebar that opens the selected day's activities, and placed course tasks on the course page. The course page also has a compact upload area, a searchable materials list with short status labels, and a tighter Pandu layout that uses the StudyForge logo.
+- Testing: The task tests cover course-specific tasks, retry and empty states, compact calendar day selection, material search, uploads, workspace tabs, and dashboard behavior.
+- Limitations: The widget work is presentation and navigation on top of the SCRUM-82 and SCRUM-87 APIs. A separate final CI log was not stored with the task.
 
-Reliability work includes duplicate-create protection, date/time handling without timezone conversion, canceled-response handling, unavailable-source filtering, and the SCRUM-103 test-label fix. Documentation covers the study-session [API contract](docs/api-contract.md) and [schema](docs/database-schema.md), [workspace contracts](docs/course-workspace.md), and [Gemini configuration/testing](docs/gemini-generation.md). Git history includes separate curiosity-report/grade files for SCRUM-87, SCRUM-82, SCRUM-103, and SCRUM-104 in [AI development reports](docs/ai-dev-reports/); their existence does not establish instructor acceptance.
+**Jira Task SCRUM-120: Switch Notes, Quizzes, and Pandu Chat from OpenAI to Gemini API**
 
-Attribution boundary: SCRUM-103 reused existing materials and study-guide functionality and initially supplied sample chat plus an unavailable quiz tab. Live reference/chat integration (SCRUM-75/76), quiz implementation, multi-material notes (SCRUM-112), and later responsive navigation are teammates' work.
+- Jira Link: [SCRUM-120](https://cs3398-rodians-f26.atlassian.net/browse/SCRUM-120)
+- Branch: `feature/switch-openai-to-gemini`
+- Pull Request Link: [PR #84](https://bitbucket.org/mth115_super/studyforge/pull-requests/84)
+- Commit Links: [Gemini provider](https://bitbucket.org/mth115_super/studyforge/commits/e63515e), [integration squash](https://bitbucket.org/mth115_super/studyforge/commits/c33c79a).
+- Status: Added after Sprint 2, once the sprint had ended. Squash-merged into `development` on November 1.
+- Contribution: Added after Sprint 2 to replace the paid OpenAI API with the free Gemini API for Notes, Quizzes, and Pandu Chat. Notes, quizzes, and grounded answers now use a shared Gemini JSON transport, with timeouts, bounded retries, response validation, and sanitized failures. Configuration is documented in [Gemini text generation](docs/gemini-generation.md).
+- Testing: [Offline verification](docs/gemini-generation.md#offline-verification) records 43 tests passing on October 31, using mocked SDK calls and real SDK response objects. The run covered provider selection, validation, grounding, and sanitized errors.
+- Limitations: This change was added after Sprint 2. The recorded run did not call the live Gemini API or a database.
 
 ### Aashish Dhital — Sprint 3 Next Steps
 
-**Proposed work for Aashish, subject to team planning:**
-
-- Extend the current completion-only To-Do update API with title/due-date editing and deletion; add confirmation UI and ownership, validation, and calendar-refresh tests.
-- Verify task/session migrations and retry-key behavior against PostgreSQL, including concurrent duplicate submissions; attach reproducible results to the task/PR.
-- Add browser coverage for course navigation, material search, task completion, calendar/session editing, and chat cancellation. Check keyboard focus, narrow viewports, and the mobile keyboard on the integrated layout.
-- Verify configured Gemini generation with real uploaded materials for notes, quizzes, and cited answers; record provider/model configuration and failure behavior without exposing credentials.
-- Refresh workspace documentation against `ConnectedCourseChat` and the current quiz/notes panels: its demo-controller and unavailable-feature descriptions predate later integrations.
-
-### Aashish Dhital — Review and Retrospective Verification
-
-Sprint 2 contributions and their Jira, commit, and PR links are documented here. Retrospective submission, Jira completion status, and final CI results require separate verification; the README alone does not establish their completion.
-
-**TODO: verification required** — confirm the supporting review/demo and Sprint 2 progress artifacts, actual retrospective outcomes and agreed improvements, and required original transcripts and separate assessments (including SCRUM-120 if applicable) against the rubric and [reporting instructions](docs/ai-dev-reports/README.md). Technical verification gaps remain listed in the testing table above.
+- Add title and due-date editing, and deletion, to the to-do API, with a confirmation step and tests for ownership, validation, and calendar refresh.
+- Run the task and study-session migrations, including the retry key, against PostgreSQL and record the results on the task.
+- Add browser coverage for course navigation, material search, task completion, calendar and session editing, and chat cancellation, including keyboard focus and a narrow viewport.
+- Check Gemini generation against real uploaded materials for notes, quizzes, and cited answers, and record the provider settings and failure behavior.
+- Turn Pandu into an agent with tool calling, so it can choose course tools such as materials, notes, quizzes, and the calendar, and test that each tool stays limited to the signed-in student's own courses.
+- Update the workspace documentation so it matches the connected course chat and the current quiz and notes panels.
 
 ## Gaurav Paneru — Sprint 2 Individual Contributions
 
