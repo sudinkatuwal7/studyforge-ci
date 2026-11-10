@@ -539,10 +539,13 @@ under `backend/apps/identity/`:
   ownership, the request fails closed with the endpoint's existing 503 code
   (`UPLOAD_UNAVAILABLE` or `MATERIAL_UNAVAILABLE`), exposes no exception detail,
   and causes no storage, database, or dispatch side effect.
-- Identity and Courses still share the Django database. When SCRUM-98 removes the
-  cross-service foreign keys, `apps.identity.ownership` is the single place to
-  replace with an Identity-service call. That call must keep the fail-closed 503 and
-  non-disclosing 404 behavior above.
+- The standalone processing service was created with plain external `job_id` and
+  `document_id` fields, with no foreign keys to Django-owned tables. Django's
+  internal User, Course, Conversation, Document, Job, and Chunk relationships
+  remain intentional. Django derives ownership and scope from its stored Job and
+  Document; processing callbacks cannot supply `owner_id`, `course_id`, or
+  `conversation_id` as authority. The authenticated internal API enforces the
+  service boundary without cross-database relationships.
 - SCRUM-118's rule that the newest Job primary key supersedes older Jobs remains
   the only current-run rule. SCRUM-99 adds no job-lifecycle constraint.
 

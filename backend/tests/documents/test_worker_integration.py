@@ -19,6 +19,8 @@ import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import DatabaseError
 from django.test import Client
+from rest_framework.test import APIClient
+from rest_framework_simplejwt.tokens import AccessToken
 
 from apps.documents.models import Document, Job
 from apps.knowledge.models import Chunk
@@ -170,6 +172,68 @@ def test_superseded_worker_stops_on_conflict_before_processing(
     assert worker_bridge.callbacks[0][1] == 409
     document.refresh_from_db()
     assert document.status == Document.Status.PENDING
+
+
+@pytest.mark.django_db(transaction=True)
+def test_cross_user_job_document_pair_cannot_process_or_expose_results(
+    worker_bridge, owner_client, course, other_user, foreign_course,
+    document_factory, pdf_factory, monkeypatch,
+):
+    document_a, job_a = upload_job(owner_client, course, pdf_factory)
+    document_b = document_factory(related_course=foreign_course)
+    job_b = Job.objects.create(document=document_b)
+    assert document_a.owner_id != document_b.owner_id
+    assert document_a.sha256 == document_b.sha256
+
+    from processing_service import tasks
+
+    with monkeypatch.context() as attack:
+        source_fetch = Mock(side_effect=AssertionError("Rejected task must not fetch a source"))
+        attack.setattr(tasks, "fetch_source_document", source_fetch)
+        with pytest.raises(worker_bridge.errors.PermanentProcessingError):
+            worker_bridge.task.run(job_a.pk, document_b.pk, document_a.sha256)
+        source_fetch.assert_not_called()
+    assert [(payload["status"], code) for payload, code in worker_bridge.callbacks] == [
+        ("RUNNING", 409),
+    ]
+    worker_bridge.embed.assert_not_called()
+    job_a.refresh_from_db()
+    job_b.refresh_from_db()
+    document_a.refresh_from_db()
+    document_b.refresh_from_db()
+    assert (job_a.status, job_b.status) == (Job.Status.QUEUED, Job.Status.QUEUED)
+    assert (document_a.status, document_b.status) == (Document.Status.PENDING, Document.Status.PENDING)
+    assert not Chunk.objects.exists()
+
+    result_b = worker_bridge.task.run(job_b.pk, document_b.pk, document_b.sha256)
+    with pytest.raises(worker_bridge.errors.PermanentProcessingError):
+        worker_bridge.results.submit_callback(job_a.pk, {**result_b, "job_id": job_a.pk})
+    assert worker_bridge.callbacks[-1][0]["status"] == "SUCCEEDED"
+    assert worker_bridge.callbacks[-1][1] == 409
+
+    job_a.refresh_from_db()
+    document_a.refresh_from_db()
+    document_b.refresh_from_db()
+    assert job_a.status == Job.Status.QUEUED
+    assert document_a.status == Document.Status.PENDING
+    assert document_b.status == Document.Status.READY
+    assert not document_a.chunks.exists()
+    chunks_b = list(document_b.chunks.all())
+    assert chunks_b
+    assert all(chunk.owner_id == other_user.pk and chunk.document_id == document_b.pk for chunk in chunks_b)
+
+    student_b_client = APIClient()
+    student_b_client.credentials(HTTP_AUTHORIZATION=f"Bearer {AccessToken.for_user(other_user)}")
+    document_url = f"/api/v1/documents/{document_b.pk}/"
+    assert owner_client.get(document_url).status_code == 404
+    assert student_b_client.get(document_url).json()["status"] == "READY"
+
+    query = {"question": "What is in the lecture?", "document_ids": [document_b.pk]}
+    query_embedding = Mock(return_value=[[0.25] * 768])
+    monkeypatch.setattr("apps.knowledge.retrieval.embed_texts", query_embedding)
+    assert owner_client.post("/api/v1/rag/questions/", query, format="json").status_code == 404
+    assert student_b_client.post("/api/v1/rag/questions/", query, format="json").status_code == 200
+    query_embedding.assert_called_once()
 
 
 @pytest.mark.django_db(transaction=True)
