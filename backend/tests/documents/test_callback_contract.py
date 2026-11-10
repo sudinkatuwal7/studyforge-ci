@@ -47,7 +47,8 @@ def post(job_id, payload):
     ("attempt", 0), ("attempt", -1), ("attempt", 1.5), ("attempt", "1"),
     ("job_id", True), ("job_id", 0), ("document_id", True),
     ("source_sha256", "A" * 64), ("status", []), ("page_count", True),
-    ("page_count", 0), ("likely_scanned", 1), ("chunks", {}), ("owner_id", 1),
+    ("page_count", 0), ("likely_scanned", 1), ("chunks", {}),
+    ("owner_id", 1), ("course_id", 1), ("conversation_id", 1),
 ])
 def test_invalid_envelope_does_not_mutate(callback_job, field, value):
     payload = {**success(callback_job), field: value}
