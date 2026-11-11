@@ -30,7 +30,7 @@ const savedUser: PublicUser = { id: 7, email: "new@example.test", first_name: "A
 function renderApp() {
   // A new element each time: React skips re-rendering an identical one.
   const tree = () => (
-    <MemoryRouter>
+    <MemoryRouter initialEntries={["/login"]}>
       <App />
     </MemoryRouter>
   );
@@ -43,7 +43,7 @@ async function signUpWithFailedLogin() {
   vi.mocked(login).mockRejectedValue(new AuthError("unavailable", "Something went wrong."));
   const user = userEvent.setup();
 
-  await user.click(screen.getByRole("button", { name: "Start free" }));
+  await user.click(screen.getByRole("link", { name: "Start free" }));
   const fields: [string, string][] = [
     ["First name", "Ada"],
     ["Last name", "Lovelace"],
@@ -82,12 +82,12 @@ describe("App after a sign-up whose automatic login failed", () => {
     expect(screen.getByLabelText("Password")).toHaveValue("");
   });
 
-  it("prefills it from the header's Log in button too", async () => {
+  it("prefills it from the header's Log in link too", async () => {
     renderApp();
     const user = await signUpWithFailedLogin();
 
     const header = screen.getByRole("banner");
-    await user.click(within(header).getByRole("button", { name: "Log in" }));
+    await user.click(within(header).getByRole("link", { name: "Log in" }));
 
     expect(screen.getByLabelText("Email address")).toHaveValue("new@example.test");
   });
@@ -100,13 +100,16 @@ describe("App after a sign-up whose automatic login failed", () => {
 
   it("forgets the email once someone has signed in", async () => {
     const rerender = renderApp();
-    await signUpWithFailedLogin();
+    const user = await signUpWithFailedLogin();
 
     auth.user = savedUser;
     rerender();
     await act(async () => {});
     auth.user = null;
     rerender();
+
+    // Signing out on the dashboard lands on the landing page, so open the log in card.
+    await user.click(within(screen.getByRole("banner")).getByRole("link", { name: "Log in" }));
 
     expect(screen.getByLabelText("Email address")).toHaveValue("");
   });

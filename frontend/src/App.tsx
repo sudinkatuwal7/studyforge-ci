@@ -1,10 +1,11 @@
 import { useEffect, useState } from "react";
-import { Link, Route, Routes } from "react-router-dom";
+import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { getHealth } from "./api/health";
 import { useAuth } from "./context/AuthContext";
 import AppShell from "./components/dashboard/AppShell";
 import AuthLayout from "./components/auth/AuthLayout";
 import { useSignInLock } from "./components/auth/useSignInLock";
+import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import CourseDetailPage from "./pages/CourseDetailPage";
@@ -22,20 +23,23 @@ function App() {
   // Increasing this number tells CourseList to fetch the latest courses.
   const [courseListVersion, setCourseListVersion] = useState(0);
 
-  const { user, isRestoring, isSigningOut, signOut } = useAuth();
+  const { user, isRestoring, isSigningOut, signedOutReason, signOut } = useAuth();
+  const location = useLocation();
+  const navigate = useNavigate();
 
-  // Which card the signed-out page shows.
-  const [authView, setAuthView] = useState<"login" | "register">("login");
   // Lives here so a request started on one card still blocks the other card.
   const signInLock = useSignInLock();
 
   // The new account's email, when sign-up worked but its automatic login did not.
   const [createdEmail, setCreatedEmail] = useState("");
 
-  // Reset to the log in card while signed in, so whenever the session ends the
-  // user lands where the signed-out message is shown.
-  if (user && authView !== "login") {
-    setAuthView("login");
+  // Show the signed-out notice at the root only on the navigation where the
+  // session ended. A later navigation can show the public landing page again.
+  const [previousUser, setPreviousUser] = useState(user);
+  const [sessionEndedAt, setSessionEndedAt] = useState<string | null>(null);
+  if (user !== previousUser) {
+    setPreviousUser(user);
+    setSessionEndedAt(user ? null : location.key);
   }
   // Forget it once signed in, so the next person on this computer does not see it.
   if (user && createdEmail) {
@@ -92,52 +96,40 @@ function App() {
   }
 
   if (!user) {
-    const isRegister = authView === "register";
-
-    return (
+    const loginCard = (
       <AuthLayout
-        heroTitle={isRegister ? "Start studying smarter" : "Welcome back"}
-        heroText={
-          isRegister
-            ? "Create a free account to keep your courses, materials, and study sessions in one place."
-            : "Log in to your cozy study space and pick up where you left off."
-        }
-        headerActions={
-          <>
-            <button
-              type="button"
-              className="auth-pill"
-              aria-current={isRegister ? undefined : "page"}
-              onClick={() => setAuthView("login")}
-            >
-              Log in
-            </button>
-            <button
-              type="button"
-              className="auth-pill auth-pill-dark"
-              aria-current={isRegister ? "page" : undefined}
-              onClick={() => setAuthView("register")}
-            >
-              Start free
-            </button>
-          </>
-        }
+        heroTitle="Welcome back"
+        heroText="Log in to your cozy study space and pick up where you left off."
         footer={healthMessage}
       >
-        {isRegister ? (
-          <RegisterPage
-            onSignIn={() => setAuthView("login")}
-            onAccountCreated={setCreatedEmail}
-            signInLock={signInLock}
-          />
-        ) : (
-          <LoginPage
-            initialEmail={createdEmail}
-            onCreateAccount={() => setAuthView("register")}
-            signInLock={signInLock}
-          />
-        )}
+        <LoginPage
+          initialEmail={createdEmail}
+          onCreateAccount={() => navigate("/register")}
+          signInLock={signInLock}
+        />
       </AuthLayout>
+    );
+    const showNoticeAtRoot = signedOutReason !== null && sessionEndedAt === location.key;
+
+    return (
+      <Routes>
+        <Route path="/" element={showNoticeAtRoot ? loginCard : <LandingPage footer={healthMessage} />} />
+        <Route path="/login" element={loginCard} />
+        <Route path="/register" element={
+          <AuthLayout
+            heroTitle="Start studying smarter"
+            heroText="Create a free account to keep your courses, materials, and study sessions in one place."
+            footer={healthMessage}
+          >
+            <RegisterPage
+              onSignIn={() => navigate("/login")}
+              onAccountCreated={setCreatedEmail}
+              signInLock={signInLock}
+            />
+          </AuthLayout>
+        } />
+        <Route path="*" element={loginCard} />
+      </Routes>
     );
   }
 
@@ -157,6 +149,8 @@ function App() {
         } />
         <Route path="/courses/:courseId" element={<CourseDetailPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
+        <Route path="/login" element={<Navigate to="/" replace />} />
+        <Route path="/register" element={<Navigate to="/" replace />} />
         <Route path="*" element={
           <section className="course-detail">
             <h2>Page not found</h2>

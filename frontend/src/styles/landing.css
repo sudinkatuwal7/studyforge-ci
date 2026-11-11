@@ -1,0 +1,126 @@
+/* Signed-out landing page. Builds on auth.css: .auth-page, the header and the pills. */
+.landing-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(3rem, 8vw, 5.5rem);
+  max-width: 80rem;
+  width: 100%;
+  margin: 0 auto;
+  padding: 4rem 0 3rem;
+}
+
+/* ---------- Introduction ---------- */
+.landing-hero {
+  text-align: center;
+}
+
+/* The dashboard mascot, larger here. Overrides .panda from dashboard.css. */
+.landing-hero .landing-panda {
+  display: block;
+  width: clamp(6rem, 12vw, 9rem);
+  height: auto;
+  margin: 0 auto 1.5rem;
+}
+
+.landing-page .landing-lead {
+  max-width: 36rem;
+}
+
+.landing-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 0.75rem;
+  margin-top: 2rem;
+}
+
+/* ---------- Features ---------- */
+/* Leave a gap above the heading when the Features link scrolls here. */
+.landing-features {
+  scroll-margin-top: 1.5rem;
+}
+
+.landing-features h2,
+.landing-cta h2 {
+  margin: 0 0 1.5rem;
+  font-size: clamp(1.6rem, 3.5vw, 2.25rem);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-align: center;
+  color: var(--ink);
+}
+
+/* One column on phones, two on tablets, four on wide screens. Fixed counts,
+   so the four cards never split into three and one. */
+.landing-feature-list {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 1.25rem;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.landing-feature {
+  padding: 1.75rem 1.5rem;
+  border: 1px solid var(--line);
+  border-radius: 1.5rem;
+  background: #fffdfa;
+  box-shadow: 0 18px 40px #26334d0d;
+}
+
+.landing-feature h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.15rem;
+  color: var(--ink);
+}
+
+.landing-feature p {
+  margin: 0;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+@media (min-width: 40rem) {
+  .landing-feature-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 68rem) {
+  .landing-feature-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* ---------- Call to action ---------- */
+.landing-cta {
+  padding: clamp(2rem, 5vw, 3rem) clamp(1.25rem, 4vw, 3rem);
+  border-radius: 1.75rem;
+  background: var(--lavender);
+  text-align: center;
+}
+
+.landing-cta h2 {
+  margin-bottom: 0.75rem;
+}
+
+.landing-cta p {
+  max-width: 32rem;
+  margin: 0 auto;
+  line-height: 1.55;
+  color: var(--ink-soft);
+}
+
+/* ---------- Tablet and mobile ---------- */
+@media (max-width: 48rem) {
+  .landing-main {
+    padding-top: 2.5rem;
+  }
+
+  .landing-hero .landing-panda {
+    width: 5.5rem;
+    margin-bottom: 1rem;
+  }
+}

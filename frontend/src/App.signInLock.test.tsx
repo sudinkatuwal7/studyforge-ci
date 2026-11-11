@@ -52,7 +52,7 @@ describe("App sign-in lock", () => {
     const user = userEvent.setup();
 
     render(
-      <MemoryRouter>
+      <MemoryRouter initialEntries={["/login"]}>
         <App />
       </MemoryRouter>,
     );
@@ -68,7 +68,7 @@ describe("App sign-in lock", () => {
     expect(login).toHaveBeenCalledTimes(1);
 
     // Switch cards while it runs, then complete Google on the new card.
-    await user.click(screen.getByRole("button", { name: "Start free" }));
+    await user.click(screen.getByRole("link", { name: "Start free" }));
     await vi.waitFor(() => expect(renderButton).toHaveBeenCalledTimes(2));
     expect(document.querySelector(".auth-google-slot")).toHaveAttribute("inert");
     expect(screen.getByRole("button", { name: "Create account" })).toBeDisabled();
