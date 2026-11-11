@@ -48,3 +48,7 @@ Frontend work is organized by feature area rather than by matching backend folde
 - Developers should avoid modifying another developer's domain unnecessarily.
 - Shared configuration should only be changed when necessary.
 - Shared API contracts should be agreed before dependent features are implemented.
+
+## Related contracts
+
+- [Pandu agent architecture (SCRUM-121)](architecture/pandu-agent.md) — tool-calling agent layout, tools, JSON replies, and chat message persistence.
