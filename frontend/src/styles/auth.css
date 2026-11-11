@@ -76,6 +76,7 @@
 
 .auth-page .auth-nav-item {
   display: inline-flex;
+  text-decoration: none;
   align-items: center;
   gap: 0.35rem;
   padding: 0.5rem 0.9rem;
@@ -95,6 +96,7 @@
 }
 
 .auth-page .auth-pill {
+  display: inline-block;
   padding: 0.7rem 1.4rem;
   border: 1px solid var(--line);
   border-radius: 999px;
@@ -102,6 +104,7 @@
   color: var(--ink);
   font-weight: 500;
   white-space: nowrap;
+  text-decoration: none;
 }
 
 .auth-page .auth-pill-dark {
