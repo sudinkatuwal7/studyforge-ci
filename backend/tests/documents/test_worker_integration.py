@@ -10,8 +10,10 @@ from io import BytesIO
 import json
 import math
 from pathlib import Path
+import sys
+from types import ModuleType
 from types import SimpleNamespace
-from urllib.error import HTTPError
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlsplit
 from unittest.mock import Mock
 
@@ -19,6 +21,7 @@ import pytest
 from django.core.files.uploadedfile import SimpleUploadedFile
 from django.db import DatabaseError
 from django.test import Client
+from django.utils import timezone
 from rest_framework.test import APIClient
 from rest_framework_simplejwt.tokens import AccessToken
 
@@ -27,29 +30,112 @@ from apps.knowledge.models import Chunk
 from apps.notes.selectors import get_ordered_chunks
 
 
+class InMemoryExecutionStore:
+    """Worker-side seam; Django still owns only its own application database."""
+
+    def __init__(self, errors, result_client):
+        self.errors = errors
+        self.result_client = result_client
+        self.executions = {}
+
+    def get_or_create_execution(self, job_id, document_id, source_sha256):
+        execution = self.executions.setdefault(job_id, SimpleNamespace(
+            job_id=job_id, document_id=document_id, source_sha256=source_sha256,
+            status="QUEUED", attempts=0, callback_payload=None,
+            delivery_status="NOT_STAGED", delivery_attempts=0, delivered_at=None,
+        ))
+        if (execution.document_id, execution.source_sha256) != (document_id, source_sha256):
+            raise self.errors.PermanentProcessingError("Execution identity mismatch.")
+        return execution
+
+    def start_or_resume(self, job_id):
+        execution = self.executions[job_id]
+        if execution.callback_payload is not None:
+            return None, json.loads(execution.callback_payload)
+        if execution.status == "QUEUED":
+            execution.attempts += 1
+            execution.status = "RUNNING"
+        return execution.attempts, None
+
+    def prepare_processing_retry(self, job_id):
+        self.executions[job_id].status = "QUEUED"
+
+    def stage_terminal(self, job_id, payload):
+        serialized = self.result_client.serialize_callback(payload)
+        execution = self.executions[job_id]
+        if execution.callback_payload is not None:
+            return json.loads(execution.callback_payload)
+        execution.callback_payload = serialized
+        execution.status = payload["status"]
+        execution.delivery_status = "PENDING"
+        return payload
+
+    def begin_delivery(self, job_id, max_attempts):
+        execution = self.executions[job_id]
+        should_send = execution.delivery_status == "PENDING" and execution.delivery_attempts < max_attempts
+        if should_send:
+            execution.delivery_attempts += 1
+        return (json.loads(execution.callback_payload), execution.delivery_status,
+                execution.delivery_attempts, should_send)
+
+    def mark_delivered(self, job_id):
+        execution = self.executions[job_id]
+        execution.delivery_status = "DELIVERED"
+        execution.delivered_at = timezone.now()
+
+    def mark_rejected(self, job_id):
+        self.executions[job_id].delivery_status = "REJECTED"
+
+
 @pytest.fixture
 def worker_bridge(monkeypatch, settings):
     service_path = Path(__file__).resolve().parents[3] / "services" / "document-processing"
     monkeypatch.syspath_prepend(str(service_path))
+    # The backend test database must never install or create the processing
+    # service's Execution table. Substitute only that worker-side boundary.
+    store_module = ModuleType("processing_service.execution_store")
+    monkeypatch.setitem(sys.modules, "processing_service.execution_store", store_module)
     from processing_service import errors, result_client, source_client, tasks
+    store = InMemoryExecutionStore(errors, result_client)
+    for name in (
+        "get_or_create_execution", "start_or_resume", "prepare_processing_retry",
+        "stage_terminal", "begin_delivery", "mark_delivered", "mark_rejected",
+    ):
+        setattr(store_module, name, getattr(store, name))
+    monkeypatch.setattr(tasks, "execution_store", store_module)
 
     settings.PROCESSING_SERVICE_TOKEN = "integration-service-token"
     settings.PROCESSING_DJANGO_API_URL = "http://testserver"
     client = Client(enforce_csrf_checks=True)
     callbacks = []
+    callback_outcomes = []
+    sources = []
+    state = SimpleNamespace(lose_next_terminal_response=False,
+                            fail_next_terminal_before_request=False)
 
     def transport(request, **kwargs):
         path = urlsplit(request.full_url).path
         headers = {"HTTP_AUTHORIZATION": request.get_header("Authorization")}
         if request.get_method() == "GET":
+            sources.append(path)
             response = client.get(path, **headers)
         else:
+            payload = json.loads(request.data)
+            if state.fail_next_terminal_before_request and payload["status"] in {"SUCCEEDED", "FAILED"}:
+                state.fail_next_terminal_before_request = False
+                callbacks.append((payload, 503))
+                raise HTTPError(request.full_url, 503, "Simulated temporary outage", Message(), BytesIO(b""))
             response = client.post(
                 path, data=request.data, content_type=request.get_header("Content-type"), **headers,
             )
-            callbacks.append((json.loads(request.data), response.status_code))
+            callbacks.append((payload, response.status_code))
         body = b"".join(response.streaming_content) if response.streaming else response.content
         response.close()
+        if request.get_method() == "POST" and response.status_code == 200:
+            callback_outcomes.append(json.loads(body)["status"])
+            if state.lose_next_terminal_response and json.loads(request.data)["status"] in {"SUCCEEDED", "FAILED"}:
+                state.lose_next_terminal_response = False
+                raise URLError("simulated lost response after Django committed")
         if response.status_code >= 400:
             raise HTTPError(request.full_url, response.status_code, "Rejected", response.headers, BytesIO(body))
         stream = BytesIO(body)
@@ -64,7 +150,8 @@ def worker_bridge(monkeypatch, settings):
     embed = Mock(side_effect=lambda texts: [[0.25] * 768 for _ in texts])
     monkeypatch.setattr(tasks, "embed_texts", embed)
     return SimpleNamespace(task=tasks.process_document_task, errors=errors, results=result_client,
-                           callbacks=callbacks, embed=embed)
+                           callbacks=callbacks, callback_outcomes=callback_outcomes,
+                           sources=sources, store=store, state=state, embed=embed)
 
 
 def upload_job(owner_client, course, pdf_factory, kind="text"):
@@ -196,7 +283,7 @@ def test_empty_extraction_becomes_controlled_failure_without_retry(
     assert document.error_code == "PROCESSING_FAILED"
     assert not document.chunks.exists()
     assert [(payload["status"], code) for payload, code in worker_bridge.callbacks] == [
-        ("RUNNING", 200), ("SUCCEEDED", 400), ("FAILED", 200),
+        ("RUNNING", 200), ("FAILED", 200),
     ]
     retry.assert_not_called()
 
@@ -296,7 +383,7 @@ def test_oversized_worker_result_reports_failure_without_retry(
     assert document.status == Document.Status.FAILED
     assert document.error_code == "PROCESSING_FAILED"
     assert not document.chunks.exists()
-    # The result client rejects the oversized body before it reaches the network.
+    # The staging size check rejects the oversized result before it reaches the network.
     assert [(payload["status"], code) for payload, code in worker_bridge.callbacks] == [
         ("RUNNING", 200), ("FAILED", 200),
     ]
@@ -308,8 +395,13 @@ def test_persistence_outage_allows_original_callback_to_be_redelivered(
     worker_bridge, owner_client, course, pdf_factory, monkeypatch,
 ):
     from celery.exceptions import Retry
+    from processing_service import tasks
 
     document, job = upload_job(owner_client, course, pdf_factory)
+    extract = Mock(wraps=tasks.extract_document)
+    chunk = Mock(wraps=tasks.chunk_pages)
+    monkeypatch.setattr(tasks, "extract_document", extract)
+    monkeypatch.setattr(tasks, "chunk_pages", chunk)
     retry = Mock(side_effect=Retry())
     monkeypatch.setattr(worker_bridge.task, "retry", retry)
     with monkeypatch.context() as failure:
@@ -319,15 +411,121 @@ def test_persistence_outage_allows_original_callback_to_be_redelivered(
     payload, code = worker_bridge.callbacks[-1]
     assert code == 503
     assert payload["status"] == "SUCCEEDED"
+    execution = worker_bridge.store.executions[job.pk]
+    assert execution.status == "SUCCEEDED"
+    assert execution.delivery_status == "PENDING"
+    assert json.loads(execution.callback_payload) == payload
+    assert execution.attempts == execution.delivery_attempts == 1
     job.refresh_from_db()
     assert job.status == Job.Status.RUNNING
     assert job.terminal_callback_sha256 == ""
     assert not document.chunks.exists()
-    # Exercise receiver support for redelivery, retaining the original attempt.
-    # Scheduling this redelivery independently belongs to the SCRUM-108 worker.
-    assert worker_bridge.results.submit_callback(job.pk, payload) == "applied"
+
+    result = worker_bridge.task.run(job.pk, document.pk, document.sha256)
+    assert result == payload
+    assert worker_bridge.callback_outcomes[-1] == "applied"
+    assert execution.delivery_status == "DELIVERED"
+    assert execution.delivered_at is not None
+    assert execution.attempts == 1
+    assert execution.delivery_attempts == 2
+    assert len(worker_bridge.sources) == 1
+    extract.assert_called_once()
+    chunk.assert_called_once()
+    worker_bridge.embed.assert_called_once()
     assert worker_bridge.results.submit_callback(job.pk, payload) == "duplicate"
     job.refresh_from_db()
+    document.refresh_from_db()
     assert job.status == Job.Status.SUCCEEDED
+    assert document.status == Document.Status.READY
+    assert document.chunks.count() == len(payload["chunks"])
     assert job.attempts == payload["attempt"] == 1
+
+
+@pytest.mark.django_db(transaction=True)
+def test_lost_response_after_commit_replays_exact_result_as_duplicate(
+    worker_bridge, owner_client, course, pdf_factory, monkeypatch,
+):
+    from celery.exceptions import Retry
+    from processing_service import tasks
+
+    document, job = upload_job(owner_client, course, pdf_factory)
+    extract = Mock(wraps=tasks.extract_document)
+    chunk = Mock(wraps=tasks.chunk_pages)
+    monkeypatch.setattr(tasks, "extract_document", extract)
+    monkeypatch.setattr(tasks, "chunk_pages", chunk)
+    monkeypatch.setattr(worker_bridge.task, "retry", Mock(side_effect=Retry()))
+    worker_bridge.state.lose_next_terminal_response = True
+
+    with pytest.raises(Retry):
+        worker_bridge.task.run(job.pk, document.pk, document.sha256)
+    execution = worker_bridge.store.executions[job.pk]
+    saved = json.loads(execution.callback_payload)
+    assert execution.status == "SUCCEEDED"
+    assert execution.delivery_status == "PENDING"
+    assert worker_bridge.callback_outcomes == ["applied", "applied"]
+    job.refresh_from_db()
+    document.refresh_from_db()
+    assert job.status == Job.Status.SUCCEEDED
+    assert document.status == Document.Status.READY
+    first_chunk_ids = list(document.chunks.order_by("pk").values_list("pk", flat=True))
+    assert len(first_chunk_ids) == len(saved["chunks"]) > 0
+
+    assert worker_bridge.task.run(job.pk, document.pk, document.sha256) == saved
+    assert worker_bridge.callback_outcomes[-1] == "duplicate"
+    assert execution.delivery_status == "DELIVERED"
+    assert execution.delivered_at is not None
+    assert execution.attempts == 1
+    assert execution.delivery_attempts == 2
+    job.refresh_from_db()
+    document.refresh_from_db()
+    assert job.status == Job.Status.SUCCEEDED
+    assert document.status == Document.Status.READY
+    assert list(document.chunks.order_by("pk").values_list("pk", flat=True)) == first_chunk_ids
+    assert len(worker_bridge.sources) == 1
+    extract.assert_called_once()
+    chunk.assert_called_once()
     worker_bridge.embed.assert_called_once()
+
+
+@pytest.mark.django_db(transaction=True)
+def test_failed_result_survives_temporary_callback_outage(
+    worker_bridge, owner_client, course, pdf_factory, monkeypatch,
+):
+    from celery.exceptions import Retry
+    from processing_service import tasks
+
+    document, job = upload_job(owner_client, course, pdf_factory, "scanned")
+    extract = Mock(wraps=tasks.extract_document)
+    chunk = Mock(wraps=tasks.chunk_pages)
+    monkeypatch.setattr(tasks, "extract_document", extract)
+    monkeypatch.setattr(tasks, "chunk_pages", chunk)
+    monkeypatch.setattr(worker_bridge.task, "retry", Mock(side_effect=Retry()))
+    worker_bridge.state.fail_next_terminal_before_request = True
+
+    with pytest.raises(Retry):
+        worker_bridge.task.run(job.pk, document.pk, document.sha256)
+    execution = worker_bridge.store.executions[job.pk]
+    saved = json.loads(execution.callback_payload)
+    assert saved["status"] == execution.status == "FAILED"
+    assert saved["error_code"] == "PROCESSING_FAILED"
+    assert execution.delivery_status == "PENDING"
+    job.refresh_from_db()
+    assert job.status == Job.Status.RUNNING
+
+    assert worker_bridge.task.run(job.pk, document.pk, document.sha256) == saved
+    assert execution.delivery_status == "DELIVERED"
+    assert execution.delivered_at is not None
+    assert execution.attempts == 1
+    assert execution.delivery_attempts == 2
+    job.refresh_from_db()
+    document.refresh_from_db()
+    assert job.status == Job.Status.FAILED
+    assert document.status == Document.Status.FAILED
+    assert not document.chunks.exists()
+    assert owner_client.get(f"/api/v1/documents/{document.pk}/").json()["error"] == {
+        "code": "PROCESSING_FAILED", "message": "This document could not be processed.",
+    }
+    assert len(worker_bridge.sources) == 1
+    extract.assert_called_once()
+    chunk.assert_called_once()
+    worker_bridge.embed.assert_not_called()
