@@ -35,6 +35,7 @@ class ResultClientTests(SimpleTestCase):
         )
         self.assertEqual(request.get_header("Authorization"), "Bearer test-service-token")
         self.assertEqual(request.get_header("Content-type"), "application/json")
+        self.assertIsInstance(request.data, bytes)
         self.assertEqual(json.loads(request.data), payload)
         self.assertEqual(urlopen.call_args.kwargs["timeout"], 30)
 
