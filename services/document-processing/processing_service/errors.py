@@ -17,5 +17,9 @@ class PermanentProcessingError(ProcessingError):
     """Processing failure that should not be retried."""
 
 
+class OversizedCallbackError(PermanentProcessingError):
+    """A terminal result cannot fit within Django's callback body limit."""
+
+
 class InvalidPDFError(PermanentProcessingError):
     """The source is not a readable, supported PDF."""
