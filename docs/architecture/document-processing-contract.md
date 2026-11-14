@@ -1,13 +1,14 @@
 # StudyForge — Sprint 2 Document Processing Service Contract v1.0
 
-Status: **APPROVED — Architecture and SCRUM-118 integration contract agreed; recovery decisions remain open**
+Status: **APPROVED — SCRUM-119 adds durable, bounded terminal callback delivery; crash reconciliation remains open**
 
 ## SCRUM-106 format extension
 
 Sanish approved extending source retrieval MIME handling, extraction dispatch,
 normalized results, Office handlers, and minimum chunk/location compatibility.
-The Celery task, queue, retries, service authentication, Job lifecycle, callback
-delivery, and atomic callback persistence retain the SCRUM-108/SCRUM-118 design.
+The Celery task, queue, service authentication, Job lifecycle, and atomic Django
+callback persistence retain the SCRUM-108/SCRUM-118 contract. SCRUM-119 adds
+worker-side result staging and bounded delivery retries.
 
 Validated PDF, DOCX, and PPTX files retain their stored suffix. Django serves the
 source with server-controlled canonical MIME; the worker checks identity, size,
@@ -164,10 +165,10 @@ HTTPS or equivalently protected private transport outside local development.
 1. Django authenticates the student, checks course ownership, validates the PDF, and commits the stored source, Document, and application Job.
 2. Django publishes the processing message. The browser retains the existing upload response and polls Django's existing status endpoint.
 3. The worker validates the message and claims or resumes the correlated execution record without creating another logical run for a duplicate delivery.
-4. The worker retrieves the PDF from the authenticated internal Django endpoint and verifies the source hash before processing.
-5. The worker posts `RUNNING`, extracts text, performs page-aware chunking, and generates embeddings.
-6. The worker posts `SUCCEEDED` with the results or `FAILED` with a safe error code. Django validates the current job/source and atomically replaces chunks, persists page count and embeddings, updates the application Job, and marks Document `READY`.
-7. Repeated terminal callbacks are acknowledged without duplicate chunks or status regression. Callback delivery uses the task's bounded Celery retry policy; the service does not yet durably stage results for recovery after prolonged Django outages.
+4. The worker posts `RUNNING`, then retrieves the source from the authenticated internal Django endpoint and verifies its hash.
+5. The worker extracts text, performs page-aware chunking, and generates embeddings.
+6. The worker saves a terminal `SUCCEEDED` result or safe `FAILED` error code in Execution before attempting HTTP delivery.
+7. The worker posts that saved callback. Django validates the current job/source and atomically persists chunks, page count, embeddings, application Job status, and Document status. Temporary delivery failure leaves the callback pending; retries send the saved payload without repeating extraction or embedding. Django acknowledges identical redelivery without duplicate chunks or status regression.
 
 ## 6. Status, security, and reliability requirements
 
@@ -316,7 +317,7 @@ items remain open.
 1. **Queue and task names:** routing, message version representation/signature, and old/new worker cutover.
 2. **Internal authentication mechanism:** shared bearer token is implemented for PDF retrieval and result callbacks; production transport protection and token rotation remain open.
 3. **Exact internal API schemas:** local callback schema, validation, and 2 MiB limit are recorded in section 14; other request/response details remain open.
-4. **Retry and recovery policy:** task retries and duplicate/stale callback handling are implemented locally; durable result retention, execution claims, reconciliation, and deleted-document handling remain open.
+4. **Retry and recovery policy:** bounded retries, durable terminal result staging, and duplicate/stale callback handling are implemented locally; crash reconciliation, execution claims, and deleted-document handling remain open.
 5. **Django dispatch and callback integration ownership:** resolved by the SCRUM-118 clarification; see sections 9 and 15.
 6. **SCRUM-106 scope and compatibility:** supported formats, upload limits/validation, extraction ownership, and preservation of the existing PDF contract.
 
@@ -404,11 +405,10 @@ Focused backend document tests passed with 122 tests and 22 subtests; the
 disposable service Compose verification passed with 39 service tests in each
 worker and confirmed both workers register and consume the task queue.
 
-This is not yet production cutover approval. The service Execution model is not
-yet used to claim tasks or durably stage results. A prolonged Django outage,
-an oversized single-callback result, or worker crash can therefore leave an
-application Job in `PROCESSING`; recovery/reconciliation and retry cost
-behavior still need work and end-to-end failure testing. The shared token also
+This SCRUM-108 integration snapshot is not production cutover approval. At that
+point Execution did not durably stage results; section 15 records the later
+SCRUM-119 behavior. Crash reconciliation and oversized-result handling still
+need explicit policy beyond bounded callback retries. The shared token also
 requires protected transport and rotation outside local development. The
 legacy worker implementation remains in the repository but upload dispatch now
 targets the standalone task.
@@ -476,26 +476,39 @@ job is reopened and no data is backfilled speculatively.
 The 2 MiB UTF-8 body limit and 1,000-character chunk limit remain inclusive.
 Blank chunk content, invalid page references, wrong vector dimensions, and
 non-finite vector values are rejected. Owner identity always comes from Document.
-The existing SCRUM-108 result client treats 400/409/413 as permanent failures.
-On empty or oversized success results, its task submits the safe `FAILED` callback
-with `PROCESSING_FAILED`, allowing Django to persist a controlled failure without
-a processing retry. An unsuccessful delivery of that failure remains a worker
-recovery concern.
+The result client treats 400/409/413 as permanent failures. The worker detects
+empty text and oversized generated results before staging success; it stages
+and sends a safe `FAILED` callback with `PROCESSING_FAILED`. Django's public
+failure message does not include raw worker exceptions.
 
-### Worker dependency and validation boundary
+### SCRUM-119 worker result and delivery lifecycle
 
-SCRUM-108 still uses a single Celery retry counter for processing and callback
-delivery. Delivery failure currently reruns the task with an incremented attempt;
-it does not redeliver the saved callback at its original attempt. The Django
-receiver now supports the agreed redelivery semantics, but durable result staging
-and separate delivery retries require a SCRUM-108 follow-up. No worker retry or
-PDF-fetch implementation is changed by SCRUM-118.
+Execution's processing status follows `QUEUED → RUNNING → SUCCEEDED / FAILED`.
+Its separate delivery status follows `NOT_STAGED → PENDING → DELIVERED / REJECTED`.
+The worker stores the complete terminal callback before HTTP delivery, within
+the same 2 MiB UTF-8 limit as the request body. A temporary callback failure
+leaves delivery `PENDING` and processing `SUCCEEDED` or `FAILED`; the bounded
+Celery retry reads the saved callback at task entry, preserving its original
+processing attempt and skipping RUNNING, source fetch, extraction, chunking,
+and embedding. Processing attempts and delivery attempts are counted separately.
+Both `applied` and `duplicate` acknowledgements mark delivery `DELIVERED` and
+set `delivered_at`. Permanent callback rejection marks delivery `REJECTED`
+without rewriting successful processing as failed. The first staged terminal
+callback wins. Django still derives ownership from its own Job and Document.
+
+For AC1, saved text is `Chunk.content`; no `Document.extracted_text` field was
+added. Django saves chunk content, embeddings, Job status, and Document status
+in one transaction. Automatic recovery if a worker dies after staging but
+before scheduling a retry is not implemented; crash reconciliation remains
+future hardening. Delivery attempts are bounded rather than retried indefinitely.
 
 Backend contract tests exercise strict validation, limits, concurrent delivery,
 receipt equality, and rollback. Worker integration tests run the existing task,
-PDF parser, source-integrity client, and result client against Django's actual
-handlers and PostgreSQL. HTTP transport, broker publication, and paid embeddings
-are replaced in these tests; they do not claim live Redis delivery or crash recovery.
+parser, source-integrity client, and result client against Django's actual
+handlers and PostgreSQL. They substitute the worker-side Execution store because
+the backend test database does not own that table. HTTP transport, broker
+publication, and paid embeddings are replaced; these tests do not claim live
+Redis delivery or crash recovery.
 
 ### Local verification on October 17, 2026
 
