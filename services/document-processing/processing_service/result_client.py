@@ -9,7 +9,7 @@ from urllib.request import Request, urlopen
 
 from django.conf import settings
 
-from .errors import PermanentProcessingError, ProcessingError, RetryableProcessingError
+from .errors import OversizedCallbackError, PermanentProcessingError, ProcessingError, RetryableProcessingError
 
 MAX_RESULT_BYTES = 2 * 1024 * 1024
 RESULT_TIMEOUT_SECONDS = 30
@@ -25,12 +25,7 @@ def submit_callback(job_id: int, payload: dict) -> str:
 
     if payload.get("schema_version") != 1 or payload.get("job_id") != job_id:
         raise PermanentProcessingError("The callback envelope is invalid.")
-    try:
-        body = json.dumps(payload, separators=(",", ":"), allow_nan=False).encode("utf-8")
-    except (TypeError, ValueError) as exc:
-        raise PermanentProcessingError("The callback payload is not valid JSON.") from exc
-    if len(body) > MAX_RESULT_BYTES:
-        raise PermanentProcessingError("The processing result exceeds the callback size limit.")
+    body = serialize_callback(payload).encode("utf-8")
 
     url = urljoin(base_url.rstrip("/") + "/", f"internal/v1/jobs/{job_id}/result/")
     request = Request(
@@ -65,6 +60,17 @@ def submit_callback(job_id: int, payload: dict) -> str:
         raise RetryableProcessingError("Could not submit the processing result to Django.") from exc
     except (TimeoutError, OSError) as exc:
         raise RetryableProcessingError("Could not submit the processing result to Django.") from exc
+
+
+def serialize_callback(payload: dict) -> str:
+    """Use the same UTF-8 encoding and 2 MiB bound for staging and HTTP."""
+    try:
+        serialized = json.dumps(payload, separators=(",", ":"), allow_nan=False)
+    except (TypeError, ValueError) as exc:
+        raise PermanentProcessingError("The callback payload is not valid JSON.") from exc
+    if len(serialized.encode("utf-8")) > MAX_RESULT_BYTES:
+        raise OversizedCallbackError("The processing result exceeds the callback size limit.")
+    return serialized
 
 
 def _response_error(status: int) -> ProcessingError:

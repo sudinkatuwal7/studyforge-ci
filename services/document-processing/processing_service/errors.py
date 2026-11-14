@@ -21,5 +21,9 @@ class DocumentDeletedError(PermanentProcessingError):
     """Django no longer has the document or job; stop without a failure callback."""
 
 
+class OversizedCallbackError(PermanentProcessingError):
+    """A terminal result cannot fit within Django's callback body limit."""
+
+
 class InvalidPDFError(PermanentProcessingError):
     """The source is not a readable, supported PDF."""
