@@ -114,4 +114,33 @@ describe("upcoming calendar events", () => {
     expect(events.map((event) => event.key)).toEqual(["session:2", "session:1"]);
     expect(getUpcomingEvents(events, "2027-01-01").map((event) => event.key)).toEqual(["session:2"]);
   });
+
+  it("limits to a window of days that counts today, and still drops overdue and completed tasks", () => {
+    const events = buildCalendarEvents([
+      todo({ id: 1, due_date: "2026-10-17" }),
+      todo({ id: 2, due_date: "2026-10-18" }),
+      todo({ id: 3, due_date: "2026-10-24" }),
+      todo({ id: 4, due_date: "2026-10-25" }),
+      todo({ id: 5, due_date: "2026-10-20", is_completed: true }),
+    ], [session({ id: 6, date: "2026-10-21" })]);
+
+    // 7 days from Oct 18 = Oct 18 to Oct 24.
+    expect(getUpcomingEvents(events, "2026-10-18", 7).map((event) => event.key)).toEqual([
+      "todo:2", "session:6", "todo:3",
+    ]);
+    expect(getUpcomingEvents(events, "2026-10-18", 1).map((event) => event.key)).toEqual(["todo:2"]);
+    // Without a window, every future day is kept, as before.
+    expect(getUpcomingEvents(events, "2026-10-18").map((event) => event.key)).toEqual([
+      "todo:2", "session:6", "todo:3", "todo:4",
+    ]);
+  });
+
+  it("carries the window across the end of a month and a year", () => {
+    const events = buildCalendarEvents([], [
+      session({ id: 1, date: "2027-01-02" }),
+      session({ id: 2, date: "2027-01-03" }),
+    ]);
+    expect(getUpcomingEvents(events, "2026-12-28", 7).map((event) => event.key)).toEqual(["session:1", "session:2"]);
+    expect(getUpcomingEvents(events, "2026-12-27", 7).map((event) => event.key)).toEqual(["session:1"]);
+  });
 });

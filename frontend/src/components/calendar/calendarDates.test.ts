@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildMonthGrid, getLocalMonth } from "./calendarDates";
+import { addDaysToDate, buildMonthGrid, getLocalMonth } from "./calendarDates";
 
 describe("buildMonthGrid", () => {
   it("builds Sunday-first weeks and marks days outside the requested month", () => {
@@ -57,5 +57,24 @@ describe("getLocalMonth", () => {
   it("rejects an invalid date", () => {
     expect(() => getLocalMonth(new Date(NaN))).toThrow(RangeError);
     expect(() => getLocalMonth(new Date("not-a-date"))).toThrow(RangeError);
+  });
+});
+
+describe("addDaysToDate", () => {
+  it.each([
+    ["2026-10-18", 6, "2026-10-24"],
+    ["2026-10-31", 1, "2026-11-01"],
+    ["2026-12-31", 1, "2027-01-01"],
+    ["2028-02-28", 1, "2028-02-29"],
+    ["2027-02-28", 1, "2027-03-01"],
+    ["2026-11-01", -1, "2026-10-31"],
+    ["2026-10-18", 0, "2026-10-18"],
+  ])("moves %s by %i days to %s", (date, days, expected) => {
+    expect(addDaysToDate(date, days)).toBe(expected);
+  });
+
+  it("is not thrown off by a daylight-saving change (US clocks go back on Nov 1, 2026)", () => {
+    expect(addDaysToDate("2026-10-31", 2)).toBe("2026-11-02");
+    expect(addDaysToDate("2026-03-07", 2)).toBe("2026-03-09");
   });
 });

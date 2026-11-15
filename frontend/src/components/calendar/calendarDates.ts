@@ -15,6 +15,16 @@ export function formatCalendarDate(date: Date): string {
   return `${year}-${month}-${day}`;
 }
 
+// Moves a YYYY-MM-DD date by whole days. UTC arithmetic has no daylight-saving gaps, so a
+// day is always exactly one step, and the result stays a plain calendar date.
+export function addDaysToDate(date: string, days: number): string {
+  const [year, month, day] = date.split("-").map(Number);
+  const moved = new Date(Date.UTC(year, month - 1, day + days));
+  const nextMonth = String(moved.getUTCMonth() + 1).padStart(2, "0");
+  const nextDay = String(moved.getUTCDate()).padStart(2, "0");
+  return `${moved.getUTCFullYear()}-${nextMonth}-${nextDay}`;
+}
+
 export function buildMonthGrid(year: number, month: number): CalendarDay[][] {
   // A four-digit year keeps dates as YYYY-MM-DD. Years 0–99 would be remapped to 1900–1999.
   if (
