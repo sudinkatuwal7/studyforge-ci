@@ -2,6 +2,13 @@
 
 Status: **APPROVED — Architecture and SCRUM-118 integration contract agreed; recovery decisions remain open**
 
+**Current implementation after SCRUM-101:** `services/document-processing` owns
+extraction, chunking, and document embeddings. Django publishes its task to the
+`document-processing` queue, serves the private source through an authenticated
+internal endpoint, and persists callback results in the application database.
+There is no backend processing app or backend Celery worker. Section 2 records
+the October 13 baseline; later sections record the standalone service contract.
+
 ## SCRUM-106 format extension
 
 Sanish approved extending source retrieval MIME handling, extraction dispatch,
@@ -45,7 +52,7 @@ Only Document Processing becomes an independent deployable service during Sprint
 
 This contract supplements the existing [architecture](../architecture.md), [public API contract](../api-contract.md), and [database schema](../database-schema.md). It does not authorize changes to the existing public API contracts.
 
-## 2. Verified current implementation
+## 2. Verified October 13 implementation baseline (historical)
 
 The following describes repository source inspected on October 13, 2026. It is not a claim that runtime or end-to-end tests were executed for this document.
 
@@ -55,23 +62,27 @@ The following describes repository source inspected on October 13, 2026. It is n
 | Public representation | Upload returns a `201` creation snapshot with `PENDING`. Upload and retrieval use `id`, `course_id`, `name`, `status`, `created_at`, `updated_at`, and `error`. See [serializer](../../backend/apps/documents/serializers.py) and [upload service](../../backend/apps/documents/services.py). |
 | Upload validation | Exactly one PDF is accepted, with a maximum file size of 20 MiB (20,971,520 bytes), inclusive. Validation checks PDF structure without extracting text. See [validation](../../backend/apps/documents/validation.py) and [views](../../backend/apps/documents/views.py). |
 | Application records | Document has User and Course foreign keys; Job has a Document foreign key. Upload creates both records before dispatch. See [models](../../backend/apps/documents/models.py) and [upload service](../../backend/apps/documents/services.py). |
-| Task publication | Django publishes `apps.processing.tasks.process_document_task` with one positional `document_id` after the database transaction commits. Publication retries are disabled and Celery results are ignored. See [dispatch](../../backend/apps/documents/dispatch.py). |
-| Worker coupling | The worker loads application Document and Chunk models, opens `Document.file` through Django storage, generates chunks and embeddings, and writes directly to the application database. Chunk replacement and the `READY` transition share a transaction. See [processing service](../../backend/apps/processing/services.py). |
-| Retries and Job tracking | The task allows three retries after the initial attempt, with a 60-second retry delay. The worker updates Document status but does not advance application Job status or attempts. See [tasks](../../backend/apps/processing/tasks.py), [constants](../../backend/apps/processing/constants.py), and [upload service](../../backend/apps/documents/services.py). |
+| Task publication | At this baseline, Django published to the former in-app task with one `document_id`. SCRUM-101 replaced that path: the current [dispatch](../../backend/apps/documents/dispatch.py) publishes `job_id`, `document_id`, and `source_sha256` to `processing_service.tasks.process_document_task`. |
+| Worker coupling | The former in-app worker accessed Django storage and models directly. The [standalone worker](../../services/document-processing/processing_service/tasks.py) now fetches sources through Django's internal API and returns results by callback; Django [persists chunks and status](../../backend/apps/documents/result_callbacks.py). |
+| Retries and Job tracking | The former task's retry and Job behavior was part of this baseline. The standalone [task](../../services/document-processing/processing_service/tasks.py) handles processing and callback delivery; Django's [callback receiver](../../backend/apps/documents/result_callbacks.py) advances application Job and Document state. |
 | Knowledge and study guides | Chunk has Document and User foreign keys and a 768-dimensional embedding field. Study-guide content retrieval reads `document.chunks` ordered by page number and primary key. See [Chunk model](../../backend/apps/knowledge/models.py) and [notes selectors](../../backend/apps/notes/selectors.py). |
 | Storage and deployment | Private uploads use `MEDIA_ROOT`; no public media route is registered. Compose currently starts only PostgreSQL 16 with pgvector and Redis 7. See [settings](../../backend/config/settings.py), [root routes](../../backend/config/urls.py), and [Compose](../../docker-compose.yml). |
 
-Current flow:
+Current flow after SCRUM-101:
 
 ```text
-Browser -> Django upload -> private PDF + Document + Job
-                         -> Redis/Celery -> existing worker
-                                           -> shared Django storage and models
+Browser -> Django upload -> private source + Document + Job
+                         -> Redis/Celery -> standalone processing worker
+                                           -> authenticated Django source endpoint
+                                           -> extraction, chunks, embeddings
+                                           -> authenticated Django result callback
                                            -> application chunks and status
 Browser -> Django status API -> application database
 ```
 
-The internal endpoints designed in section 5 are not present in the inspected routes. Older documentation may describe earlier implementation stages; the source references above establish this contract's implementation baseline as of the inspection date.
+The internal endpoints designed in section 5 were absent from the October 13
+inspection baseline. They are implemented in the current
+[internal views](../../backend/apps/documents/internal_views.py).
 
 ## 3. Approved service boundary
 

@@ -1,8 +1,8 @@
 # Automated testing and Bitbucket CI
 
-StudyForge currently has one Django backend and one React frontend. CI tests the
-whole application; domain selections below are preparation for future service
-contracts, not a microservices migration.
+StudyForge has a Django backend, a standalone document-processing service, and a
+React frontend. The backend domain selections below group Django tests; the
+processing service has its own tests.
 
 ## Install and run on Windows
 
@@ -52,12 +52,12 @@ npm.cmd --prefix frontend run test:watch
 | --- | --- | --- |
 | Identity/Courses | `backend/tests/users`, `backend/apps/courses` | Identity claims, token lifecycle, course ownership API |
 | Documents | `backend/tests/documents`, `backend/apps/documents` | Private upload storage, authorization, processing handoff and status |
-| AI Learning | `backend/apps/processing`, `backend/apps/knowledge`, `backend/apps/notes`, `backend/apps/quizzes` | Content retrieval, chunk/vector persistence, generation contracts |
+| AI Learning | `backend/apps/knowledge`, `backend/apps/notes`, `backend/apps/quizzes` | Content retrieval, chunk/vector persistence, generation contracts |
 
-Processing currently spans document and AI concerns. These selections are not
-separately deployable services: tests still initialize all installed Django apps.
-Keep the full suite as the merge gate. Add consumer/producer contract tests before
-replacing cross-app model references during Sprint 2.
+The standalone service extracts, chunks, and embeds documents. Backend document
+tests cover dispatch, callbacks, and integration with retrieval, Pandu, and notes;
+backend suites still initialize all installed Django apps. Keep the full suite as
+the merge gate.
 
 ## Database, storage, and AI isolation
 
@@ -85,10 +85,10 @@ used by the current OpenAI and Gemini clients). Embedding tests inject fake
 vectors or mock clients. Tests must never call paid APIs. Do not add real keys to
 repository/workspace CI variables for these jobs.
 
-Celery task tests call the real registered task synchronously with mocked retry
-state. Broker settings use in-memory transport, while document dispatch tests
-mock publication. This does not test actual Redis delivery or worker execution.
-No Redis service is needed for this first pipeline.
+The backend's document integration tests call the standalone registered task
+synchronously with mocked HTTP transport and AI embeddings. Dispatch tests mock
+broker publication. These tests exercise worker processing and Django persistence
+without testing live Redis delivery. No Redis service is needed for this pipeline.
 
 ### Bitbucket service mode
 

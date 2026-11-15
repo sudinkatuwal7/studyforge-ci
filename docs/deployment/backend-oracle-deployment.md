@@ -25,7 +25,7 @@ Internet (HTTPS :443)
       → Postgres 16 + pgvector   [Docker Compose, private]
       → Redis 7                  [Docker Compose, private]
          ↑
-      Celery worker (systemd) uses Redis as broker
+      Django publishes document jobs to Redis for the standalone processing service
 ```
 
 **Why this shape**
@@ -39,7 +39,7 @@ Internet (HTTPS :443)
 
 - [x] Backend API reachable via HTTPS at a production URL
 - [x] Migrations run; pgvector retrieval works in production
-- [x] Background tasks process through production Redis (Celery systemd + Redis)
+- [x] Background tasks processed through production Redis at the SCRUM-125 cutover (historical backend worker, retired by SCRUM-101)
 - [x] Data persists across backend redeployments (Gunicorn restart; DB volume kept)
 - [x] No secrets committed to the repository
 
@@ -72,7 +72,7 @@ Production secrets and env live on the **OCI VM**, not in git and not in
 | **Host** | `studyforge-api` (OCI Compute) |
 | **Path** | `/etc/studyforge.env` |
 | **Permissions** | `600`, owned by `root` (read via `sudo`) |
-| **Used by** | systemd `EnvironmentFile=` for Gunicorn and Celery |
+| **Used by** | systemd `EnvironmentFile=` for Gunicorn; the standalone processing service has its own environment |
 
 ### How to access (SSH first)
 
@@ -92,7 +92,7 @@ sudo cat /etc/studyforge.env
 sudo nano /etc/studyforge.env
 
 # after changes, restart app processes
-sudo systemctl restart studyforge-gunicorn studyforge-celery
+sudo systemctl restart studyforge-gunicorn
 ```
 
 **Do not** commit this file, paste secret values into docs/chat, or copy it into
@@ -169,17 +169,17 @@ Use the repo Compose services only (`db`, `redis`). Init script enables
 | 4.4 | Verify: `pg_isready` / `SELECT` on `vector` extension | Done (`vector` 0.8.7) |
 | 4.5 | Verify: `redis-cli ping` → `PONG` | Done |
 
-### 5. Django + Gunicorn + Celery
+### 5. Django + Gunicorn
 
 | Step | Action | Status |
 |------|--------|--------|
 | 5.1 | Land production settings changes on the deploy branch | Done |
-| 5.2 | venv + `pip install -r requirements.txt` (includes gunicorn + `packaging` for Celery/Redis) | Done |
+| 5.2 | venv + `pip install -r requirements.txt` (includes Gunicorn and Celery's Redis publisher dependencies) | Done |
 | 5.3 | Env file on VM (`/etc/studyforge.env`, mode `600`) — no secrets in git | Done |
 | 5.4 | `python manage.py migrate` | Done |
 | 5.5 | `python manage.py collectstatic --noinput` | Done |
 | 5.6 | systemd: `studyforge-gunicorn` on `127.0.0.1:8000` | Done |
-| 5.7 | systemd: `studyforge-celery` (`celery -A config worker`) using `CELERY_BROKER_URL` | Done |
+| 5.7 | The former backend Celery worker is retired by SCRUM-101; Django only publishes to the standalone worker's queue. | Current architecture |
 
 ### 6. HTTPS reverse proxy
 
@@ -196,7 +196,7 @@ Use the repo Compose services only (`db`, `redis`). Init script enables
 |------|--------|--------|
 | 7.1 | HTTPS API reachable | Done |
 | 7.2 | Migrations + pgvector check | Done |
-| 7.3 | Celery connected to Redis (`celery@studyforge-api ready`) | Done |
+| 7.3 | Redis reachable for Django task publication; standalone worker deployment is verified separately | Redis verified; worker separate |
 | 7.4 | Restart Gunicorn; confirm API + DB/pgvector still present | Done |
 | 7.5 | Confirm no secrets in git for this work | Done |
 
@@ -213,7 +213,7 @@ feature branch → PR → merge (e.g. development)
        ↓
   OCI VM: unchanged until someone deploys
        ↓
-  Human SSH → git pull → migrate → restart Gunicorn/Celery
+  Human SSH → git pull → migrate → restart Gunicorn
        ↓
   Production API serves the new code
 ```
@@ -230,9 +230,14 @@ pip install -r requirements.txt
 set -a; source /etc/studyforge.env; set +a
 python manage.py migrate --noinput
 python manage.py collectstatic --noinput
-sudo systemctl restart studyforge-gunicorn studyforge-celery
+sudo systemctl restart studyforge-gunicorn
 curl -i https://studyforge-rodians.duckdns.org/api/v1/health/
 ```
+
+When deploying SCRUM-101 to a VM that still has the former backend
+`studyforge-celery` unit, retire it once with
+`sudo systemctl disable --now studyforge-celery`. Deploy and verify the standalone
+document-processing worker separately; restarting Gunicorn does not start it.
 
 ## Planned: Bitbucket auto-deploy (after frontend)
 
@@ -257,15 +262,16 @@ What we will need later:
 | Deploy branch choice | Only that branch triggers deploy (`main` preferred; can switch) |
 | `scripts/deploy-oci.sh` (or equivalent) | Same commands as the manual ritual |
 | Bitbucket Repository variables / Secured variables | SSH private key, host, user — **never in git** |
-| VM `authorized_keys` + limited sudo | Allow CI to restart Gunicorn/Celery only |
+| VM `authorized_keys` + limited sudo | Allow CI to restart Gunicorn only |
 | Post-frontend CORS | Vercel origin already in `/etc/studyforge.env` before auto-deploy matters for browsers |
 
 Until that pipeline exists, continue using the manual SSH flow above.
 
 ## Document-processing microservice (how it can be deployed)
 
-SCRUM-125 deploys the **Django API + Compose Postgres/Redis + API-side Celery**.
-The **document-processing** service is a **separate** Celery worker
+SCRUM-125 deploys the **Django API + Compose Postgres/Redis**. Django publishes
+document jobs to Redis but does not run a backend Celery worker. The
+**document-processing** service is a **separate** Celery worker
 (`services/document-processing/`) that consumes the `document-processing` queue,
 calls back into Django, and needs `PROCESSING_SERVICE_TOKEN` + `GEMINI_API_KEY`.
 It is **not** required for the SCRUM-125 HTTPS API acceptance checks.
@@ -288,7 +294,7 @@ API is sketched). Keep `PROCESSING_SERVICE_TOKEN` aligned between Django
 | Frontend on Vercel | Set `CORS_ALLOWED_ORIGINS` / `CSRF_TRUSTED_ORIGINS` in `/etc/studyforge.env` to the Vercel HTTPS origin; restart Gunicorn |
 | Bitbucket auto-deploy | Pipeline SSH deploy of the manual steps; **after frontend**; branch configurable |
 | Document-processing worker | Production path TBD (OCI VM vs K8s); local kind path already in `docs/kind-local-worker.md` |
-| `packaging` | Explicit in `backend/requirements.txt` so Celery’s Redis transport does not fail on fresh installs |
+| `packaging` | Explicit in `backend/requirements.txt` for the Django Celery publisher's Redis transport |
 
 ## Environment variable placeholders
 
@@ -321,7 +327,7 @@ curl -i https://studyforge-rodians.duckdns.org/api/v1/health/
 On the VM (optional):
 
 ```bash
-sudo systemctl status studyforge-gunicorn studyforge-celery nginx --no-pager
+sudo systemctl status studyforge-gunicorn nginx --no-pager
 docker compose exec redis redis-cli ping
 docker compose exec db psql -U studyforge -d studyforge -c \
   "SELECT extname, extversion FROM pg_extension WHERE extname = 'vector';"

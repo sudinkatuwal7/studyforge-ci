@@ -56,7 +56,8 @@ Database and Redis health checks precede dependent startup. Successful setup and
 migration containers exit with code 0; they are not additional microservices.
 The service binds to host loopback at port 8001 by default. The workers register
 `processing_service.tasks.process_document_task` and consume the isolated
-`document-processing` queue, separate from the legacy backend's default queue.
+`document-processing` queue. Django publishes to this queue without running a
+backend Celery worker.
 
 The task accepts `job_id`, `document_id`, and `source_sha256`. It fetches
 `GET /internal/v1/jobs/{job_id}/document/` using the shared Bearer token,
