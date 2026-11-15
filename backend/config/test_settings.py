@@ -30,4 +30,3 @@ for _key in ("OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_APPLI
     os.environ.pop(_key, None)
 GEMINI_API_KEY = ""
 CELERY_BROKER_URL = "memory://"
-CELERY_RESULT_BACKEND = "cache+memory://"

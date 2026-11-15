@@ -45,7 +45,6 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt.token_blacklist",
     "corsheaders",
-    "apps.processing",
     "apps.knowledge",
     "apps.users.apps.UsersConfig",
     "apps.courses",
@@ -137,13 +136,12 @@ STATIC_ROOT = Path(os.environ.get("STATIC_ROOT", str(BASE_DIR / "staticfiles")))
 # Private uploads: no public media route is registered.
 MEDIA_ROOT = Path(os.environ.get("MEDIA_ROOT", str(BASE_DIR / "media")))
 
-# Producer configuration only. Person 4 owns the worker and task implementation.
+# Broker used to publish jobs to the standalone processing workers.
 CELERY_BROKER_URL = os.environ.get("CELERY_BROKER_URL", "redis://127.0.0.1:6379/0")
-# Gemini embeddings. The key is required only when an embedding call runs.
+# Gemini query embeddings for knowledge retrieval.
 GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
 EMBEDDING_MODEL = os.environ.get("EMBEDDING_MODEL", "gemini-embedding-2")
 EMBEDDING_DIMENSION = int(os.environ.get("EMBEDDING_DIMENSION", "768"))
-EMBEDDING_BATCH_SIZE = int(os.environ.get("EMBEDDING_BATCH_SIZE", "16"))
 # Disabled until a cosine-similarity cutoff is calibrated on labeled queries.
 _retrieval_min_similarity = os.environ.get("RETRIEVAL_MIN_COSINE_SIMILARITY", "").strip()
 RETRIEVAL_MIN_COSINE_SIMILARITY = (

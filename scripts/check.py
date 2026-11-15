@@ -16,7 +16,7 @@ SUITES = {
     "all": ["backend/apps", "backend/tests"],
     "identity-courses": ["backend/tests/users", "backend/apps/courses"],
     "documents": ["backend/tests/documents", "backend/apps/documents"],
-    "ai-learning": ["backend/apps/processing", "backend/apps/knowledge", "backend/apps/notes", "backend/apps/quizzes"],
+    "ai-learning": ["backend/apps/knowledge", "backend/apps/notes", "backend/apps/quizzes"],
 }
 
 
@@ -31,7 +31,7 @@ def test_environment():
     env.update(
         NOTES_LLM_BACKEND="fake", QUIZ_LLM_BACKEND="fake", DJANGO_SETTINGS_MODULE="config.test_settings",
         DATABASE_ENGINE="postgresql", EMBEDDING_DIMENSION="768",
-        EMBEDDING_BATCH_SIZE="16", EMBEDDING_MODEL="gemini-embedding-2",
+        EMBEDDING_MODEL="gemini-embedding-2",
         VITE_API_BASE_URL="http://api.test/api/v1",
     )
     return env
