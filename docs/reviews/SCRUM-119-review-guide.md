@@ -253,13 +253,36 @@ For the required short timestamped Real PR video:
 
 ## Reviewer Feedback
 
-If everything passes and the behavior works as expected, the PR can be approved.
+### Automated checks
 
-If something fails, please include:
+- Backend checks: **Passed**.
+- Document-processing checks: **Passed**.
+- Callback-failure replay test: **Passed**; the saved result was reused without
+  repeating extraction, chunking, or embedding.
+- No issues were found in the test files.
+
+### Manual checks
+
+- Uploaded a PDF and confirmed its status remained consistent after refreshing.
+- Confirmed PDF deletion works.
+- Confirmed quizzes work.
+- Notes results remained unchanged after switching to the Quiz tab.
+
+### Follow-up
+
+Preventing the same PDF from being processed more than once is a follow-up for a
+later sprint; it is not blocking this review.
+
+### Decision
+
+**Approved** by the reviewer.
+
+If a new issue is found, include:
 
 - what command/test failed;
 - what behavior was expected;
 - what actually happened;
 - the small change you recommend.
 
-After any requested change is made, rerun the failed test and the relevant automated checks before approving the PR.
+After any requested change is made, rerun the failed test and the relevant
+automated checks before approving the PR.
