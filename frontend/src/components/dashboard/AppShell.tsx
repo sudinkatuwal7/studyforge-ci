@@ -22,9 +22,12 @@ export default function AppShell({
   onSignOut: () => void;
   children: ReactNode;
 }) {
-  const { pathname, hash, key } = useLocation();
+  const { pathname, key } = useLocation();
   const onDashboard = pathname === "/";
-  const onHome = onDashboard && hash !== "#courses" && hash !== "#tasks";
+  // Courses stays highlighted inside a course (/courses/7/notes), since that is where it leads.
+  const onCourses = pathname === "/courses" || pathname.startsWith("/courses/");
+  const onTasks = pathname === "/tasks";
+  const onCalendar = pathname === "/calendar";
 
   // On phones the sidebar is a drawer. It stays open only for the location it
   // was opened on, so any navigation (a nav link, Back, a course link) closes it.
@@ -90,16 +93,16 @@ export default function AppShell({
           StudyForge
         </Link>
         <nav className="sidebar-nav" aria-label="Main">
-          <Link to="/" className={navClass(onHome)} aria-current={onHome ? "page" : undefined}>
-            <HomeIcon /> Home
+          <Link to="/" className={navClass(onDashboard)} aria-current={onDashboard ? "page" : undefined}>
+            <HomeIcon /> Dashboard
           </Link>
-          <Link className={navClass(onDashboard && hash === "#courses")} to="/#courses" aria-current={onDashboard && hash === "#courses" ? "page" : undefined}>
+          <Link to="/courses" className={navClass(onCourses)} aria-current={onCourses ? "page" : undefined}>
             <CoursesIcon /> Courses
           </Link>
-          <Link className={navClass(onDashboard && hash === "#tasks")} to="/#tasks" aria-current={onDashboard && hash === "#tasks" ? "page" : undefined}>
+          <Link to="/tasks" className={navClass(onTasks)} aria-current={onTasks ? "page" : undefined}>
             <TasksIcon /> Tasks
           </Link>
-          <Link className={navClass(pathname === "/calendar")} to="/calendar" aria-current={pathname === "/calendar" ? "page" : undefined}>
+          <Link to="/calendar" className={navClass(onCalendar)} aria-current={onCalendar ? "page" : undefined}>
             <CalendarIcon /> Calendar
           </Link>
         </nav>
@@ -148,6 +151,8 @@ function shellClass(pathname: string, navOpen: boolean) {
 
 function pageTitle(pathname: string): string {
   if (pathname.startsWith("/courses/")) return "Course";
+  if (pathname === "/courses") return "My Courses";
+  if (pathname === "/tasks") return "Tasks";
   if (pathname === "/calendar") return "Calendar";
   return "Dashboard";
 }

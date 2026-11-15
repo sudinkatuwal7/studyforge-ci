@@ -10,7 +10,9 @@ import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
 import CourseDetailPage from "./pages/CourseDetailPage";
 import CalendarPage from "./pages/CalendarPage";
+import CoursesPage from "./pages/CoursesPage";
 import DashboardPage from "./pages/DashboardPage";
+import TasksPage from "./pages/TasksPage";
 import "./styles/dashboard.css";
 
 type HealthState =
@@ -142,11 +144,22 @@ function App() {
     >
       <Routes>
         <Route path="/" element={
+          // Keyed by account so a different student never sees the previous one's courses or choices.
           <DashboardPage
+            key={user.id}
             refreshKey={courseListVersion}
             onCourseCreated={() => setCourseListVersion((version) => version + 1)}
           />
         } />
+        {/* Also keyed by account: each page loads the signed-in student's own data. */}
+        <Route path="/courses" element={
+          <CoursesPage
+            key={user.id}
+            refreshKey={courseListVersion}
+            onCourseCreated={() => setCourseListVersion((version) => version + 1)}
+          />
+        } />
+        <Route path="/tasks" element={<TasksPage key={user.id} refreshKey={courseListVersion} />} />
         <Route path="/courses/:courseId/:section?" element={<CourseDetailPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/login" element={<Navigate to="/" replace />} />
@@ -154,7 +167,7 @@ function App() {
         <Route path="*" element={
           <section className="course-detail">
             <h2>Page not found</h2>
-            <Link to="/">Return to my courses</Link>
+            <Link to="/courses">Return to my courses</Link>
           </section>
         } />
       </Routes>

@@ -40,6 +40,47 @@ function BackButton() {
   return <button type="button" onClick={() => navigate(-1)}>Back</button>;
 }
 
+describe("AppShell main navigation", () => {
+  const NAV = [
+    ["Dashboard", "/"],
+    ["Courses", "/courses"],
+    ["Tasks", "/tasks"],
+    ["Calendar", "/calendar"],
+  ] as const;
+
+  it("links Dashboard, Courses, Tasks and Calendar to their own pages, in that order", () => {
+    renderShell("/");
+    const nav = screen.getByRole("navigation", { name: "Main" });
+    const links = Array.from(nav.querySelectorAll("a"));
+    expect(links.map((link) => link.textContent?.trim())).toEqual(NAV.map(([name]) => name));
+    for (const [name, href] of NAV) {
+      expect(screen.getByRole("link", { name })).toHaveAttribute("href", href);
+    }
+  });
+
+  it.each([
+    ["/", "Dashboard", "Dashboard"],
+    ["/courses", "Courses", "My Courses"],
+    ["/courses/7/notes", "Courses", "Course"],
+    ["/courses/7/materials?pandu=open", "Courses", "Course"],
+    ["/tasks", "Tasks", "Tasks"],
+    ["/calendar", "Calendar", "Calendar"],
+  ])("at %s highlights only %s and titles the page %s", (path, active, title) => {
+    renderShell(path);
+    for (const [name] of NAV) {
+      const link = screen.getByRole("link", { name });
+      if (name === active) expect(link).toHaveAttribute("aria-current", "page");
+      else expect(link).not.toHaveAttribute("aria-current");
+    }
+    expect(screen.getByRole("heading", { level: 1, name: title })).toBeInTheDocument();
+  });
+
+  it("highlights nothing on an unknown page", () => {
+    renderShell("/no-such-page");
+    for (const [name] of NAV) expect(screen.getByRole("link", { name })).not.toHaveAttribute("aria-current");
+  });
+});
+
 describe("AppShell calendar navigation", () => {
   it("marks Calendar active and titles the page", () => {
     renderShell("/calendar");
@@ -47,10 +88,10 @@ describe("AppShell calendar navigation", () => {
     expect(screen.getByRole("link", { name: "Calendar" })).toHaveAttribute("href", "/calendar");
     expect(screen.getByRole("link", { name: "Calendar" })).toHaveAttribute("aria-current", "page");
     expect(screen.getByRole("heading", { level: 1, name: "Calendar" })).toBeInTheDocument();
-    expect(screen.getByRole("link", { name: "Home" })).not.toHaveAttribute("aria-current");
+    expect(screen.getByRole("link", { name: "Dashboard" })).not.toHaveAttribute("aria-current");
   });
 
-  it("keeps the dashboard title on Home", () => {
+  it("keeps the dashboard title on the Dashboard page", () => {
     renderShell("/");
 
     expect(screen.getByRole("heading", { level: 1, name: "Dashboard" })).toBeInTheDocument();
