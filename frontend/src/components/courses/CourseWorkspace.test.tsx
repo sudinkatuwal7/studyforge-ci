@@ -1,6 +1,6 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, type NavigateFunction, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import CourseWorkspace from "./CourseWorkspace";
 import type { CourseSection } from "./courseSections";
 import { listDocuments } from "../../api/documents";
@@ -59,7 +59,7 @@ function mockCompactScreen(matches: boolean) {
 
 it("switches sections without reloading materials or hiding chat and supports keyboard tabs", async () => {
   renderWorkspace();
-  await screen.findByText("No materials uploaded yet.");
+  await screen.findByText(/No materials uploaded yet./);
   const before = vi.mocked(listDocuments).mock.calls.length;
   fireEvent.click(screen.getByRole("tab", { name: "Notes" }));
   expect(screen.getByRole("heading", { name: "Study notes" })).toBeVisible();
@@ -93,7 +93,7 @@ it("offers multi-material notes in the Notes tab, separate from material managem
 
 it("collapses and restores the assistant without losing the course content", async () => {
   renderWorkspace();
-  await screen.findByText("No materials uploaded yet.");
+  await screen.findByText(/No materials uploaded yet./);
   const toggle = screen.getByRole("button", { name: "AI Assistant" });
   expect(toggle).toHaveAttribute("aria-expanded", "true");
   fireEvent.click(toggle);
@@ -151,7 +151,7 @@ it("keeps the draft and an in-flight real reply while Pandu is hidden", async ()
 
 it("returns focus to the toggle after each swap", async () => {
   renderWorkspace();
-  await screen.findByText("No materials uploaded yet.");
+  await screen.findByText(/No materials uploaded yet./);
   const toggle = screen.getByRole("button", { name: "AI Assistant" });
   fireEvent.click(toggle);
   expect(toggle).toHaveFocus();
@@ -162,7 +162,7 @@ it("returns focus to the toggle after each swap", async () => {
 it("moves focus off hidden course content when resizing into the view swap", async () => {
   const resize = mockCompactScreen(false);
   renderWorkspace();
-  await screen.findByText("No materials uploaded yet.");
+  await screen.findByText(/No materials uploaded yet./);
   screen.getByRole("tab", { name: "Materials" }).focus();
   resize(true);
   const toggle = screen.getByRole("button", { name: "AI Assistant" });
@@ -173,7 +173,7 @@ it("moves focus off hidden course content when resizing into the view swap", asy
 it("leaves focus in Pandu when resizing into the view swap", async () => {
   const resize = mockCompactScreen(false);
   renderWorkspace();
-  await screen.findByText("No materials uploaded yet.");
+  await screen.findByText(/No materials uploaded yet./);
   const message = screen.getByLabelText("Message Pandu");
   message.focus();
   resize(true);
@@ -183,7 +183,7 @@ it("leaves focus in Pandu when resizing into the view swap", async () => {
 it("keeps the open or closed choice when the screen crosses 64rem", async () => {
   const resize = mockCompactScreen(true);
   renderWorkspace();
-  await screen.findByText("No materials uploaded yet.");
+  await screen.findByText(/No materials uploaded yet./);
   const toggle = screen.getByRole("button", { name: "AI Assistant" });
   expect(toggle).toHaveAttribute("aria-expanded", "false");
   resize(false);
@@ -198,7 +198,7 @@ it("opens the section and Pandu state named in the address", async () => {
   expect(screen.getByRole("tab", { name: "Quizzes" })).toHaveAttribute("aria-selected", "true");
   expect(screen.getByRole("heading", { name: "Generate a quiz" })).toBeVisible();
   expect(screen.getByRole("button", { name: "AI Assistant" })).toHaveAttribute("aria-expanded", "false");
-  await screen.findByText("No materials uploaded yet.");
+  await screen.findByText(/No materials uploaded yet./);
 });
 
 it("lets ?pandu=open override the collapsed default on a narrow screen", async () => {
@@ -206,19 +206,19 @@ it("lets ?pandu=open override the collapsed default on a narrow screen", async (
   renderWorkspace("/courses/42/notes?pandu=open");
   expect(screen.getByRole("button", { name: "AI Assistant" })).toHaveAttribute("aria-expanded", "true");
   expect(document.getElementById("course-assistant")).not.toHaveAttribute("inert");
-  await screen.findByText("No materials uploaded yet.");
+  await screen.findByText(/No materials uploaded yet./);
 });
 
 it("ignores an unknown ?pandu value and uses the screen-size default", async () => {
   mockCompactScreen(true);
   renderWorkspace("/courses/42/materials?pandu=maybe");
   expect(screen.getByRole("button", { name: "AI Assistant" })).toHaveAttribute("aria-expanded", "false");
-  await screen.findByText("No materials uploaded yet.");
+  await screen.findByText(/No materials uploaded yet./);
 });
 
 it("puts each section switch and Pandu toggle in history and restores them with Back and Forward", async () => {
   renderWorkspace();
-  await screen.findByText("No materials uploaded yet.");
+  await screen.findByText(/No materials uploaded yet./);
   const documentLoads = vi.mocked(listDocuments).mock.calls.length;
   const toggle = screen.getByRole("button", { name: "AI Assistant" });
   const message = screen.getByLabelText("Message Pandu");
@@ -256,7 +256,7 @@ it("puts each section switch and Pandu toggle in history and restores them with 
 it("closes Pandu with Back after opening it on a narrow screen", async () => {
   mockCompactScreen(true);
   renderWorkspace();
-  await screen.findByText("No materials uploaded yet.");
+  await screen.findByText(/No materials uploaded yet./);
   const toggle = screen.getByRole("button", { name: "AI Assistant" });
   fireEvent.click(toggle);
   expect(browser.url).toBe("/courses/42/materials?pandu=open");
@@ -268,7 +268,7 @@ it("closes Pandu with Back after opening it on a narrow screen", async () => {
 
 it("does not add a history entry when the current section's tab is clicked", async () => {
   renderWorkspace();
-  await screen.findByText("No materials uploaded yet.");
+  await screen.findByText(/No materials uploaded yet./);
   const key = browser.key;
   fireEvent.click(screen.getByRole("tab", { name: "Materials" }));
   expect(browser.key).toBe(key);
@@ -277,7 +277,7 @@ it("does not add a history entry when the current section's tab is clicked", asy
 it("restores sections and Pandu with Back and Forward on a narrow screen", async () => {
   mockCompactScreen(true);
   renderWorkspace();
-  await screen.findByText("No materials uploaded yet.");
+  await screen.findByText(/No materials uploaded yet./);
   const toggle = screen.getByRole("button", { name: "AI Assistant" });
   const expectView = (url: string, section: string, panduOpen: boolean) => {
     expect(browser.url).toBe(url);
@@ -402,4 +402,44 @@ it("keeps a note generation running through section changes and shows its result
   expect(panel.getByText("Cells divide by mitosis.")).toBeVisible();
   expect(generateNotes).toHaveBeenCalledTimes(1);
   expect(getNotes).not.toHaveBeenCalled();
+});
+
+describe("Notes and Quizzes before materials are known", () => {
+  const notesPanel = () => within(document.getElementById("panel-Notes")!);
+  const quizzesPanel = () => within(document.getElementById("panel-Quizzes")!);
+
+  it("show loading, not 'no materials', while the material list loads", async () => {
+    vi.mocked(listDocuments).mockReturnValueOnce(new Promise(() => undefined));
+    renderWorkspace("/courses/42/notes");
+
+    expect(notesPanel().getByText("Loading materials...")).toBeVisible();
+    expect(quizzesPanel().getByText("Loading materials...")).toBeInTheDocument();
+    expect(notesPanel().queryByText(/No materials yet/)).not.toBeInTheDocument();
+    expect(notesPanel().queryByRole("link", { name: "Go to Materials" })).not.toBeInTheDocument();
+  });
+
+  it("show the load error with a way back to Materials to retry", async () => {
+    vi.mocked(listDocuments).mockRejectedValueOnce(new Error("offline"));
+    renderWorkspace("/courses/42/quizzes");
+
+    expect(await quizzesPanel().findByRole("alert")).toHaveTextContent("Materials could not be loaded. Open Materials to try again.");
+    expect(quizzesPanel().queryByText(/No materials yet/)).not.toBeInTheDocument();
+    fireEvent.click(quizzesPanel().getByRole("link", { name: "Go to Materials" }));
+    expect(browser.url).toBe("/courses/42/materials");
+    expect(screen.getByRole("button", { name: "Retry loading materials" })).toBeVisible();
+  });
+
+  it("show the empty state with Go to Materials, keeping Pandu's state", async () => {
+    renderWorkspace("/courses/42/notes?pandu=closed");
+
+    expect(await notesPanel().findByText("No materials yet. Upload one in Materials to create notes.")).toBeVisible();
+    expect(quizzesPanel().getByText("No materials yet. Upload one in Materials to create a quiz.")).toBeInTheDocument();
+    const link = notesPanel().getByRole("link", { name: "Go to Materials" });
+    expect(link).toHaveAttribute("href", "/courses/42/materials?pandu=closed");
+
+    fireEvent.click(link);
+    expect(browser.url).toBe("/courses/42/materials?pandu=closed");
+    expect(screen.getByRole("tab", { name: "Materials" })).toHaveAttribute("aria-selected", "true");
+    expect(screen.getByRole("button", { name: "AI Assistant" })).toHaveAttribute("aria-expanded", "false");
+  });
 });

@@ -65,7 +65,7 @@ it("shows an empty list and a recoverable safe API error", async () => {
   expect(screen.getByRole("alert")).toHaveTextContent("Materials unavailable.");
   vi.mocked(listDocuments).mockResolvedValue([]);
   await click("Retry loading materials");
-  expect(screen.getByText("No materials uploaded yet.")).toBeInTheDocument();
+  expect(screen.getByText(/No materials uploaded yet./)).toBeInTheDocument();
   expect(screen.queryByRole("alert")).not.toBeInTheDocument();
 });
 
@@ -212,4 +212,38 @@ it("filters the materials list by name", async () => {
   expect(screen.queryByRole("heading", { name: "Lecture.pdf" })).not.toBeInTheDocument();
   fireEvent.change(screen.getByLabelText("Search materials"), { target: { value: "missing" } });
   expect(screen.getByText("No materials match that search.")).toBeInTheDocument();
+});
+
+it("offers to upload the first material, which moves to Choose files", async () => {
+  vi.mocked(listDocuments).mockResolvedValue([]);
+  await show();
+  fireEvent.click(screen.getByRole("button", { name: "Upload your first material" }));
+  expect(screen.getByRole("button", { name: "Choose files" })).toHaveFocus();
+});
+
+it("reports loading, then ready, and shows the empty action only once loaded", async () => {
+  const states: string[] = [];
+  const record = (state: string) => states.push(state);
+  const request = deferred<StudyDocument[]>();
+  vi.mocked(listDocuments).mockReturnValueOnce(request.promise);
+  await act(async () => { render(<CourseMaterials courseId={7} onLoadStateChange={record} />); });
+
+  expect(states.at(-1)).toBe("loading");
+  expect(screen.queryByRole("button", { name: "Upload your first material" })).not.toBeInTheDocument();
+  await act(async () => request.resolve([]));
+  expect(states.at(-1)).toBe("ready");
+  expect(screen.getByRole("button", { name: "Upload your first material" })).toBeInTheDocument();
+});
+
+it("reports an error, with no empty action, then loading and ready after a retry", async () => {
+  const states: string[] = [];
+  const record = (state: string) => states.push(state);
+  vi.mocked(listDocuments).mockRejectedValueOnce(new DocumentRequestError(503, { code: "UNAVAILABLE", message: "Materials unavailable." }));
+  await act(async () => { render(<CourseMaterials courseId={7} onLoadStateChange={record} />); });
+
+  expect(states.at(-1)).toBe("error");
+  expect(screen.queryByRole("button", { name: "Upload your first material" })).not.toBeInTheDocument();
+  vi.mocked(listDocuments).mockResolvedValueOnce([document]);
+  await click("Retry loading materials");
+  expect(states.slice(-2)).toEqual(["loading", "ready"]);
 });

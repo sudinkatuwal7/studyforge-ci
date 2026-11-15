@@ -1,20 +1,29 @@
 import { useEffect, useId, useRef, useState } from "react";
 import { DocumentRequestError, listDocuments } from "../../api/documents";
 import { useAuth } from "../../context/AuthContext";
-import type { TrackedDocument } from "../../types/document";
+import type { MaterialsLoadState, TrackedDocument } from "../../types/document";
 import DocumentUpload from "../documents/DocumentUpload";
 import MaterialItem from "../documents/MaterialItem";
+import EmptyState from "../shared/EmptyState";
+import { revealAndFocus } from "../shared/revealAndFocus";
 
 // One material source powers the Materials, Notes, and Quizzes tabs and Pandu's reference picker.
-type Props = { courseId: number; onMaterialsChange?: (materials: TrackedDocument[]) => void };
+type Props = {
+  courseId: number;
+  onMaterialsChange?: (materials: TrackedDocument[]) => void;
+  // Lets Notes and Quizzes show "loading" or "could not load" instead of "no materials yet".
+  onLoadStateChange?: (state: MaterialsLoadState) => void;
+};
 
-export default function CourseMaterials({ courseId, onMaterialsChange }: Props) {
+export default function CourseMaterials({ courseId, onMaterialsChange, onLoadStateChange }: Props) {
   const { accessToken, user } = useAuth();
   if (!user || !accessToken) return <p role="alert">Sign in to view course materials.</p>;
-  return <Materials key={`${courseId}:${user.id}:${accessToken}`} courseId={courseId} accessToken={accessToken} onMaterialsChange={onMaterialsChange} />;
+  return <Materials key={`${courseId}:${user.id}:${accessToken}`} courseId={courseId} accessToken={accessToken}
+    onMaterialsChange={onMaterialsChange} onLoadStateChange={onLoadStateChange} />;
 }
 
-function Materials({ courseId, accessToken, onMaterialsChange }: Props & { accessToken: string }) {
+function Materials({ courseId, accessToken, onMaterialsChange, onLoadStateChange }: Props & { accessToken: string }) {
+  const sectionRef = useRef<HTMLElement>(null);
   const [materials, setMaterials] = useState<TrackedDocument[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -46,12 +55,15 @@ function Materials({ courseId, accessToken, onMaterialsChange }: Props & { acces
 
   // Publish uploads, renames, deletions, and status updates without another API request.
   useEffect(() => { onMaterialsChange?.(materials); }, [materials, onMaterialsChange]);
+  useEffect(() => {
+    onLoadStateChange?.(loading ? "loading" : error ? "error" : "ready");
+  }, [loading, error, onLoadStateChange]);
 
   const search = query.trim().toLowerCase();
   const matchesSearch = (name: string) => !search || name.toLowerCase().includes(search);
   const visibleMaterials = materials.filter((item) => matchesSearch(item.name));
 
-  return <section className="course-materials" aria-labelledby={`course-${courseId}-materials`}>
+  return <section ref={sectionRef} className="course-materials" aria-labelledby={`course-${courseId}-materials`}>
     <h3 id={`course-${courseId}-materials`}>Course materials</h3>
     <DocumentUpload courseId={courseId} onDocumentSaved={(document) => {
       setNotice("");
@@ -62,7 +74,15 @@ function Materials({ courseId, accessToken, onMaterialsChange }: Props & { acces
     {error && <div><p role="alert" className="document-error">{error}</p><button disabled={loading} onClick={() => {
       setLoading(true); setReload((value) => value + 1);
     }}>Retry loading materials</button></div>}
-    {!loading && !error && !materials.length && <p>No materials uploaded yet.</p>}
+    {!loading && !error && !materials.length && (
+      <EmptyState message="No materials uploaded yet. Add a PDF, DOCX or PPTX to use it in notes, quizzes and Pandu.">
+        {/* The upload form sits just above this message. */}
+        <button type="button" className="empty-state-action"
+          onClick={() => revealAndFocus(sectionRef.current?.querySelector<HTMLButtonElement>(".document-choose"))}>
+          Upload your first material
+        </button>
+      </EmptyState>
+    )}
     <div className="material-library">
       <div className="material-library-toolbar" hidden={materials.length === 0}>
         <h4 id={`course-${courseId}-library`}>Materials</h4>

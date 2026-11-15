@@ -1,7 +1,9 @@
 import { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import { listTodos } from "../../api/todos";
 import { useAuth } from "../../context/AuthContext";
 import type { TodoItem } from "../../types/todo";
+import EmptyState from "../shared/EmptyState";
 import { sortTodos } from "../todos/sortTodos";
 import "../todos/TodoList.css";
 
@@ -40,7 +42,10 @@ export default function CourseTasks({ courseId }: { courseId: number }) {
         <button type="button" onClick={() => setRetry((value) => value + 1)}>Try again</button>
       </>}
       {state.status === "ready" && (state.todos.length === 0 ? (
-        <p className="todo-empty">No tasks for this course yet.</p>
+        // This tab only lists tasks; they are added on the Tasks page, where the course is chosen.
+        <EmptyState message="No tasks for this course yet.">
+          <Link className="empty-state-action" to="/tasks">Add a task</Link>
+        </EmptyState>
       ) : (
         <ul>
           {state.todos.map((todo) => (

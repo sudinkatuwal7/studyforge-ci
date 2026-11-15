@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import type { Course } from "../../types/course";
-import type { TrackedDocument } from "../../types/document";
+import type { MaterialsLoadState, TrackedDocument } from "../../types/document";
 import ConnectedCourseChat from "../chat/ConnectedCourseChat";
 import CourseMaterials from "./CourseMaterials";
 import CourseTasks from "./CourseTasks";
@@ -50,11 +50,13 @@ export default function CourseWorkspace({ course, section }: { course: Course; s
   }, [assistantOpen]);
   // CourseMaterials owns fetching; this shared snapshot feeds Pandu's references.
   const [materials, setMaterials] = useState<TrackedDocument[]>([]);
+  // Until the list loads, an empty `materials` means "not known yet", not "none uploaded".
+  const [materialsState, setMaterialsState] = useState<MaterialsLoadState>("loading");
   return <section className="course-workspace" aria-label={`${course.name} workspace`}>
     <div className={`course-workspace-grid${assistantOpen ? "" : " course-workspace-grid-collapsed"}`}>
       {/* Inside the grid so Pandu can start on the same line instead of below this header. */}
       <header className="course-workspace-header">
-        <Link to="/">← My courses</Link>
+        <Link to="/courses">← My courses</Link>
         <h2>{course.name}</h2>
         {course.description && <p>{course.description}</p>}
       </header>
@@ -69,15 +71,15 @@ export default function CourseWorkspace({ course, section }: { course: Course; s
         </div>
         <div className="course-content-scroll">
           <div role="tabpanel" id="panel-Materials" aria-labelledby="tab-Materials" hidden={tab !== "Materials"}>
-            <CourseMaterials courseId={course.id} onMaterialsChange={setMaterials} />
+            <CourseMaterials courseId={course.id} onMaterialsChange={setMaterials} onLoadStateChange={setMaterialsState} />
           </div>
           {/* Stays mounted while hidden so a selection or generation in progress survives a tab switch. */}
           <div role="tabpanel" id="panel-Notes" aria-labelledby="tab-Notes" hidden={tab !== "Notes"} className="course-notes">
-            <NotesPanel courseId={course.id} materials={materials} />
+            <NotesPanel courseId={course.id} materials={materials} materialsState={materialsState} />
           </div>
           {/* Stays mounted while hidden so a quiz in progress survives a tab switch. */}
           <div role="tabpanel" id="panel-Quizzes" aria-labelledby="tab-Quizzes" hidden={tab !== "Quizzes"} className="course-quizzes">
-            <QuizPanel courseId={course.id} materials={materials} />
+            <QuizPanel courseId={course.id} materials={materials} materialsState={materialsState} />
           </div>
           <div role="tabpanel" id="panel-Tasks" aria-labelledby="tab-Tasks" hidden={tab !== "Tasks"}>
             <CourseTasks key={course.id} courseId={course.id} />
