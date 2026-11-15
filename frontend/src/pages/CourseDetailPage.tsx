@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react";
-import { Link, useParams } from "react-router-dom";
+import { Link, Navigate, useLocation, useParams } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { getCourse } from "../api/courses";
 import CourseWorkspace from "../components/courses/CourseWorkspace";
+import { type CourseSection, coursePath, isCourseSection } from "../components/courses/courseSections";
 import { useAuth } from "../context/AuthContext";
 import type { Course } from "../types/course";
 
@@ -12,7 +13,7 @@ type CourseState =
   | { status: "ready"; course: Course }
   | { status: "error"; message: string };
 
-function CourseDetail({ courseId }: { courseId: string }) {
+function CourseDetail({ courseId, section }: { courseId: string; section: CourseSection }) {
   const { accessToken } = useAuth();
   const [state, setState] = useState<CourseState>({ status: "loading" });
 
@@ -44,7 +45,7 @@ function CourseDetail({ courseId }: { courseId: string }) {
   }, [accessToken, courseId]);
 
   // Hand the authenticated course to the workspace only after it loads successfully.
-  if (state.status === "ready") return <CourseWorkspace course={state.course} />;
+  if (state.status === "ready") return <CourseWorkspace course={state.course} section={section} />;
 
   return (
     <section className="course-detail">
@@ -57,10 +58,17 @@ function CourseDetail({ courseId }: { courseId: string }) {
 }
 
 export default function CourseDetailPage() {
-  // For /courses/7, React Router provides courseId as the string "7".
-  const { courseId = "" } = useParams();
+  // For /courses/7/notes, React Router provides courseId "7" and section "notes".
+  const { courseId = "", section } = useParams();
+  const { search } = useLocation();
   const { user } = useAuth();
 
+  // A bare or unknown section opens Materials without adding a history entry, keeping ?pandu.
+  if (!isCourseSection(section)) {
+    return <Navigate to={{ pathname: coursePath(courseId), search }} replace />;
+  }
+
   // Reset for another course or account, but preserve in-flight chat work when the token refreshes.
-  return <CourseDetail key={`${courseId}:${user?.id ?? "signed-out"}`} courseId={courseId} />;
+  // The key leaves out the section so switching sections keeps the workspace (and Pandu) mounted.
+  return <CourseDetail key={`${courseId}:${user?.id ?? "signed-out"}`} courseId={courseId} section={section} />;
 }

@@ -147,7 +147,7 @@ function App() {
             onCourseCreated={() => setCourseListVersion((version) => version + 1)}
           />
         } />
-        <Route path="/courses/:courseId" element={<CourseDetailPage />} />
+        <Route path="/courses/:courseId/:section?" element={<CourseDetailPage />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/login" element={<Navigate to="/" replace />} />
         <Route path="/register" element={<Navigate to="/" replace />} />

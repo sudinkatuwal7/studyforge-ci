@@ -1,22 +1,41 @@
 import { useEffect, useRef, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import type { Course } from "../../types/course";
 import type { TrackedDocument } from "../../types/document";
 import ConnectedCourseChat from "../chat/ConnectedCourseChat";
 import CourseMaterials from "./CourseMaterials";
 import CourseTasks from "./CourseTasks";
+import { type CourseSection, coursePath, courseSections } from "./courseSections";
 import NotesPanel from "../notes/NotesPanel";
 import QuizPanel from "../quizzes/QuizPanel";
 import "../../styles/course-workspace.css";
 
-const tabs = ["Materials", "Notes", "Quizzes", "Tasks"] as const;
 // Matches the compact breakpoint in course-workspace.css and dashboard.css.
 const compactQuery = "(max-width: 64rem)";
-export default function CourseWorkspace({ course }: { course: Course }) {
-  // Materials is the default workspace section for every course visit.
-  const [tab, setTab] = useState<typeof tabs[number]>("Materials");
-  // Start with the assistant collapsed at the mobile and tablet breakpoint.
-  const [assistantOpen, setAssistantOpen] = useState(() => !window.matchMedia?.(compactQuery).matches);
+export default function CourseWorkspace({ course, section }: { course: Course; section: CourseSection }) {
+  const navigate = useNavigate();
+  const { search } = useLocation();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = courseSections.find((item) => item.slug === section)!.label;
+  // Without ?pandu, start with the assistant collapsed at the mobile and tablet breakpoint.
+  const [assistantOpenByDefault] = useState(() => !window.matchMedia?.(compactQuery).matches);
+  const pandu = searchParams.get("pandu");
+  const assistantOpen = pandu === "open" ? true : pandu === "closed" ? false : assistantOpenByDefault;
+
+  // Each section switch and Pandu toggle adds a history entry, so Back restores the previous view.
+  // Changing only :section or ?pandu keeps this component mounted, so chat and quiz work survive.
+  function showSection(next: CourseSection) {
+    if (next === section) return;
+    // Keep ?pandu so switching sections does not open or close Pandu.
+    navigate({ pathname: coursePath(course.id, next), search });
+  }
+  function toggleAssistant() {
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set("pandu", assistantOpen ? "closed" : "open");
+      return next;
+    });
+  }
   const toggleRef = useRef<HTMLButtonElement>(null);
   const contentRef = useRef<HTMLElement>(null);
   // Resizing into the compact view can hide a focused course control.
@@ -42,9 +61,10 @@ export default function CourseWorkspace({ course }: { course: Course }) {
       <section ref={contentRef} className="course-content" aria-label="Course content">
         <div className="course-tabs" role="tablist" aria-label="Course sections">
           {/* Arrow, Home, and End keys follow the accessible tabs keyboard pattern. */}
-          {tabs.map((name, index) => <button key={name} id={`tab-${name}`} role="tab" aria-selected={tab === name} aria-controls={`panel-${name}`} tabIndex={tab === name ? 0 : -1} onClick={() => setTab(name)} onKeyDown={(event) => {
-            const next = event.key === "ArrowRight" ? (index + 1) % tabs.length : event.key === "ArrowLeft" ? (index + tabs.length - 1) % tabs.length : event.key === "Home" ? 0 : event.key === "End" ? tabs.length - 1 : -1;
-            if (next >= 0) { event.preventDefault(); setTab(tabs[next]); document.getElementById(`tab-${tabs[next]}`)?.focus(); }
+          {courseSections.map(({ slug, label: name }, index) => <button key={slug} id={`tab-${name}`} role="tab" aria-selected={tab === name} aria-controls={`panel-${name}`} tabIndex={tab === name ? 0 : -1} onClick={() => showSection(slug)} onKeyDown={(event) => {
+            const count = courseSections.length;
+            const next = event.key === "ArrowRight" ? (index + 1) % count : event.key === "ArrowLeft" ? (index + count - 1) % count : event.key === "Home" ? 0 : event.key === "End" ? count - 1 : -1;
+            if (next >= 0) { event.preventDefault(); showSection(courseSections[next].slug); document.getElementById(`tab-${courseSections[next].label}`)?.focus(); }
           }}>{name}</button>)}
         </div>
         <div className="course-content-scroll">
@@ -65,7 +85,7 @@ export default function CourseWorkspace({ course }: { course: Course }) {
         </div>
       </section>
       <button ref={toggleRef} type="button" className="assistant-toggle" aria-expanded={assistantOpen} aria-controls="course-assistant" onClick={() => {
-        setAssistantOpen((open) => !open);
+        toggleAssistant();
         toggleRef.current?.focus();
       }}>
         AI Assistant

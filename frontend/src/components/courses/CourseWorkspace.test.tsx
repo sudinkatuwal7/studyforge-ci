@@ -1,16 +1,47 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, type NavigateFunction, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import CourseWorkspace from "./CourseWorkspace";
+import type { CourseSection } from "./courseSections";
 import { listDocuments } from "../../api/documents";
 import { askConversationQuestion, listConversations, listConversationUploads } from "../../api/conversations";
+import { generateNotes, getNotes } from "../../api/notes";
+import { generateQuiz, getQuiz } from "../../api/quizzes";
+import type { CourseNotes } from "../../types/notes";
+import type { Quiz } from "../../types/quiz";
 
 vi.mock("../../context/AuthContext", () => ({ useAuth: () => ({ user: { id: 1 }, accessToken: "token" }) }));
 vi.mock("../../api/documents", async (original) => ({ ...await original<typeof import("../../api/documents")>(), listDocuments: vi.fn().mockResolvedValue([]) }));
 vi.mock("../../api/conversations", () => ({ listConversations: vi.fn().mockResolvedValue([{ id: 9, course_id: 42, title: "", created_at: "2026-10-01", updated_at: "2026-10-01" }]), listConversationUploads: vi.fn().mockResolvedValue([]), askConversationQuestion: vi.fn() }));
+vi.mock("../../api/quizzes", async (original) => ({ ...await original<typeof import("../../api/quizzes")>(), generateQuiz: vi.fn(), getQuiz: vi.fn(), getQuizResults: vi.fn(), submitQuiz: vi.fn() }));
+vi.mock("../../api/notes", async (original) => ({ ...await original<typeof import("../../api/notes")>(), generateNotes: vi.fn(), getNotes: vi.fn() }));
 const course = { id: 42, name: "Biology", description: "Cell biology", owner: 1, created_at: "2026-10-01" };
 
-afterEach(() => vi.unstubAllGlobals());
+afterEach(() => { vi.unstubAllGlobals(); sessionStorage.clear(); });
+
+// Renders the workspace at a real course route and records the address, so tests can check
+// the URL and use Back/Forward the way the app does.
+const browser = { navigate: (() => {}) as NavigateFunction, url: "", key: "" };
+function Workspace() {
+  const { section } = useParams();
+  return <CourseWorkspace course={course} section={section as CourseSection} />;
+}
+function AddressProbe() {
+  const location = useLocation();
+  browser.navigate = useNavigate();
+  browser.url = location.pathname + location.search;
+  browser.key = location.key;
+  return null;
+}
+function renderWorkspace(...entries: string[]) {
+  const urls = entries.length ? entries : ["/courses/42/materials"];
+  return render(<MemoryRouter initialEntries={urls} initialIndex={urls.length - 1}>
+    <Routes><Route path="/courses/:courseId/:section" element={<Workspace />} /></Routes>
+    <AddressProbe />
+  </MemoryRouter>);
+}
+const back = () => act(async () => browser.navigate(-1));
+const forward = () => act(async () => browser.navigate(1));
 
 function mockCompactScreen(matches: boolean) {
   const listeners = new Set<() => void>();
@@ -27,7 +58,7 @@ function mockCompactScreen(matches: boolean) {
 }
 
 it("switches sections without reloading materials or hiding chat and supports keyboard tabs", async () => {
-  render(<MemoryRouter><CourseWorkspace course={course} /></MemoryRouter>);
+  renderWorkspace();
   await screen.findByText("No materials uploaded yet.");
   const before = vi.mocked(listDocuments).mock.calls.length;
   fireEvent.click(screen.getByRole("tab", { name: "Notes" }));
@@ -51,7 +82,7 @@ it("offers multi-material notes in the Notes tab, separate from material managem
     { id: 81, course_id: 42, name: "Cells.pdf", status: "READY", error: null, created_at: "2026-10-01", updated_at: "2026-10-01" },
     { id: 82, course_id: 42, name: "Genes.pdf", status: "READY", error: null, created_at: "2026-10-01", updated_at: "2026-10-01" },
   ]);
-  render(<MemoryRouter><CourseWorkspace course={course} /></MemoryRouter>);
+  renderWorkspace();
   fireEvent.click(await screen.findByRole("tab", { name: "Notes" }));
   const panel = within(screen.getByRole("tabpanel", { name: "Notes" }));
   expect(await panel.findByRole("checkbox", { name: "Cells.pdf" })).toBeVisible();
@@ -61,7 +92,7 @@ it("offers multi-material notes in the Notes tab, separate from material managem
 });
 
 it("collapses and restores the assistant without losing the course content", async () => {
-  render(<MemoryRouter><CourseWorkspace course={course} /></MemoryRouter>);
+  renderWorkspace();
   await screen.findByText("No materials uploaded yet.");
   const toggle = screen.getByRole("button", { name: "AI Assistant" });
   expect(toggle).toHaveAttribute("aria-expanded", "true");
@@ -76,7 +107,7 @@ it("collapses and restores the assistant without losing the course content", asy
 
 it("starts with the assistant collapsed at the narrow breakpoint", () => {
   mockCompactScreen(true);
-  render(<MemoryRouter><CourseWorkspace course={course} /></MemoryRouter>);
+  renderWorkspace();
   expect(screen.getByRole("button", { name: "AI Assistant" })).toHaveAttribute("aria-expanded", "false");
   expect(document.getElementById("course-assistant")).toHaveAttribute("inert");
 });
@@ -92,7 +123,7 @@ it("keeps the draft and an in-flight real reply while Pandu is hidden", async ()
     questionSignal = signal;
     return new Promise((resolve) => { finish = resolve; });
   });
-  render(<MemoryRouter><CourseWorkspace course={course} /></MemoryRouter>);
+  renderWorkspace();
   await screen.findByRole("checkbox", { name: /Lecture.pdf/ });
   fireEvent.click(screen.getByRole("checkbox", { name: /Lecture.pdf/ }));
   const message = screen.getByLabelText("Message Pandu");
@@ -119,7 +150,7 @@ it("keeps the draft and an in-flight real reply while Pandu is hidden", async ()
 });
 
 it("returns focus to the toggle after each swap", async () => {
-  render(<MemoryRouter><CourseWorkspace course={course} /></MemoryRouter>);
+  renderWorkspace();
   await screen.findByText("No materials uploaded yet.");
   const toggle = screen.getByRole("button", { name: "AI Assistant" });
   fireEvent.click(toggle);
@@ -130,7 +161,7 @@ it("returns focus to the toggle after each swap", async () => {
 
 it("moves focus off hidden course content when resizing into the view swap", async () => {
   const resize = mockCompactScreen(false);
-  render(<MemoryRouter><CourseWorkspace course={course} /></MemoryRouter>);
+  renderWorkspace();
   await screen.findByText("No materials uploaded yet.");
   screen.getByRole("tab", { name: "Materials" }).focus();
   resize(true);
@@ -141,7 +172,7 @@ it("moves focus off hidden course content when resizing into the view swap", asy
 
 it("leaves focus in Pandu when resizing into the view swap", async () => {
   const resize = mockCompactScreen(false);
-  render(<MemoryRouter><CourseWorkspace course={course} /></MemoryRouter>);
+  renderWorkspace();
   await screen.findByText("No materials uploaded yet.");
   const message = screen.getByLabelText("Message Pandu");
   message.focus();
@@ -151,7 +182,7 @@ it("leaves focus in Pandu when resizing into the view swap", async () => {
 
 it("keeps the open or closed choice when the screen crosses 64rem", async () => {
   const resize = mockCompactScreen(true);
-  render(<MemoryRouter><CourseWorkspace course={course} /></MemoryRouter>);
+  renderWorkspace();
   await screen.findByText("No materials uploaded yet.");
   const toggle = screen.getByRole("button", { name: "AI Assistant" });
   expect(toggle).toHaveAttribute("aria-expanded", "false");
@@ -160,4 +191,215 @@ it("keeps the open or closed choice when the screen crosses 64rem", async () => 
   fireEvent.click(toggle);
   resize(true);
   expect(toggle).toHaveAttribute("aria-expanded", "true");
+});
+
+it("opens the section and Pandu state named in the address", async () => {
+  renderWorkspace("/courses/42/quizzes?pandu=closed");
+  expect(screen.getByRole("tab", { name: "Quizzes" })).toHaveAttribute("aria-selected", "true");
+  expect(screen.getByRole("heading", { name: "Generate a quiz" })).toBeVisible();
+  expect(screen.getByRole("button", { name: "AI Assistant" })).toHaveAttribute("aria-expanded", "false");
+  await screen.findByText("No materials uploaded yet.");
+});
+
+it("lets ?pandu=open override the collapsed default on a narrow screen", async () => {
+  mockCompactScreen(true);
+  renderWorkspace("/courses/42/notes?pandu=open");
+  expect(screen.getByRole("button", { name: "AI Assistant" })).toHaveAttribute("aria-expanded", "true");
+  expect(document.getElementById("course-assistant")).not.toHaveAttribute("inert");
+  await screen.findByText("No materials uploaded yet.");
+});
+
+it("ignores an unknown ?pandu value and uses the screen-size default", async () => {
+  mockCompactScreen(true);
+  renderWorkspace("/courses/42/materials?pandu=maybe");
+  expect(screen.getByRole("button", { name: "AI Assistant" })).toHaveAttribute("aria-expanded", "false");
+  await screen.findByText("No materials uploaded yet.");
+});
+
+it("puts each section switch and Pandu toggle in history and restores them with Back and Forward", async () => {
+  renderWorkspace();
+  await screen.findByText("No materials uploaded yet.");
+  const documentLoads = vi.mocked(listDocuments).mock.calls.length;
+  const toggle = screen.getByRole("button", { name: "AI Assistant" });
+  const message = screen.getByLabelText("Message Pandu");
+  fireEvent.change(message, { target: { value: "Draft question" } });
+
+  fireEvent.click(screen.getByRole("tab", { name: "Notes" }));
+  expect(browser.url).toBe("/courses/42/notes");
+  fireEvent.click(toggle);
+  expect(browser.url).toBe("/courses/42/notes?pandu=closed");
+  // A section switch keeps Pandu's state.
+  fireEvent.click(screen.getByRole("tab", { name: "Quizzes" }));
+  expect(browser.url).toBe("/courses/42/quizzes?pandu=closed");
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+  await back();
+  expect(screen.getByRole("tab", { name: "Notes" })).toHaveAttribute("aria-selected", "true");
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+  await back();
+  expect(screen.getByRole("tab", { name: "Notes" })).toHaveAttribute("aria-selected", "true");
+  expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await back();
+  expect(browser.url).toBe("/courses/42/materials");
+  expect(screen.getByRole("tab", { name: "Materials" })).toHaveAttribute("aria-selected", "true");
+  await forward();
+  await forward();
+  expect(browser.url).toBe("/courses/42/notes?pandu=closed");
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+
+  // History moves never remount the workspace: same chat, same draft, no reload of materials.
+  expect(screen.getByLabelText("Message Pandu")).toBe(message);
+  expect(message).toHaveValue("Draft question");
+  expect(vi.mocked(listDocuments)).toHaveBeenCalledTimes(documentLoads);
+});
+
+it("closes Pandu with Back after opening it on a narrow screen", async () => {
+  mockCompactScreen(true);
+  renderWorkspace();
+  await screen.findByText("No materials uploaded yet.");
+  const toggle = screen.getByRole("button", { name: "AI Assistant" });
+  fireEvent.click(toggle);
+  expect(browser.url).toBe("/courses/42/materials?pandu=open");
+  expect(toggle).toHaveAttribute("aria-expanded", "true");
+  await back();
+  expect(browser.url).toBe("/courses/42/materials");
+  expect(toggle).toHaveAttribute("aria-expanded", "false");
+});
+
+it("does not add a history entry when the current section's tab is clicked", async () => {
+  renderWorkspace();
+  await screen.findByText("No materials uploaded yet.");
+  const key = browser.key;
+  fireEvent.click(screen.getByRole("tab", { name: "Materials" }));
+  expect(browser.key).toBe(key);
+});
+
+it("restores sections and Pandu with Back and Forward on a narrow screen", async () => {
+  mockCompactScreen(true);
+  renderWorkspace();
+  await screen.findByText("No materials uploaded yet.");
+  const toggle = screen.getByRole("button", { name: "AI Assistant" });
+  const expectView = (url: string, section: string, panduOpen: boolean) => {
+    expect(browser.url).toBe(url);
+    expect(screen.getByRole("tab", { name: section })).toHaveAttribute("aria-selected", "true");
+    expect(toggle).toHaveAttribute("aria-expanded", String(panduOpen));
+  };
+
+  fireEvent.click(screen.getByRole("tab", { name: "Notes" }));
+  fireEvent.click(toggle);
+  fireEvent.click(screen.getByRole("tab", { name: "Quizzes" }));
+  expectView("/courses/42/quizzes?pandu=open", "Quizzes", true);
+
+  await back();
+  expectView("/courses/42/notes?pandu=open", "Notes", true);
+  await back();
+  expectView("/courses/42/notes", "Notes", false);
+  await back();
+  expectView("/courses/42/materials", "Materials", false);
+  await forward();
+  expectView("/courses/42/notes", "Notes", false);
+  await forward();
+  expectView("/courses/42/notes?pandu=open", "Notes", true);
+});
+
+it("keeps sent Pandu messages and replies through Back and Forward", async () => {
+  vi.mocked(listDocuments).mockResolvedValueOnce([{
+    id: 81, course_id: 42, name: "Lecture.pdf", status: "READY", error: null,
+    created_at: "2026-10-01", updated_at: "2026-10-01",
+  }]);
+  vi.mocked(askConversationQuestion).mockResolvedValueOnce({ status: "INSUFFICIENT_CONTEXT", answer: null, citations: [] });
+  renderWorkspace();
+  const assistant = document.getElementById("course-assistant")!;
+  fireEvent.click(await within(assistant).findByRole("checkbox", { name: /Lecture.pdf/ }));
+  fireEvent.change(screen.getByLabelText("Message Pandu"), { target: { value: "What is osmosis?" } });
+  fireEvent.click(screen.getByRole("button", { name: "Send to Pandu" }));
+  expect(await within(assistant).findByText(/find enough information/)).toBeInTheDocument();
+  const conversationLoads = vi.mocked(listConversations).mock.calls.length;
+
+  fireEvent.click(screen.getByRole("tab", { name: "Notes" }));
+  fireEvent.click(screen.getByRole("button", { name: "AI Assistant" }));
+  await back();
+  await back();
+  await forward();
+
+  expect(document.getElementById("course-assistant")).toBe(assistant);
+  const [question, reply] = within(assistant).getAllByRole("article");
+  expect(within(question).getByText("What is osmosis?")).toBeInTheDocument();
+  expect(within(reply).getByText(/find enough information/)).toBeInTheDocument();
+  expect(vi.mocked(listConversations)).toHaveBeenCalledTimes(conversationLoads);
+});
+
+const readyMaterial = {
+  id: 81, course_id: 42, name: "Cells.pdf", status: "READY" as const, error: null,
+  created_at: "2026-10-01", updated_at: "2026-10-01",
+};
+
+it("keeps an in-progress quiz, its answers and current question through section changes", async () => {
+  const quiz: Quiz = {
+    id: 5, title: "Biology quiz", course: 42, source_documents: [81], created_at: "", is_submitted: false,
+    questions: [
+      { id: 11, position: 1, text: "What is a cell?", options: ["A", "B", "C", "D"] },
+      { id: 12, position: 2, text: "What is a gene?", options: ["E", "F", "G", "H"] },
+    ],
+  };
+  vi.mocked(listDocuments).mockResolvedValueOnce([readyMaterial]);
+  vi.mocked(generateQuiz).mockResolvedValueOnce(quiz);
+  renderWorkspace("/courses/42/quizzes");
+  const panel = within(screen.getByRole("tabpanel", { name: "Quizzes" }));
+  fireEvent.click(await panel.findByRole("checkbox", { name: "Cells.pdf" }));
+  fireEvent.click(panel.getByLabelText("10 questions"));
+  fireEvent.click(panel.getByRole("button", { name: "Generate quiz" }));
+  await panel.findByText("What is a cell?");
+  fireEvent.click(panel.getByLabelText("A"));
+  fireEvent.click(panel.getByRole("button", { name: "Next" }));
+  expect(panel.getByText(/Question 2 of 2 · 1 of 2 answered/)).toBeVisible();
+
+  // Leave by tab and return with Back, then leave by tab once more and return with Back.
+  fireEvent.click(screen.getByRole("tab", { name: "Notes" }));
+  expect(browser.url).toBe("/courses/42/notes");
+  await back();
+  expect(browser.url).toBe("/courses/42/quizzes");
+  fireEvent.click(screen.getByRole("tab", { name: "Materials" }));
+  await back();
+  expect(browser.url).toBe("/courses/42/quizzes");
+
+  expect(panel.getByText(/Question 2 of 2 · 1 of 2 answered/)).toBeVisible();
+  expect(panel.getByText("What is a gene?")).toBeVisible();
+  expect(panel.getByRole("button", { name: "Question 1, answered" })).toBeInTheDocument();
+  // A remount would restore the saved quiz from the API and lose the answers.
+  expect(generateQuiz).toHaveBeenCalledTimes(1);
+  expect(getQuiz).not.toHaveBeenCalled();
+});
+
+it("keeps a note generation running through section changes and shows its result", async () => {
+  const notes: CourseNotes = {
+    id: 6, title: "Notes: Cells.pdf", course: 42, overview: "Cells are small.", created_at: "",
+    source_documents: [{ id: 81, name: "Cells.pdf" }],
+    sections: [{ heading: "Cell structure", key_concepts: [], points: ["Cells divide by mitosis."] }],
+  };
+  let finish!: (value: CourseNotes) => void;
+  let signal!: AbortSignal;
+  vi.mocked(listDocuments).mockResolvedValueOnce([readyMaterial]);
+  vi.mocked(generateNotes).mockImplementationOnce((_course, _ids, _token, requestSignal) => {
+    signal = requestSignal!;
+    return new Promise((resolve) => { finish = resolve; });
+  });
+  renderWorkspace("/courses/42/notes");
+  const panel = within(screen.getByRole("tabpanel", { name: "Notes" }));
+  fireEvent.click(await panel.findByRole("checkbox", { name: "Cells.pdf" }));
+  fireEvent.click(panel.getByRole("button", { name: "Generate notes" }));
+  expect(panel.getByRole("status")).toHaveTextContent("writing your notes");
+
+  fireEvent.click(screen.getByRole("tab", { name: "Quizzes" }));
+  fireEvent.click(screen.getByRole("button", { name: "AI Assistant" }));
+  await back();
+  await back();
+  expect(browser.url).toBe("/courses/42/notes");
+  expect(signal.aborted).toBe(false);
+
+  await act(async () => finish(notes));
+  expect(await panel.findByRole("heading", { name: notes.title })).toBeVisible();
+  expect(panel.getByText("Cells divide by mitosis.")).toBeVisible();
+  expect(generateNotes).toHaveBeenCalledTimes(1);
+  expect(getNotes).not.toHaveBeenCalled();
 });
