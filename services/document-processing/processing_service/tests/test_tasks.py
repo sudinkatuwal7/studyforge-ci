@@ -10,7 +10,13 @@ from processing_service.chunking import TextChunk
 from processing_service.errors import DocumentDeletedError, PermanentProcessingError, RetryableProcessingError
 from processing_service.pdf_parser import ExtractionResult, PageText
 from processing_service.source_client import SourceDocument
-from processing_service.tasks import process_document_task
+from processing_service.tasks import (
+    DELIVERY_MAX_RETRIES,
+    PROCESSING_MAX_RETRIES,
+    RUNNING_MAX_RETRIES,
+    TASK_MAX_RETRIES,
+    process_document_task,
+)
 
 
 DIGEST = "a" * 64
@@ -39,8 +45,13 @@ def extraction():
 
 
 class DocumentTaskTests(SimpleTestCase):
-    def test_task_keeps_the_three_retry_limit(self):
-        self.assertEqual(process_document_task.max_retries, 3)
+    def test_task_reserves_retry_budget_for_each_phase(self):
+        self.assertEqual(
+            (RUNNING_MAX_RETRIES, PROCESSING_MAX_RETRIES, DELIVERY_MAX_RETRIES),
+            (3, 3, 3),
+        )
+        self.assertEqual(TASK_MAX_RETRIES, 9)
+        self.assertEqual(process_document_task.max_retries, TASK_MAX_RETRIES)
         self.assertTrue(app.conf.task_acks_late)
         self.assertTrue(app.conf.task_reject_on_worker_lost)
         self.assertEqual(app.conf.worker_prefetch_multiplier, 1)
@@ -162,11 +173,16 @@ class DocumentTaskTests(SimpleTestCase):
         fetch.assert_not_called()
 
     def test_deleted_document_does_not_retry_or_send_a_failed_callback(self):
+        store = new_task_store()
         with (
+            patch("processing_service.tasks.execution_store", store),
             patch(
                 "processing_service.tasks.fetch_source_document",
                 side_effect=DocumentDeletedError("Django returned 404"),
             ),
+            patch("processing_service.tasks.extract_document") as extract,
+            patch("processing_service.tasks.chunk_pages") as chunk,
+            patch("processing_service.tasks.embed_texts") as embed,
             patch.object(process_document_task, "retry") as retry,
             patch("processing_service.tasks.submit_callback") as callback,
         ):

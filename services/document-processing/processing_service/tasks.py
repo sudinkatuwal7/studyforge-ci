@@ -64,20 +64,6 @@ def process_document_task(
         # A user deletion is terminal. Do not retry or send a FAILED callback
         # for a document that no longer exists.
         return {**identity, "status": "DELETED"}
-        result = {
-            **identity,
-            "status": "SUCCEEDED",
-            "page_count": extraction.page_count,
-            "likely_scanned": extraction.likely_scanned,
-            "chunks": [
-                {
-                    "page_number": chunk.page_number,
-                    "content": chunk.content,
-                    "embedding": embedding,
-                }
-                for chunk, embedding in zip(chunks, embeddings, strict=True)
-            ],
-        }
     except RetryableProcessingError as exc:
         if attempt <= PROCESSING_MAX_RETRIES and self.request.retries < TASK_MAX_RETRIES:
             execution_store.prepare_processing_retry(job_id)
@@ -89,6 +75,21 @@ def process_document_task(
         _stage_failure(job_id, identity)
         _deliver_saved(self, job_id)
         raise
+
+    result = {
+        **identity,
+        "status": "SUCCEEDED",
+        "page_count": extraction.page_count,
+        "likely_scanned": extraction.likely_scanned,
+        "chunks": [
+            {
+                "page_number": chunk.page_number,
+                "content": chunk.content,
+                "embedding": embedding,
+            }
+            for chunk, embedding in zip(chunks, embeddings, strict=True)
+        ],
+    }
 
     try:
         execution_store.stage_terminal(job_id, result)
