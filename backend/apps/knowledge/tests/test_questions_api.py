@@ -18,8 +18,8 @@ from apps.courses.models import Course
 from apps.documents.models import Document
 from apps.knowledge.llm import OpenAIRAGLLM
 from apps.knowledge.models import Chunk
+from apps.knowledge.query_embeddings import PermanentQueryEmbeddingError, RetryableQueryEmbeddingError
 from apps.knowledge.serializers import AnswerResultSerializer, CitationSerializer
-from apps.processing.exceptions import PermanentProcessingError, RetryableProcessingError
 
 
 ABSTENTION = {"status": "INSUFFICIENT_CONTEXT", "answer": None, "citations": []}
@@ -218,8 +218,8 @@ class QuestionsAPITests(TestCase):
         self.sdk.chat.completions.create.assert_called_once()
 
     def test_embedding_failures_are_sanitized_not_abstentions(self):
-        for error in (RetryableProcessingError("SECRET upstream"),
-                      PermanentProcessingError("SECRET key"), ValueError("SECRET vector"),
+        for error in (RetryableQueryEmbeddingError("SECRET upstream"),
+                      PermanentQueryEmbeddingError("SECRET key"), ValueError("SECRET vector"),
                       ImproperlyConfigured("SECRET configuration")):
             with self.subTest(error=type(error).__name__):
                 self.embed.side_effect = error

@@ -10,8 +10,8 @@ from django.test import TestCase, override_settings
 from apps.courses.models import Course
 from apps.documents.models import Document
 from apps.knowledge.models import Chunk
+from apps.knowledge.query_embeddings import PermanentQueryEmbeddingError, RetryableQueryEmbeddingError
 from apps.knowledge.retrieval import retrieve_chunks, retrieve_chunks_for_documents
-from apps.processing.exceptions import PermanentProcessingError, RetryableProcessingError
 
 
 DIMENSION = 768
@@ -183,8 +183,8 @@ class RetrievalTests(TestCase):
 
     def test_provider_failure_is_not_an_empty_result(self):
         for error in (
-            RetryableProcessingError("provider temporarily unavailable"),
-            PermanentProcessingError("provider rejected request"),
+            RetryableQueryEmbeddingError("provider temporarily unavailable"),
+            PermanentQueryEmbeddingError("provider rejected request"),
         ):
             with self.subTest(error=type(error).__name__), patch(
                 "apps.knowledge.retrieval.embed_texts", side_effect=error
@@ -413,7 +413,7 @@ class MultiDocumentRetrievalTests(TestCase):
 
     def test_empty_corpus_and_provider_failures(self):
         self.assertEqual(self.retrieve(), [])
-        for error in (RetryableProcessingError("temporary"), PermanentProcessingError("permanent")):
+        for error in (RetryableQueryEmbeddingError("temporary"), PermanentQueryEmbeddingError("permanent")):
             with self.subTest(error=error), patch("apps.knowledge.retrieval.embed_texts", side_effect=error) as embed:
                 with self.assertRaises(type(error)) as caught:
                     retrieve_chunks_for_documents(

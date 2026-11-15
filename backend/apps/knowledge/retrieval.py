@@ -12,8 +12,8 @@ from pgvector.django import CosineDistance
 
 from apps.documents.models import Document
 from apps.knowledge.models import Chunk
+from apps.knowledge.query_embeddings import embed_texts
 from apps.knowledge.scope import question_documents
-from apps.processing.embedding_service import embed_texts
 
 
 EMBEDDING_DIMENSION = 768
