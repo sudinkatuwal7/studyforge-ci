@@ -24,6 +24,8 @@ from rest_framework_simplejwt.tokens import AccessToken
 
 from apps.documents.models import Document, Job
 from apps.knowledge.models import Chunk
+from apps.knowledge.retrieval import retrieve_chunks
+from apps.notes.llm.fake import FakeStudyGuideLLM
 from apps.notes.selectors import get_ordered_chunks
 
 
@@ -74,15 +76,21 @@ def upload_job(owner_client, course, pdf_factory, kind="text"):
         format="multipart",
     )
     assert response.status_code == 201
+    assert response.json()["status"] == "PENDING"
     document = Document.objects.get(pk=response.json()["id"])
-    return document, document.jobs.get()
+    job = document.jobs.get()
+    assert document.status == Document.Status.PENDING
+    assert job.status == Job.Status.QUEUED
+    assert not document.chunks.exists()
+    return document, job
 
 
 @pytest.mark.django_db(transaction=True)
 def test_uploaded_pdf_reaches_ready_and_identical_redelivery_is_acknowledged(
-    worker_bridge, owner_client, course, pdf_factory, dispatch,
+    worker_bridge, owner_client, owner, course, pdf_factory, dispatch, monkeypatch,
 ):
     document, job = upload_job(owner_client, course, pdf_factory)
+    assert owner_client.get(f"/api/v1/documents/{document.pk}/").json()["status"] == "PENDING"
     dispatch.assert_called_once_with(job.pk, document.pk, document.sha256)
     result = worker_bridge.task.run(job.pk, document.pk, document.sha256)
     assert worker_bridge.results.submit_callback(job.pk, result) == "duplicate"
@@ -92,9 +100,54 @@ def test_uploaded_pdf_reaches_ready_and_identical_redelivery_is_acknowledged(
     assert job.attempts == 1
     assert document.status == Document.Status.READY
     assert document.page_count == 1
-    assert Chunk.objects.filter(document=document).count() == len(result["chunks"]) > 0
-    assert all(chunk.owner_id == document.owner_id for chunk in document.chunks.all())
+    chunks = list(get_ordered_chunks(document))
+    assert len(chunks) == len(result["chunks"]) > 0
+    assert all(chunk.owner_id == document.owner_id for chunk in chunks)
+    assert [payload["status"] for payload, code in worker_bridge.callbacks if code == 200] == [
+        "RUNNING", "SUCCEEDED", "SUCCEEDED",
+    ]
     assert owner_client.get(f"/api/v1/documents/{document.pk}/").json()["status"] == "READY"
+
+    question = "What does this lecture cover?"
+    query_embed = Mock(return_value=[[0.25] * 768])
+    monkeypatch.setattr("apps.knowledge.retrieval.embed_texts", query_embed)
+    retrieved = retrieve_chunks(owner, document.pk, question)
+    assert [row["chunk_id"] for row in retrieved] == [chunk.pk for chunk in chunks]
+    assert [row["content"] for row in retrieved] == [chunk.content for chunk in chunks]
+
+    def answer_from_passages(_, passages):
+        passage = passages[0]
+        return {
+            "status": "ANSWERED", "answer": "The lecture contains the cited material.",
+            "citations": [{
+                "chunk_id": passage["chunk_id"], "document_id": passage["document_id"],
+                "page_number": passage["page_number"], "excerpt": passage["content"],
+            }],
+        }
+
+    pandu = SimpleNamespace(generate=Mock(side_effect=answer_from_passages))
+    monkeypatch.setattr("apps.knowledge.llm.get_client", lambda: pandu)
+    answer = owner_client.post(
+        "/api/v1/rag/questions/", {"question": question, "document_ids": [document.pk]}, format="json",
+    )
+    assert answer.status_code == 200
+    assert answer.json()["status"] == "ANSWERED"
+    assert answer.json()["citations"][0]["chunk_id"] == chunks[0].pk
+    assert pandu.generate.call_args.args[1][0]["content"] == chunks[0].content
+    assert query_embed.call_count == 2
+
+    notes_provider = FakeStudyGuideLLM()
+    notes_provider.generate_notes = Mock(wraps=notes_provider.generate_notes)
+    monkeypatch.setattr("apps.notes.services.get_client", lambda: notes_provider)
+    notes = owner_client.post(
+        f"/api/v1/courses/{course.pk}/notes/", {"document_ids": [document.pk]}, format="json",
+    )
+    assert notes.status_code == 201
+    assert notes.json()["source_documents"] == [{"id": document.pk, "name": document.title}]
+    notes_provider.generate_notes.assert_called_once_with([
+        (document.title, "\n\n".join(chunk.content for chunk in chunks)),
+    ])
+    assert owner_client.get(f"/api/v1/notes/{notes.json()['id']}/").status_code == 200
 
 
 @pytest.mark.django_db(transaction=True)
@@ -195,6 +248,7 @@ def test_empty_extraction_becomes_controlled_failure_without_retry(
     assert document.status == Document.Status.FAILED
     assert document.error_code == "PROCESSING_FAILED"
     assert not document.chunks.exists()
+    assert owner_client.get(f"/api/v1/documents/{document.pk}/").json()["status"] == "FAILED"
     assert [(payload["status"], code) for payload, code in worker_bridge.callbacks] == [
         ("RUNNING", 200), ("SUCCEEDED", 400), ("FAILED", 200),
     ]
