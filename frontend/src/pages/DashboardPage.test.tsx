@@ -10,7 +10,8 @@ import type { StudySession } from "../types/studySession";
 import type { TodoItem } from "../types/todo";
 import DashboardPage from "./DashboardPage";
 
-vi.mock("../api/courses", () => ({ listCourses: vi.fn() }));
+// Keep the real error classes: CourseList checks `instanceof NotLoggedInError` when loading fails.
+vi.mock("../api/courses", async (original) => ({ ...await original<typeof import("../api/courses")>(), listCourses: vi.fn() }));
 vi.mock("../api/todos", () => ({ listTodos: vi.fn(), updateTodoCompletion: vi.fn(), createTodo: vi.fn() }));
 vi.mock("../api/studySessions", () => ({ listStudySessions: vi.fn() }));
 vi.mock("../context/AuthContext", () => ({
@@ -82,7 +83,7 @@ describe("dashboard calendar", () => {
     expect(within(sessionDay).getByText("Review graphs")).toBeInTheDocument();
   });
 
-  it("updates the upcoming count when a dated task is completed", async () => {
+  it("lists and counts the next 7 days, and updates both when a dated task is completed", async () => {
     const user = userEvent.setup();
     const later: TodoItem = { ...datedTask, id: 5, title: "Later assignment", due_date: "2026-10-30" };
     const quiz: TodoItem = { ...datedTask, id: 6, title: "Quiz prep", due_date: "2026-10-23" };
@@ -96,16 +97,117 @@ describe("dashboard calendar", () => {
       </MemoryRouter>,
     );
 
+    // Today is Oct 18, so the window is Oct 18–24: the session (18th), Read chapter (22nd), Quiz prep (23rd).
+    // Later assignment (30th) is outside it; overdue, completed and undated tasks never count.
     const summary = await screen.findByRole("region", { name: "Study summary" });
-    await waitFor(() => expect(summary).toHaveTextContent("Upcoming4"));
-    expect(screen.queryByRole("region", { name: "Upcoming" })).not.toBeInTheDocument();
+    await waitFor(() => expect(summary).toHaveTextContent("Upcoming3"));
+    const upcoming = within(screen.getByRole("region", { name: "Upcoming" }));
+    const titles = () => upcoming.getAllByRole("listitem").map((item) => item.querySelector("strong")?.textContent);
+    expect(titles()).toEqual(["Review graphs", "Read chapter", "Quiz prep"]);
 
     await user.click(screen.getByRole("checkbox", { name: "Mark complete: Read chapter" }));
-    await waitFor(() => expect(summary).toHaveTextContent("Upcoming3"));
+    await waitFor(() => expect(summary).toHaveTextContent("Upcoming2"));
+    expect(titles()).toEqual(["Review graphs", "Quiz prep"]);
 
     await user.click(screen.getByRole("button", { name: /October 22, 2026, 1 activity/ }));
     const selected = screen.getByRole("dialog", { name: "October 22, 2026" });
     expect(within(selected).getByText("Read chapter")).toBeInTheDocument();
     expect(selected.querySelector(".calendar-activity-completed")).not.toBeNull();
+  });
+});
+
+describe("dashboard calendar empty state", () => {
+  beforeEach(() => {
+    vi.mocked(listCourses).mockResolvedValue([]);
+  });
+
+  it("offers to plan a study session when nothing is dated", async () => {
+    vi.mocked(listTodos).mockResolvedValue([undatedTask]);
+    vi.mocked(listStudySessions).mockResolvedValue([]);
+    render(<MemoryRouter><DashboardPage refreshKey={0} onCourseCreated={() => undefined} /></MemoryRouter>);
+
+    const calendar = within(screen.getByRole("region", { name: "Calendar" }));
+    expect(await calendar.findByText("No dated tasks or study sessions yet.")).toBeInTheDocument();
+    expect(calendar.getByRole("link", { name: "Plan a study session" })).toHaveAttribute("href", "/calendar");
+  });
+
+  it("waits for both lists before calling the calendar empty", async () => {
+    vi.mocked(listTodos).mockResolvedValue([]);
+    vi.mocked(listStudySessions).mockReturnValue(new Promise(() => undefined));
+    render(<MemoryRouter><DashboardPage refreshKey={0} onCourseCreated={() => undefined} /></MemoryRouter>);
+
+    const calendar = within(screen.getByRole("region", { name: "Calendar" }));
+    expect(await calendar.findByText("October 2026")).toBeInTheDocument();
+    expect(calendar.queryByText(/No dated tasks/)).not.toBeInTheDocument();
+  });
+
+  it("shows the error, not the empty state, when study sessions fail to load", async () => {
+    vi.mocked(listTodos).mockResolvedValue([]);
+    vi.mocked(listStudySessions).mockRejectedValue(new Error("offline"));
+    render(<MemoryRouter><DashboardPage refreshKey={0} onCourseCreated={() => undefined} /></MemoryRouter>);
+
+    const calendar = within(screen.getByRole("region", { name: "Calendar" }));
+    expect(await calendar.findByRole("alert")).toHaveTextContent("Could not load study sessions.");
+    expect(calendar.queryByText(/No dated tasks/)).not.toBeInTheDocument();
+  });
+
+  it("does not show the empty state once something is dated", async () => {
+    vi.mocked(listTodos).mockResolvedValue([datedTask]);
+    vi.mocked(listStudySessions).mockResolvedValue([]);
+    render(<MemoryRouter><DashboardPage refreshKey={0} onCourseCreated={() => undefined} /></MemoryRouter>);
+
+    const calendar = within(screen.getByRole("region", { name: "Calendar" }));
+    await waitFor(() => expect(screen.getByRole("region", { name: "Calendar" }).querySelectorAll(".calendar-dot")).toHaveLength(1));
+    expect(calendar.queryByText(/No dated tasks/)).not.toBeInTheDocument();
+  });
+});
+
+describe("dashboard quick links", () => {
+  const biology = { id: 7, name: "Biology", description: "", owner: 1, created_at: "2026-10-01" };
+  const renderDashboard = () => render(
+    <MemoryRouter>
+      <DashboardPage refreshKey={0} onCourseCreated={() => undefined} />
+    </MemoryRouter>,
+  );
+
+  beforeEach(() => {
+    localStorage.clear();
+    vi.mocked(listTodos).mockResolvedValue([]);
+    vi.mocked(listStudySessions).mockResolvedValue([]);
+  });
+
+  it("links into the last opened course once the course list loads", async () => {
+    localStorage.setItem("studyforge:lastCourse:1", "7");
+    vi.mocked(listCourses).mockResolvedValue([biology]);
+    renderDashboard();
+
+    const quickLinks = within(screen.getByRole("region", { name: "Quick links" }));
+    expect(quickLinks.getByRole("status")).toHaveTextContent("Loading quick links...");
+    expect(await quickLinks.findByRole("link", { name: /Quizzes/ })).toHaveAttribute("href", "/courses/7/quizzes");
+    expect(quickLinks.getByRole("link", { name: /Ask Pandu/ })).toHaveAttribute("href", "/courses/7/materials?pandu=open");
+  });
+
+  it("sends both create-course shortcuts to the dashboard's real course form", async () => {
+    const user = userEvent.setup();
+    vi.mocked(listCourses).mockResolvedValue([]);
+    renderDashboard();
+    const quickLinks = within(screen.getByRole("region", { name: "Quick links" }));
+    const field = screen.getByLabelText("Course name");
+
+    await user.click(await quickLinks.findByRole("button", { name: "Create your first course" }));
+    expect(field).toHaveFocus();
+
+    field.blur();
+    await user.click(screen.getByRole("button", { name: "New course" }));
+    expect(field).toHaveFocus();
+  });
+
+  it("shows an error in the quick links when the course list fails", async () => {
+    vi.mocked(listCourses).mockRejectedValue(new Error("Server unavailable"));
+    renderDashboard();
+
+    const quickLinks = within(screen.getByRole("region", { name: "Quick links" }));
+    expect(await quickLinks.findByRole("alert")).toHaveTextContent("Could not load your courses");
+    expect(quickLinks.queryByRole("status")).not.toBeInTheDocument();
   });
 });

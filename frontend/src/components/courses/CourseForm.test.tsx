@@ -73,7 +73,7 @@ describe("SCRUM-36: course form validation and dashboard updates", () => {
   ])("rejects an %s name without calling the create API", async (_label, name) => {
     const user = userEvent.setup();
     renderDashboard();
-    await screen.findByText("You have no courses yet.");
+    await screen.findByText(/You have no courses yet./);
 
     if (name) await user.type(screen.getByLabelText("Course name"), name);
     await user.click(screen.getByRole("button", { name: "Create" }));
@@ -103,7 +103,7 @@ describe("SCRUM-36: course form validation and dashboard updates", () => {
     vi.mocked(createCourse).mockResolvedValue(course);
     const user = userEvent.setup();
     renderDashboard();
-    await screen.findByText("You have no courses yet.");
+    await screen.findByText(/You have no courses yet./);
 
     // First trigger validation, then verify that a successful retry clears it.
     await user.click(screen.getByRole("button", { name: "Create" }));
@@ -122,14 +122,14 @@ describe("SCRUM-36: course form validation and dashboard updates", () => {
     expect((screen.getByLabelText("Course name") as HTMLInputElement).value).toBe("");
     expect((screen.getByLabelText("Description") as HTMLTextAreaElement).value).toBe("");
     expect(screen.queryByRole("alert")).toBeNull();
-    expect(screen.queryByText("You have no courses yet.")).toBeNull();
+    expect(screen.queryByText(/You have no courses yet./)).toBeNull();
   });
 
   it("shows a creation error and keeps the entered values for retry", async () => {
     vi.mocked(createCourse).mockRejectedValue(new Error("Could not save course."));
     const user = userEvent.setup();
     renderDashboard();
-    await screen.findByText("You have no courses yet.");
+    await screen.findByText(/You have no courses yet./);
 
     await user.type(screen.getByLabelText("Course name"), "Algorithms");
     await user.type(screen.getByLabelText("Description"), "Lecture notes");
@@ -150,7 +150,7 @@ describe("SCRUM-36: course form validation and dashboard updates", () => {
     }));
     const user = userEvent.setup();
     renderDashboard();
-    await screen.findByText("You have no courses yet.");
+    await screen.findByText(/You have no courses yet./);
     await user.type(screen.getByLabelText("Course name"), "Algorithms");
     await user.dblClick(screen.getByRole("button", { name: "Create" }));
 

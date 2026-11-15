@@ -3,6 +3,8 @@ import { Link } from "react-router-dom";
 import { listCourses, NotLoggedInError } from "../../api/courses";
 import { useAuth } from "../../context/AuthContext";
 import type { Course } from "../../types/course";
+import EmptyState from "../shared/EmptyState";
+import { focusCourseForm } from "./focusCourseForm";
 
 // The list shows one of these states: loading, logged out, an error, or courses.
 type ListState =
@@ -20,10 +22,13 @@ const COURSE_IMAGES = [
 function CourseList({
   refreshKey,
   onCourses,
+  onLoadFailed,
   embedded = false,
 }: {
   refreshKey: number;
   onCourses?: (courses: Course[]) => void;
+  // Lets the dashboard stop waiting for courses (for example, its quick links) when loading fails.
+  onLoadFailed?: () => void;
   embedded?: boolean;
 }) {
   const { accessToken } = useAuth();
@@ -62,16 +67,20 @@ function CourseList({
 
   useEffect(() => {
     if (state.status === "ready") onCourses?.(state.courses);
-  }, [onCourses, state]);
+    else if (state.status === "error" || state.status === "logged-out") onLoadFailed?.();
+  }, [onCourses, onLoadFailed, state]);
 
   return (
     <section className={embedded ? "course-list course-list-embedded" : "course-list"}>
       {!embedded && <h2>Your courses</h2>}
-      {state.status === "loading" && <p>Loading courses...</p>}
+      {state.status === "loading" && <p role="status">Loading courses...</p>}
       {state.status === "logged-out" && <p>Log in to see your courses.</p>}
-      {state.status === "error" && <p className="form-error">{state.message}</p>}
+      {state.status === "error" && <p className="form-error" role="alert">{state.message}</p>}
       {state.status === "ready" && state.courses.length === 0 && (
-        <p>You have no courses yet.</p>
+        // Both pages that show this list (dashboard and /courses) have the course form below it.
+        <EmptyState message="You have no courses yet. Create one to start adding materials, notes and quizzes.">
+          <button type="button" className="empty-state-action" onClick={focusCourseForm}>Create a course</button>
+        </EmptyState>
       )}
       {state.status === "ready" && state.courses.length > 0 && (
         <ul>
