@@ -19,3 +19,7 @@ export type TrackedDocument = {
   // Present for a file chosen in this visit. The document API does not return a byte size.
   sizeBytes?: number;
 };
+
+// Whether the course's material list has loaded, so Notes and Quizzes can tell
+// "still loading" and "could not load" apart from "no materials yet".
+export type MaterialsLoadState = "loading" | "error" | "ready";
