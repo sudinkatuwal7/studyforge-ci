@@ -8,6 +8,7 @@ import pytest
 
 from apps.notes.llm import get_client
 from apps.quizzes.llm import get_client as get_quiz_client
+from apps.knowledge.llm import get_client as get_rag_client
 
 
 def test_notes_provider_is_fake_and_has_no_inherited_api_keys():
@@ -20,6 +21,11 @@ def test_notes_provider_is_fake_and_has_no_inherited_api_keys():
 def test_quiz_provider_is_fake():
     assert os.environ["QUIZ_LLM_BACKEND"] == "fake"
     assert get_quiz_client().name == "fake"
+
+
+def test_rag_provider_is_fake():
+    assert os.environ["RAG_LLM_BACKEND"] == "fake"
+    assert get_rag_client().name == "fake"
 
 
 def test_sync_provider_http_is_blocked_before_network_access():

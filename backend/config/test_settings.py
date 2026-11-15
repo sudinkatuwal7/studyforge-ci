@@ -26,6 +26,7 @@ DATABASES = {
 MEDIA_ROOT = _media_root
 os.environ["NOTES_LLM_BACKEND"] = "fake"
 os.environ["QUIZ_LLM_BACKEND"] = "fake"
+os.environ["RAG_LLM_BACKEND"] = "fake"
 for _key in ("OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_APPLICATION_CREDENTIALS"):
     os.environ.pop(_key, None)
 GEMINI_API_KEY = ""
