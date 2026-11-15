@@ -65,7 +65,7 @@ describe("dashboard task list", () => {
   it("shows an empty state when there are no tasks", async () => {
     vi.mocked(listTodos).mockResolvedValue([]);
     render(<TodoPanel refreshKey={0} />);
-    expect(await screen.findByText("You have no tasks yet.")).toBeInTheDocument();
+    expect(await screen.findByText(/You have no tasks yet./)).toBeInTheDocument();
   });
 
   it("shows an error when tasks cannot be loaded", async () => {
@@ -109,13 +109,13 @@ describe("dashboard task list", () => {
     };
     vi.mocked(createTodo).mockResolvedValue(created);
     render(<TodoPanel refreshKey={0} />);
-    await screen.findByText("You have no tasks yet.");
+    await screen.findByText(/You have no tasks yet./);
 
     await user.type(screen.getByLabelText("Task title (required)"), "Read chapter");
     await user.selectOptions(screen.getByLabelText("Course (required)"), "7");
     await user.click(screen.getByRole("button", { name: "Add task" }));
 
     expect(await screen.findByRole("listitem")).toHaveTextContent("Read chapter");
-    expect(screen.queryByText("You have no tasks yet.")).not.toBeInTheDocument();
+    expect(screen.queryByText(/You have no tasks yet./)).not.toBeInTheDocument();
   });
 });

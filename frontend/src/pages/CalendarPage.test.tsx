@@ -1,5 +1,6 @@
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
+import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { RefreshRejectedError } from "../api/auth";
 import { deleteStudySession } from "../api/studySessions";
@@ -52,7 +53,7 @@ describe("CalendarPage", () => {
   });
 
   it("shows dated tasks and study sessions, including completed tasks", async () => {
-    render(<CalendarPage />);
+    render(<CalendarPage />, { wrapper: MemoryRouter });
 
     expect(await screen.findByRole("heading", { name: "Calendar" })).toBeInTheDocument();
     expect(screen.getByText("October 2026")).toBeInTheDocument();
@@ -69,7 +70,7 @@ describe("CalendarPage", () => {
   it("opens the edit form and removes a study session after delete is confirmed", async () => {
     const user = userEvent.setup();
     vi.mocked(deleteStudySession).mockResolvedValue(undefined);
-    render(<CalendarPage />);
+    render(<CalendarPage />, { wrapper: MemoryRouter });
     await screen.findByRole("heading", { name: "Calendar" });
 
     await user.click(screen.getByRole("button", { name: /Thursday, October 22, 2026, 3 activities/ }));
@@ -85,7 +86,7 @@ describe("CalendarPage", () => {
 
   it("keeps the loading screen when the session is rejected so login can replace it", async () => {
     authenticatedFetch.mockRejectedValue(new RefreshRejectedError("Session expired. Please sign in again."));
-    render(<CalendarPage />);
+    render(<CalendarPage />, { wrapper: MemoryRouter });
 
     await waitFor(() => expect(authenticatedFetch).toHaveBeenCalled());
     await act(async () => {
@@ -102,7 +103,7 @@ describe("CalendarPage", () => {
       if (path === "/courses/") return Response.json(courses);
       throw new Error(`Unexpected path ${path}`);
     });
-    render(<CalendarPage />);
+    render(<CalendarPage />, { wrapper: MemoryRouter });
 
     expect(await screen.findByText(/No dated tasks or study sessions yet/)).toBeInTheDocument();
     expect(screen.getByText("October 2026")).toBeInTheDocument();
@@ -113,7 +114,7 @@ describe("CalendarPage", () => {
   it("loads the calendar again after Try again", async () => {
     const user = userEvent.setup();
     authenticatedFetch.mockResolvedValue(new Response(null, { status: 500 }));
-    render(<CalendarPage />);
+    render(<CalendarPage />, { wrapper: MemoryRouter });
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not load the calendar.");
 
     authenticatedFetch.mockImplementation(async (path: string) => {
@@ -128,8 +129,44 @@ describe("CalendarPage", () => {
 
   it("shows a calendar error when the request fails for another reason", async () => {
     authenticatedFetch.mockResolvedValue(new Response(null, { status: 500 }));
-    render(<CalendarPage />);
+    render(<CalendarPage />, { wrapper: MemoryRouter });
 
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not load the calendar.");
+  });
+
+  it("offers a study session or a dated task when nothing is on the calendar", async () => {
+    const user = userEvent.setup();
+    authenticatedFetch.mockImplementation(async (path: string) => {
+      if (path === "/todos/") return Response.json([undatedTask]);
+      if (path === "/study-sessions/") return Response.json([]);
+      if (path === "/courses/") return Response.json(courses);
+      throw new Error(`Unexpected path ${path}`);
+    });
+    render(<CalendarPage />, { wrapper: MemoryRouter });
+
+    const empty = (await screen.findByText("No dated tasks or study sessions yet.")).parentElement!;
+    expect(within(empty).getByRole("link", { name: "Add a task with a due date" })).toHaveAttribute("href", "/tasks");
+    await user.click(within(empty).getByRole("button", { name: "Plan a study session" }));
+    expect(screen.getByLabelText("Title (required)")).toHaveFocus();
+  });
+
+  it("asks for a course first when the student has none", async () => {
+    authenticatedFetch.mockImplementation(async (path: string) => {
+      if (path === "/courses/") return Response.json([]);
+      if (path === "/todos/" || path === "/study-sessions/") return Response.json([]);
+      throw new Error(`Unexpected path ${path}`);
+    });
+    render(<CalendarPage />, { wrapper: MemoryRouter });
+
+    const empty = (await screen.findByText(/Nothing on your calendar yet/)).parentElement!;
+    expect(within(empty).getByRole("link", { name: "Create a course" })).toHaveAttribute("href", "/courses");
+    expect(within(empty).queryByRole("button", { name: "Plan a study session" })).not.toBeInTheDocument();
+  });
+
+  it("shows loading, not the empty message, while the calendar loads", async () => {
+    authenticatedFetch.mockImplementation(() => new Promise(() => undefined));
+    render(<CalendarPage />, { wrapper: MemoryRouter });
+    expect(screen.getByRole("status")).toHaveTextContent("Loading calendar...");
+    expect(screen.queryByText(/No dated tasks/)).not.toBeInTheDocument();
   });
 });

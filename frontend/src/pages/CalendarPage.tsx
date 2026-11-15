@@ -1,4 +1,5 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { RefreshRejectedError } from "../api/auth";
 import { ApiError } from "../api/client";
 import { deleteStudySession } from "../api/studySessions";
@@ -6,6 +7,8 @@ import CalendarMonth from "../components/calendar/CalendarMonth";
 import StudySessionForm from "../components/calendar/StudySessionForm";
 import { getLocalMonth } from "../components/calendar/calendarDates";
 import { buildCalendarEvents } from "../components/calendar/calendarEvents";
+import EmptyState from "../components/shared/EmptyState";
+import { revealAndFocus } from "../components/shared/revealAndFocus";
 import { useAuth } from "../context/AuthContext";
 import type { Course } from "../types/course";
 import type { StudySession } from "../types/studySession";
@@ -36,6 +39,7 @@ export default function CalendarPage() {
   const [editing, setEditing] = useState<StudySession | null>(null);
   const [focusDate, setFocusDate] = useState<string | null>(null);
   const [actionError, setActionError] = useState("");
+  const calendarRef = useRef<HTMLElement>(null);
   const opened = getLocalMonth();
   const focusParts = focusDate?.split("-").map(Number);
   const year = focusParts?.[0] || opened.year;
@@ -114,11 +118,23 @@ export default function CalendarPage() {
   const editingSession = state.sessions.find((item) => item.id === editing?.id) ?? null;
 
   return (
-    <section aria-labelledby="calendar-heading">
+    <section ref={calendarRef} aria-labelledby="calendar-heading">
       <h2 id="calendar-heading">Calendar</h2>
-      {events.length === 0 && (
-        <p className="calendar-empty">No dated tasks or study sessions yet. Add a study session below, or give a task a due date.</p>
-      )}
+      {events.length === 0 && (state.courses.length === 0 ? (
+        // Sessions and tasks both belong to a course, so that comes first.
+        <EmptyState message="Nothing on your calendar yet. Study sessions and tasks belong to a course, so create a course first.">
+          <Link className="empty-state-action" to="/courses">Create a course</Link>
+        </EmptyState>
+      ) : (
+        <EmptyState message="No dated tasks or study sessions yet.">
+          <button type="button" className="empty-state-action"
+            // The study session form below the calendar; its first field is the title.
+            onClick={() => revealAndFocus(calendarRef.current?.querySelector<HTMLInputElement>("form input"))}>
+            Plan a study session
+          </button>
+          <Link className="empty-state-action empty-state-action-secondary" to="/tasks">Add a task with a due date</Link>
+        </EmptyState>
+      ))}
       <CalendarMonth
         year={year}
         month={month}

@@ -1,5 +1,7 @@
+import { Link } from "react-router-dom";
 import type { Course } from "../../types/course";
 import type { TodoItem } from "../../types/todo";
+import EmptyState from "../shared/EmptyState";
 import "./TodoList.css";
 
 type TodoListProps = {
@@ -7,6 +9,8 @@ type TodoListProps = {
   courses: Course[];
   updatingId: number | null;
   onToggle: (todo: TodoItem) => void;
+  // Moves to the "Add a task" form; offered when the list is empty and a course exists.
+  onAddFirst?: () => void;
 };
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -19,11 +23,23 @@ function formatDueDate(dueDate: string | null): string {
   return `${monthName} ${day}, ${year}`;
 }
 
-export default function TodoList({ todos, courses, updatingId, onToggle }: TodoListProps) {
+export default function TodoList({ todos, courses, updatingId, onToggle, onAddFirst }: TodoListProps) {
   const courseNames = new Map(courses.map((course) => [course.id, course.name]));
 
   if (todos.length === 0) {
-    return <p className="todo-empty">You have no tasks yet.</p>;
+    // Every task belongs to a course, so without one the next step is creating a course.
+    if (courses.length === 0) {
+      return (
+        <EmptyState message="You have no tasks yet. Tasks belong to a course, so create a course first.">
+          <Link className="empty-state-action" to="/courses">Create a course</Link>
+        </EmptyState>
+      );
+    }
+    return (
+      <EmptyState message="You have no tasks yet.">
+        {onAddFirst && <button type="button" className="empty-state-action" onClick={onAddFirst}>Add your first task</button>}
+      </EmptyState>
+    );
   }
 
   return (
