@@ -421,8 +421,8 @@ an oversized single-callback result, or worker crash can therefore leave an
 application Job in `PROCESSING`; recovery/reconciliation and retry cost
 behavior still need work and end-to-end failure testing. The shared token also
 requires protected transport and rotation outside local development. The
-legacy worker implementation remains in the repository but upload dispatch now
-targets the standalone task.
+legacy backend processing implementation was removed under SCRUM-101; upload
+dispatch targets the standalone task.
 
 ## 15. SCRUM-118 callback contract
 
