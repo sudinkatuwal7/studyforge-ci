@@ -321,7 +321,8 @@
   padding: 0;
   border: none;
   background: none;
-  color: var(--accent);
+  /* Text needs the darker periwinkle for 4.5:1; --accent stays for borders and checkboxes. */
+  color: var(--periwinkle-text);
   font-weight: 500;
   text-decoration: underline;
   text-underline-offset: 3px;

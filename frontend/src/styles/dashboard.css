@@ -437,7 +437,7 @@
 }
 
 .new-link {
-  color: var(--periwinkle);
+  color: var(--periwinkle-text);
   font-weight: 700;
   text-decoration: none;
 }
@@ -654,5 +654,229 @@
   .sidebar,
   .sidebar-backdrop {
     transition: none;
+  }
+}
+
+/* /courses: the top bar holds the title, so the toolbar is a short hint and the New button. */
+.courses-toolbar {
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.courses-toolbar p {
+  margin: 0;
+  color: var(--muted);
+}
+
+/* Dashboard quick links into the last opened course. */
+.quick-links {
+  box-sizing: border-box;
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.15rem 1.15rem;
+  border: 1px solid #efeae3;
+  border-radius: 1.15rem;
+  background: white;
+  box-shadow: 0 8px 24px #26334d0a;
+  overflow-wrap: anywhere;
+}
+
+.quick-links > p {
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+}
+
+.quick-links .quick-links-course {
+  margin-top: -0.4rem;
+  color: var(--navy);
+  font-weight: 700;
+}
+
+.link-button {
+  padding: 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  cursor: pointer;
+}
+
+.quick-links-grid,
+.quick-links-picker {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.quick-links-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 0.75rem;
+}
+
+.quick-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+  box-sizing: border-box;
+  height: 100%;
+  min-height: 2.75rem;
+  padding: 0.85rem;
+  border-radius: 0.9rem;
+  color: var(--navy);
+  text-decoration: none;
+}
+
+.quick-link span {
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.quick-link:hover,
+.quick-link:focus-visible {
+  outline: 2px solid var(--periwinkle);
+  outline-offset: 2px;
+}
+
+.quick-link-materials { background: var(--lavender); }
+.quick-link-notes { background: var(--sage); }
+.quick-link-quizzes { background: var(--peach); }
+.quick-link-pandu { background: #e3ebff; }
+
+.quick-links-picker {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.quick-links-picker li {
+  max-width: 100%;
+}
+
+.quick-links-picker button {
+  max-width: 100%;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid #d9d3ea;
+  border-radius: 999px;
+  background: white;
+  color: var(--navy);
+  font: inherit;
+  font-weight: 600;
+  text-align: left;
+  overflow-wrap: anywhere;
+  cursor: pointer;
+}
+
+.quick-links-picker button[aria-pressed="true"] {
+  border-color: var(--periwinkle);
+  background: var(--lavender);
+}
+
+.quick-links .quick-links-notice {
+  padding: 0.55rem 0.75rem;
+  border-radius: 0.7rem;
+  background: var(--peach);
+  color: var(--navy);
+  font-weight: 600;
+}
+
+.quick-links-empty p {
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+}
+
+.quick-links-action {
+  display: inline-block;
+  padding: 0.6rem 0.95rem;
+  border: 0;
+  border-radius: 0.7rem;
+  font: inherit;
+  cursor: pointer;
+  background: var(--navy);
+  color: white;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+@media (max-width: 64rem) {
+  .quick-links-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+/* Dashboard Upcoming: tasks and study sessions in the next 7 days. */
+.upcoming-card {
+  box-sizing: border-box;
+  margin-bottom: 1.5rem;
+  padding: 1rem 1.15rem 1.15rem;
+  border: 1px solid #efeae3;
+  border-radius: 1.15rem;
+  background: white;
+  box-shadow: 0 8px 24px #26334d0a;
+  overflow-wrap: anywhere;
+}
+
+.upcoming-card .upcoming-range {
+  margin: -0.4rem 0 0.75rem;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.upcoming-card > p[role="status"],
+.upcoming-card > p[role="alert"] {
+  margin: 0 0 0.75rem;
+}
+
+.upcoming-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.upcoming-item {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.65rem 0;
+  border-top: 1px solid #f1ece5;
+}
+
+.upcoming-item:first-child {
+  border-top: 0;
+}
+
+.upcoming-dot {
+  width: 0.7rem;
+  height: 0.7rem;
+  border-radius: 50%;
+}
+
+.upcoming-text strong {
+  display: block;
+  color: var(--navy);
+}
+
+.upcoming-text p {
+  margin: 0.15rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.upcoming-when {
+  color: var(--navy);
+  font-size: 0.85rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+/* On a phone the date moves under the title so long titles keep their width. */
+@media (max-width: 40rem) {
+  .upcoming-item {
+    grid-template-columns: auto minmax(0, 1fr);
+  }
+
+  .upcoming-when {
+    grid-column: 2;
+    white-space: normal;
   }
 }

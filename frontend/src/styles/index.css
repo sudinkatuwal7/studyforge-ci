@@ -5,6 +5,9 @@
   --sage: #dceee3;
   --peach: #ffe5d4;
   --periwinkle: #7387e8;
+  /* Periwinkle for text: #7387e8 is only 3.3:1 on white. This is 5.3:1 on white and 5.0:1 on
+     cream, so it passes WCAG AA (4.5:1). --periwinkle stays for outlines, fills and icons (3:1). */
+  --periwinkle-text: #4f63c9;
   --muted: #5c6a84;
   font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif;
   color: var(--navy);
@@ -126,7 +129,7 @@ form {
 .course-icon-blue { background: #e4e8fb; color: var(--periwinkle); }
 
 a {
-  color: var(--periwinkle);
+  color: var(--periwinkle-text);
 }
 
 /* Show keyboard users which link, field, or button is selected. */
@@ -138,7 +141,7 @@ a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visib
 .course-card-action {
   margin-top: auto;
   padding-top: 0.35rem;
-  color: var(--periwinkle);
+  color: var(--periwinkle-text);
   font-weight: 600;
 }
 
@@ -190,6 +193,69 @@ button {
 button:disabled {
   cursor: wait;
   opacity: 0.65;
+}
+
+/* Shared "nothing here yet" box (EmptyState): what is missing, then the next step.
+   Two-class selectors so the course workspace's `.course-workspace button` rule does not win. */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.65rem;
+  margin-top: 0.85rem;
+  padding: 0.9rem 1rem;
+  border: 1px dashed #e4ddd4;
+  border-radius: 0.9rem;
+  background: var(--cream);
+  overflow-wrap: anywhere;
+}
+
+.empty-state p {
+  margin: 0;
+  color: var(--muted);
+}
+
+.empty-state-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+/* The plain class styles actions outside an EmptyState (e.g. after a load error); the
+   two-class form beats `.course-workspace button` for buttons inside one. */
+.empty-state-action,
+.empty-state .empty-state-action {
+  display: inline-flex;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.9rem;
+  border: 1px solid var(--navy);
+  border-radius: 0.7rem;
+  background: var(--navy);
+  color: white;
+  font: inherit;
+  font-weight: 600;
+  text-decoration: none;
+  cursor: pointer;
+}
+
+.material-load-error {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.material-load-error p {
+  margin: 0;
+}
+
+.empty-state-action-secondary,
+.empty-state .empty-state-action-secondary {
+  border-color: #d9d3ea;
+  background: white;
+  color: var(--navy);
 }
 
 /* Stack the list and form vertically on smaller screens. */
