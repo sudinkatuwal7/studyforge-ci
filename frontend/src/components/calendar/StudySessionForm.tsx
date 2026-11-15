@@ -128,7 +128,7 @@ export default function StudySessionForm({
       <p>Choose a course, a date, and an optional time.</p>
       {courses.length === 0 && (
         <p role="status">
-          Create a course before adding a study session. <Link to="/#courses">Create a course</Link>
+          Create a course before adding a study session. <Link to="/courses">Create a course</Link>
         </p>
       )}
 
