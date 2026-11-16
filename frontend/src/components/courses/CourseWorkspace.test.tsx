@@ -311,7 +311,7 @@ it("keeps sent Pandu messages and replies through Back and Forward", async () =>
     id: 81, course_id: 42, name: "Lecture.pdf", status: "READY", error: null,
     created_at: "2026-10-01", updated_at: "2026-10-01",
   }]);
-  vi.mocked(askConversationQuestion).mockResolvedValueOnce({ status: "INSUFFICIENT_CONTEXT", answer: null, citations: [] });
+  vi.mocked(askConversationQuestion).mockResolvedValueOnce(noContext);
   renderWorkspace();
   const assistant = document.getElementById("course-assistant")!;
   fireEvent.click(await within(assistant).findByRole("checkbox", { name: /Lecture.pdf/ }));
