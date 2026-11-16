@@ -404,7 +404,8 @@ pass.
 ## Expected results
 
 - `npx tsc -b`, `npm run lint` and `npm run build` finish without errors. Lint
-  may show existing `react(immutability)` warnings on test probes; no new ones.
+  currently shows 9 warnings: 4 pre-existing warnings and 5
+  `react(immutability)` warnings introduced by this branch's test probes.
 - `npm test`: all tests pass. The author's last full run: 535 of 536 passed. The
   one failure was the known slow test `CourseDetailPage.test.tsx > opens the
   selected course, uploads…`, which sometimes times out at about 5 seconds under

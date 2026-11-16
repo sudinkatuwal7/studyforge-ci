@@ -1,3 +1,5 @@
+import { useEffect } from "react";
+import { useLocation } from "react-router-dom";
 import CourseForm from "../components/courses/CourseForm";
 import CourseList from "../components/courses/CourseList";
 import { focusCourseForm } from "../components/courses/focusCourseForm";
@@ -11,6 +13,13 @@ export default function CoursesPage({
   refreshKey: number;
   onCourseCreated: () => void;
 }) {
+  const location = useLocation();
+  const focusOnArrival = (location.state as { focusCourseForm?: boolean } | null)?.focusCourseForm === true;
+
+  useEffect(() => {
+    if (focusOnArrival) focusCourseForm();
+  }, [focusOnArrival, location.key]);
+
   return (
     <div className="dashboard-page courses-page">
       <div className="section-heading courses-toolbar">

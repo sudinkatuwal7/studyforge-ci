@@ -173,18 +173,21 @@
   .app-shell-course > .workspace { padding: .6rem; }
   .app-shell-course .topbar { flex: none; }
   .course-workspace { gap: 0; }
+  /* Keep the toggle beside the back link, above the full-width course name. */
+  .course-workspace-header a { min-height: 3rem; }
   .course-workspace-header h2 { margin: .15rem 0; }
   .course-workspace-header p { display: none; }
   /* On a narrow screen the header stays above Pandu so My courses remains reachable. */
   .course-workspace-grid { grid-template-columns: minmax(0, 1fr); grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "header" "assistant"; gap: .6rem; }
   .course-workspace-grid:not(.course-workspace-grid-collapsed) .course-content { position: absolute; inset: 0; visibility: hidden; pointer-events: none; }
   .course-workspace-grid-collapsed { grid-template-rows: auto minmax(0, 1fr); grid-template-areas: "header" "content"; }
+  .course-workspace-grid-collapsed .course-workspace-header { padding-right: 0; }
   .course-assistant[inert] { top: 0; left: 0; width: auto; }
-  .course-workspace-grid-collapsed .assistant-toggle { top: auto; right: 1rem; bottom: 1rem; box-shadow: 0 8px 22px #26334d33; }
-  .course-workspace-grid-collapsed .course-content-scroll { padding-bottom: 4rem; }
+  .course-workspace-grid-collapsed .assistant-toggle { top: .55rem; right: .55rem; bottom: auto; }
   .course-tabs { padding: .35rem; }
   .course-content-scroll { padding: .8rem; }
   .chat-header { padding: .45rem .7rem; gap: .5rem; }
+  .course-chat .chat-header { padding-right: .7rem; }
   .chat-header h3 { font-size: .85rem; }
   .chat-messages { padding: .5rem .7rem; }
   .pandu-avatar-small { width: 3rem; height: 3rem; }

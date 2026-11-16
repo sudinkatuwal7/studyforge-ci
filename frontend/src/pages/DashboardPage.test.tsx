@@ -187,7 +187,7 @@ describe("dashboard quick links", () => {
     expect(quickLinks.getByRole("link", { name: /Ask Pandu/ })).toHaveAttribute("href", "/courses/7/materials?pandu=open");
   });
 
-  it("sends both create-course shortcuts to the dashboard's real course form", async () => {
+  it("sends all create-course shortcuts to the dashboard's real course form", async () => {
     const user = userEvent.setup();
     vi.mocked(listCourses).mockResolvedValue([]);
     renderDashboard();
@@ -199,6 +199,11 @@ describe("dashboard quick links", () => {
 
     field.blur();
     await user.click(screen.getByRole("button", { name: "New course" }));
+    expect(field).toHaveFocus();
+
+    field.blur();
+    const tasks = within(screen.getByRole("region", { name: "My To-Do List" }));
+    await user.click(await tasks.findByRole("button", { name: "Create a course" }));
     expect(field).toHaveFocus();
   });
 

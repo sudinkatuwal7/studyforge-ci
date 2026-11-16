@@ -1,10 +1,11 @@
 import { fireEvent, render, screen, within } from "@testing-library/react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import { listCourses } from "../api/courses";
 import { listTodos } from "../api/todos";
 import type { TodoItem } from "../types/todo";
 import TasksPage from "./TasksPage";
+import CoursesPage from "./CoursesPage";
 
 vi.mock("../api/courses", async (original) => ({
   ...await original<typeof import("../api/courses")>(),
@@ -58,4 +59,16 @@ it("with no courses, asks for a course first instead of a task", async () => {
   expect(await screen.findByText(/Tasks belong to a course, so create a course first/)).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Create a course" })).toHaveAttribute("href", "/courses");
   expect(screen.queryByRole("button", { name: "Add your first task" })).not.toBeInTheDocument();
+});
+
+it("takes the create-course link to the form and focuses its name field", async () => {
+  vi.mocked(listCourses).mockResolvedValue([]);
+  vi.mocked(listTodos).mockResolvedValue([]);
+  render(<MemoryRouter initialEntries={["/tasks"]}><Routes>
+    <Route path="/tasks" element={<TasksPage refreshKey={0} />} />
+    <Route path="/courses" element={<CoursesPage refreshKey={0} onCourseCreated={() => undefined} />} />
+  </Routes></MemoryRouter>);
+
+  fireEvent.click(await screen.findByRole("link", { name: "Create a course" }));
+  expect(screen.getByLabelText("Course name")).toHaveFocus();
 });

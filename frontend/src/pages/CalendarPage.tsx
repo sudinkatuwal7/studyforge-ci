@@ -123,7 +123,7 @@ export default function CalendarPage() {
       {events.length === 0 && (state.courses.length === 0 ? (
         // Sessions and tasks both belong to a course, so that comes first.
         <EmptyState message="Nothing on your calendar yet. Study sessions and tasks belong to a course, so create a course first.">
-          <Link className="empty-state-action" to="/courses">Create a course</Link>
+          <Link className="empty-state-action" to="/courses" state={{ focusCourseForm: true }}>Create a course</Link>
         </EmptyState>
       ) : (
         <EmptyState message="No dated tasks or study sessions yet.">

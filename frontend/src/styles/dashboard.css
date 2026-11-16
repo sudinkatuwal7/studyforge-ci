@@ -544,6 +544,9 @@
   .app-shell-nav-open .sidebar {
     transform: none;
     visibility: visible;
+    /* Make the brand focusable as soon as the drawer opens. The closed rule
+       still delays visibility: hidden until the slide-out finishes. */
+    transition: transform 0.2s ease, visibility 0s;
   }
 
   .sidebar-backdrop {

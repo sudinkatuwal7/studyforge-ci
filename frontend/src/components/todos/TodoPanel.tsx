@@ -27,9 +27,11 @@ function loadErrorMessage(error: unknown): string {
 export default function TodoPanel({
   refreshKey,
   onTodos,
+  onCreateCourse,
 }: {
   refreshKey: number;
   onTodos?: (todos: TodoItem[]) => void;
+  onCreateCourse?: () => void;
 }) {
   const { accessToken } = useAuth();
   const [state, setState] = useState<PanelState>({ status: "loading" });
@@ -96,6 +98,7 @@ export default function TodoPanel({
             courses={state.courses}
             updatingId={updatingId}
             onToggle={toggleTodo}
+            onCreateCourse={onCreateCourse}
             // The task form's first field is its title.
             onAddFirst={() => revealAndFocus(panelRef.current?.querySelector<HTMLInputElement>(".todo-form input"))}
           />

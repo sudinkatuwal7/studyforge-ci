@@ -108,7 +108,7 @@ export default function DashboardPage({
       </div>
       <aside className="dashboard-sidebar" aria-label="Calendar and tasks">
           <DashboardCalendar events={events} calendarReady={calendarReady} calendarEmpty={calendarEmpty} sessionError={sessionError} />
-          <TodoPanel refreshKey={refreshKey} onTodos={setTodos} />
+          <TodoPanel refreshKey={refreshKey} onTodos={setTodos} onCreateCourse={focusCourseForm} />
       </aside>
     </div>
   );

@@ -68,6 +68,17 @@ describe("dashboard task list", () => {
     expect(await screen.findByText(/You have no tasks yet./)).toBeInTheDocument();
   });
 
+  it("focuses the dashboard course form without navigating when no course exists", async () => {
+    const onCreateCourse = vi.fn();
+    vi.mocked(listCourses).mockResolvedValue([]);
+    vi.mocked(listTodos).mockResolvedValue([]);
+    render(<TodoPanel refreshKey={0} onCreateCourse={onCreateCourse} />);
+
+    await userEvent.setup().click(await screen.findByRole("button", { name: "Create a course" }));
+    expect(onCreateCourse).toHaveBeenCalledOnce();
+    expect(screen.queryByRole("link", { name: "Create a course" })).not.toBeInTheDocument();
+  });
+
   it("shows an error when tasks cannot be loaded", async () => {
     vi.mocked(listTodos).mockRejectedValue(new ApiError(500));
     render(<TodoPanel refreshKey={0} />);
