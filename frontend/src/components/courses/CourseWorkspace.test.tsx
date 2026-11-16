@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import CourseWorkspace from "./CourseWorkspace";
 import type { CourseSection } from "./courseSections";
 import { listDocuments } from "../../api/documents";
-import { askConversationQuestion, listConversations, listConversationUploads } from "../../api/conversations";
+import { askConversationQuestion, listConversations, listConversationUploads, type QuestionResult } from "../../api/conversations";
 import { generateNotes, getNotes } from "../../api/notes";
 import { generateQuiz, getQuiz } from "../../api/quizzes";
 import { DEFAULT_NOTES_OPTIONS, type CourseNotes } from "../../types/notes";
@@ -12,9 +12,13 @@ import type { Quiz } from "../../types/quiz";
 
 vi.mock("../../context/AuthContext", () => ({ useAuth: () => ({ user: { id: 1 }, accessToken: "token" }) }));
 vi.mock("../../api/documents", async (original) => ({ ...await original<typeof import("../../api/documents")>(), listDocuments: vi.fn().mockResolvedValue([]) }));
-vi.mock("../../api/conversations", () => ({ listConversations: vi.fn().mockResolvedValue([{ id: 9, course_id: 42, title: "", created_at: "2026-10-01", updated_at: "2026-10-01" }]), listConversationUploads: vi.fn().mockResolvedValue([]), askConversationQuestion: vi.fn() }));
+vi.mock("../../api/conversations", () => ({ listConversations: vi.fn().mockResolvedValue([{ id: 9, course_id: 42, title: "", created_at: "2026-10-01", updated_at: "2026-10-01" }]), listConversationUploads: vi.fn().mockResolvedValue([]), listConversationMessages: vi.fn().mockResolvedValue([]), askConversationQuestion: vi.fn() }));
 vi.mock("../../api/quizzes", async (original) => ({ ...await original<typeof import("../../api/quizzes")>(), generateQuiz: vi.fn(), getQuiz: vi.fn(), getQuizResults: vi.fn(), submitQuiz: vi.fn() }));
 vi.mock("../../api/notes", async (original) => ({ ...await original<typeof import("../../api/notes")>(), generateNotes: vi.fn(), getNotes: vi.fn() }));
+// SCRUM-24: answers carry the saved question and reply.
+const noContext: QuestionResult = { status: "INSUFFICIENT_CONTEXT", answer: null, citations: [], tool_trace: [],
+  question: { id: 1, role: "user", status: "ANSWERED", content: "What is osmosis?", citations: [], tool_trace: [], reply_to: null, created_at: "2026-10-01" },
+  reply: { id: 2, role: "assistant", status: "INSUFFICIENT_CONTEXT", content: "", citations: [], tool_trace: [], reply_to: 1, created_at: "2026-10-01" } };
 const course = { id: 42, name: "Biology", description: "Cell biology", owner: 1, created_at: "2026-10-01" };
 
 afterEach(() => { vi.unstubAllGlobals(); sessionStorage.clear(); });
@@ -117,7 +121,7 @@ it("keeps the draft and an in-flight real reply while Pandu is hidden", async ()
     id: 81, course_id: 42, name: "Lecture.pdf", status: "READY", error: null,
     created_at: "2026-10-01", updated_at: "2026-10-01",
   }]);
-  let finish!: (result: { status: "INSUFFICIENT_CONTEXT"; answer: null; citations: [] }) => void;
+  let finish!: (result: QuestionResult) => void;
   let questionSignal!: AbortSignal;
   vi.mocked(askConversationQuestion).mockImplementationOnce((_id, _question, _ids, _token, signal) => {
     questionSignal = signal;
@@ -137,7 +141,7 @@ it("keeps the draft and an in-flight real reply while Pandu is hidden", async ()
   fireEvent.click(toggle);
   expect(assistant).toHaveAttribute("inert");
   expect(questionSignal.aborted).toBe(false);
-  await act(async () => finish({ status: "INSUFFICIENT_CONTEXT", answer: null, citations: [] }));
+  await act(async () => finish(noContext));
   expect(within(assistant!).getByText(/find enough information/)).toBeInTheDocument();
   fireEvent.click(toggle);
 

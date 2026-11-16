@@ -96,6 +96,7 @@ it("keeps an in-flight course chat question mounted through an access-token refr
       { id: 9, course_id: course.id, title: "", created_at: "2026-10-02", updated_at: "2026-10-02" },
     ]));
     if (path === "/api/v1/conversations/9/documents/") return Promise.resolve(Response.json([]));
+    if (path === "/api/v1/conversations/9/messages/") return Promise.resolve(Response.json([]));
     if (path === "/api/v1/conversations/9/questions/") {
       questionSignal = options?.signal as AbortSignal;
       return new Promise((resolve) => { finishQuestion = resolve; });
@@ -122,7 +123,11 @@ it("keeps an in-flight course chat question mounted through an access-token refr
   expect(screen.getByRole("complementary", { name: "Pandu course chat" })).toBe(chat);
   expect(questionSignal.aborted).toBe(false);
 
-  await act(async () => finishQuestion(Response.json({ status: "INSUFFICIENT_CONTEXT", answer: null, citations: [] })));
+  // A token refresh must not reload the chat's history mid-question (SCRUM-24).
+  expect(fetch.mock.calls.filter(([url]) => String(url).endsWith("/conversations/9/messages/"))).toHaveLength(1);
+  await act(async () => finishQuestion(Response.json({ status: "INSUFFICIENT_CONTEXT", answer: null, citations: [], tool_trace: [],
+    question: { id: 1, role: "user", status: "ANSWERED", content: "Explain this lecture", citations: [], tool_trace: [], reply_to: null, created_at: "2026-10-02" },
+    reply: { id: 2, role: "assistant", status: "INSUFFICIENT_CONTEXT", content: "", citations: [], tool_trace: [], reply_to: 1, created_at: "2026-10-02" } })));
   expect(screen.getByText(/find enough information in the selected references/)).toBeInTheDocument();
 });
 

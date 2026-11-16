@@ -1,22 +1,31 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { askConversationQuestion, createCourseConversation, getConversationUpload, listConversations, listConversationUploads, uploadConversationDocument, type ConversationUpload, type QuestionCitation } from "../../api/conversations";
+import {
+  QuestionRequestError, askConversationQuestion, createCourseConversation, deleteConversation, deleteConversationUpload,
+  getConversationUpload, listConversationMessages, listConversationUploads, listConversations, retryConversationQuestion,
+  uploadConversationDocument, type Conversation, type ConversationUpload, type QuestionResult,
+} from "../../api/conversations";
 import { DocumentRequestError, validateDocument } from "../../api/documents";
+import { fetchSourceFile } from "../../api/sourceFiles";
 import { useAuth } from "../../context/AuthContext";
-import type { ChatCitation, ChatMessage, ChatReference, ChatStatus } from "../../types/chat";
+import type { ChatCitation, ChatMessage, ChatReference, ChatStatus, CitationSource } from "../../types/chat";
 import type { TrackedDocument } from "../../types/document";
 import DocumentStatus from "../documents/DocumentStatus";
 import CourseChat from "./CourseChat";
+import { replaceMessage, toChatMessage } from "./chatHistory";
 import { reconcileSelection, selectedDocumentIds } from "./chatReferences";
 
-type SavedSession = { conversationId: number | null; messages: ChatMessage[]; selected: string[] };
-const emptySession = (): SavedSession => ({ conversationId: null, messages: [], selected: [] });
+// Only the active chat and the selected sources are kept in the browser; messages
+// always come from the backend, so a refresh shows exactly what was saved.
+type SavedSession = { conversationId: number | null; selected: string[] };
+const emptySession = (): SavedSession => ({ conversationId: null, selected: [] });
 function sessionKey(userId: number, courseId: number) { return `studyforge:course-chat:${userId}:${courseId}`; }
 function readSession(key: string): SavedSession {
   try {
     const value: unknown = JSON.parse(sessionStorage.getItem(key) ?? "null");
-    if (value && typeof value === "object" && "messages" in value && "selected" in value && "conversationId" in value) {
-      const state = value as SavedSession;
-      if ((state.conversationId === null || Number.isSafeInteger(state.conversationId)) && Array.isArray(state.messages) && Array.isArray(state.selected)) return state;
+    if (value && typeof value === "object" && "selected" in value && "conversationId" in value) {
+      const { conversationId, selected } = value as SavedSession;
+      if ((conversationId === null || Number.isSafeInteger(conversationId)) && Array.isArray(selected) &&
+        selected.every((item) => typeof item === "string")) return { conversationId, selected };
     }
   } catch { /* Private browsing or a stale entry: start fresh. */ }
   return emptySession();
@@ -33,12 +42,17 @@ function problem(cause: unknown, fallback: string) {
   }
   return fallback;
 }
-function citationView(item: QuestionCitation, references: ChatReference[]): ChatCitation {
-  const source = references.find((reference) => reference.documentId === item.document_id);
-  const name = source?.name ?? `Document ${item.document_id}`;
-  const location = /\.pdf$/i.test(name) ? `Page ${item.page_number}` : /\.pptx$/i.test(name) ? `Slide ${item.page_number}` : "Source excerpt";
-  return { id: `${item.chunk_id}:${item.document_id}`, label: `${name} · ${location}`, detail: item.excerpt };
+function sourceProblem(cause: unknown) {
+  if (cause instanceof DocumentRequestError && cause.status === 404) return "This source is no longer available.";
+  if (cause instanceof DocumentRequestError && (cause.status === 401 || cause.status === 403)) return "Your session has ended. Sign in again to open sources.";
+  return "The source could not be opened. Please try again.";
 }
+function fileName(source: CitationSource) {
+  const name = source.name ?? "source";
+  const suffix = source.format ? `.${source.format}` : "";
+  return name.toLowerCase().endsWith(suffix) ? name : name + suffix;
+}
+const OBJECT_URL_LIFETIME = 60_000;
 
 export default function ConnectedCourseChat({ courseId, materials }: { courseId: number; materials: TrackedDocument[] }) {
   const { accessToken, user } = useAuth();
@@ -48,56 +62,139 @@ export default function ConnectedCourseChat({ courseId, materials }: { courseId:
 
 function ConnectedChat({ courseId, materials, token, userId }: { courseId: number; materials: TrackedDocument[]; token: string; userId: number }) {
   const key = sessionKey(userId, courseId);
-  const [saved, setSaved] = useState(() => readSession(key));
-  const [conversationId, setConversationId] = useState<number | null>(null);
-  const [ready, setReady] = useState(false);
+  const [session, setSession] = useState(() => readSession(key));
+  // Threads
+  const [threads, setThreadsState] = useState<Conversation[]>([]);
+  const [threadsLoading, setThreadsLoading] = useState(true);
+  const [threadsError, setThreadsError] = useState("");
+  const [threadsRequest, setThreadsRequest] = useState(0);
+  const [activeId, setActiveId] = useState<number | null>(null);
+  const [creating, setCreating] = useState(false);
+  const [deletingId, setDeletingId] = useState<number | null>(null);
+  // Active thread
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState("");
+  const [historyRequest, setHistoryRequest] = useState(0);
   const [uploads, setUploads] = useState<ConversationUpload[]>([]);
-  const [loadingReferences, setLoadingReferences] = useState(true);
-  const [referenceError, setReferenceError] = useState("");
-  const [reload, setReload] = useState(0);
   const [uploading, setUploading] = useState(false);
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState("");
+  const [deletingUploadId, setDeletingUploadId] = useState<number | null>(null);
+  const [uploadDeleteError, setUploadDeleteError] = useState("");
   const [status, setStatus] = useState<ChatStatus>("idle");
   const [error, setError] = useState("");
-  const [citation, setCitation] = useState<ChatCitation | null>(null);
+  const [notice, setNotice] = useState("");
+  // Mirrors read inside async work, where state captured at call time may be stale.
+  const activeRef = useRef<number | null>(null);
+  const threadsRef = useRef<Conversation[]>([]);
   const pendingQuestion = useRef<AbortController | null>(null);
   const pendingUpload = useRef<AbortController | null>(null);
-  const lastQuestion = useRef<{ text: string; ids: number[] } | null>(null);
+  const lifetime = useRef(new AbortController());
   const sequence = useRef(0);
+  const refreshRun = useRef(0);
+  // Loads read the latest token but do not depend on it: an access-token refresh must
+  // not reload the thread list or history (that would disturb a question in flight).
+  const tokenRef = useRef(token);
+  useEffect(() => { tokenRef.current = token; }, [token]);
 
+  function setThreads(next: Conversation[]) { threadsRef.current = next; setThreadsState(next); }
+  const reloadHistory = useCallback(() => setHistoryRequest((value) => value + 1), []);
+
+  // Leaving a thread cancels its in-flight question and upload in the browser. The
+  // server still finishes and saves the answer, so it appears when the thread is reopened.
+  function cancelPending() {
+    pendingQuestion.current?.abort(); pendingQuestion.current = null;
+    pendingUpload.current?.abort(); pendingUpload.current = null;
+    setUploading(false); setUploadProgress(null);
+  }
+  function selectThread(id: number | null) {
+    if (id === activeRef.current) return;
+    cancelPending();
+    activeRef.current = id;
+    setActiveId(id);
+    setMessages([]); setUploads([]); setHistoryError("");
+    setStatus("idle"); setError(""); setNotice(""); setUploadError(""); setUploadDeleteError("");
+    setSession((current) => ({ ...current, conversationId: id }));
+  }
+
+  // Load this course's chats; restore the saved one, else the most recent, else start one.
   useEffect(() => {
     const controller = new AbortController();
-    setLoadingReferences(true); setReferenceError("");
-    async function start() {
+    setThreadsLoading(true); setThreadsError("");
+    async function load() {
       try {
-        const conversations = await listConversations(token, controller.signal);
+        const all = await listConversations(tokenRef.current, controller.signal);
         if (controller.signal.aborted) return;
-        const matching = conversations.filter((item) => item.course_id === courseId);
-        const chosen = matching.find((item) => item.id === (conversationId ?? saved.conversationId)) ?? matching[0] ??
-          await createCourseConversation(courseId, token, controller.signal);
+        let list = all.filter((item) => item.course_id === courseId);
+        if (!list.length) list = [await createCourseConversation(courseId, tokenRef.current, controller.signal)];
         if (controller.signal.aborted) return;
-        if (chosen.course_id !== courseId) throw new Error("The returned conversation does not match this course.");
-        setConversationId(chosen.id);
-        const nextUploads = await listConversationUploads(chosen.id, token, controller.signal);
-        if (controller.signal.aborted) return;
-        if (nextUploads.some((item) => item.conversation_id !== chosen.id)) throw new Error("The returned uploads do not match this conversation.");
-        setConversationId(chosen.id);
-        setUploads(nextUploads);
-        if (saved.conversationId !== chosen.id) setSaved({ conversationId: chosen.id, messages: [], selected: [] });
-        setReady(true); setReferenceError("");
+        if (list.some((item) => item.course_id !== courseId)) throw new Error("The returned conversation does not match this course.");
+        setThreads(list);
+        const saved = activeRef.current ?? readSession(key).conversationId;
+        selectThread((list.find((item) => item.id === saved) ?? list[0]).id);
       } catch (cause) {
-        if (!controller.signal.aborted) setReferenceError(problem(cause, "Course Chat could not be loaded. Please try again."));
-      } finally { if (!controller.signal.aborted) setLoadingReferences(false); }
+        if (!controller.signal.aborted) setThreadsError(problem(cause, "Your chats could not be loaded. Please try again."));
+      } finally { if (!controller.signal.aborted) setThreadsLoading(false); }
     }
-    void start();
+    void load();
     return () => controller.abort();
-  // Reload is only used for an explicit retry. Saved state is read for this course on mount.
+  // selectThread and key are stable for this mounted course; reload only on request.
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courseId, token, reload]);
+  }, [courseId, threadsRequest]);
 
-  useEffect(() => { if (ready) saveSession(key, { ...saved, conversationId }); }, [key, ready, saved, conversationId]);
-  useEffect(() => () => { pendingQuestion.current?.abort(); pendingUpload.current?.abort(); }, []);
+  // Load the active thread's saved messages and uploads. A newer load (another thread,
+  // or a reload) aborts this one, so a slow response can never show in the wrong thread.
+  useEffect(() => {
+    if (activeId === null) { setHistoryLoading(false); return; }
+    const controller = new AbortController();
+    setHistoryLoading(true); setHistoryError("");
+    async function load(id: number) {
+      try {
+        const [saved, nextUploads] = await Promise.all([
+          listConversationMessages(id, tokenRef.current, controller.signal), listConversationUploads(id, tokenRef.current, controller.signal),
+        ]);
+        if (controller.signal.aborted || activeRef.current !== id) return;
+        if (nextUploads.some((item) => item.conversation_id !== id)) throw new Error("The returned uploads do not match this conversation.");
+        setMessages(saved.map(toChatMessage));
+        setUploads(nextUploads);
+      } catch (cause) {
+        if (!controller.signal.aborted) setHistoryError(problem(cause, "This chat could not be loaded. Please try again."));
+      } finally { if (!controller.signal.aborted) setHistoryLoading(false); }
+    }
+    void load(activeId);
+    return () => controller.abort();
+  }, [activeId, historyRequest]);
+
+  useEffect(() => { if (!threadsLoading) saveSession(key, session); }, [key, session, threadsLoading]);
+  // Created in the effect (not only in useRef) so a StrictMode remount gets a live controller.
+  useEffect(() => {
+    lifetime.current = new AbortController();
+    return () => { cancelPending(); lifetime.current.abort(); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // After a question settles, re-read the list: the server may have named the thread
+  // from its first question and moved it to the top. The active thread is unchanged.
+  async function refreshThreads() {
+    const run = ++refreshRun.current;
+    const shownBefore = new Set(threadsRef.current.map((item) => item.id));
+    try {
+      // The latest token: an answer can outlast the token it was sent with.
+      const all = await listConversations(tokenRef.current, lifetime.current.signal);
+      // A newer refresh started meanwhile; its response is the one to keep.
+      if (run !== refreshRun.current) return;
+      const shownNow = threadsRef.current;
+      const shownIds = new Set(shownNow.map((item) => item.id));
+      // Server titles and order for chats still shown. A chat deleted meanwhile, here or
+      // in another tab, is left out.
+      const fresh = all.filter((item) => item.course_id === courseId && shownIds.has(item.id));
+      const freshIds = new Set(fresh.map((item) => item.id));
+      // A chat created after the server answered is not in its list yet: keep it.
+      const createdMeanwhile = shownNow.filter((item) => !shownBefore.has(item.id) && !freshIds.has(item.id));
+      setThreads([...createdMeanwhile, ...fresh]);
+    } catch { /* The list keeps its current titles; nothing else depends on them. */ }
+  }
 
   const references: ChatReference[] = [
     ...materials.filter((item) => item.snapshot?.course_id === courseId).map((item) => ({
@@ -110,30 +207,31 @@ function ConnectedChat({ courseId, materials, token, userId }: { courseId: numbe
       available: item.status === "READY",
     })),
   ];
-  const selected = reconcileSelection(references, saved.selected);
-  const getStatus = useCallback((documentId: number, access: string, signal: AbortSignal) => getConversationUpload(conversationId!, documentId, access, signal), [conversationId]);
-  const statusViews = useMemo(() => conversationId && uploads.filter((item) => item.status !== "READY" && item.status !== "FAILED").map((item) =>
-    <DocumentStatus key={`${conversationId}:${item.id}`} tracked={{ id: item.id, name: item.name, snapshot: item }} conversationId={conversationId} accessToken={token}
+  const selected = reconcileSelection(references, session.selected);
+  const getStatus = useCallback((documentId: number, access: string, signal: AbortSignal) => getConversationUpload(activeId!, documentId, access, signal), [activeId]);
+  const statusViews = useMemo(() => activeId && uploads.filter((item) => item.status !== "READY" && item.status !== "FAILED").map((item) =>
+    <DocumentStatus key={`${activeId}:${item.id}`} tracked={{ id: item.id, name: item.name, snapshot: item }} conversationId={activeId} accessToken={token}
       getStatus={getStatus} onStatusChange={(next) => setUploads((current) => current.map((upload) => upload.id === next.id ? next : upload))} />
-  ), [conversationId, uploads, token, getStatus]);
+  ), [activeId, uploads, token, getStatus]);
 
   async function addDocuments(files: File[]) {
     const file = files[0];
     const validation = validateDocument(file ?? null);
     if (validation) { setUploadError(validation); return; }
-    if (!file || !conversationId || !ready || pendingUpload.current) return;
+    const conversation = activeRef.current;
+    if (!file || !conversation || pendingUpload.current) return;
     const controller = new AbortController(); pendingUpload.current = controller;
     setUploading(true); setUploadProgress(0); setUploadError("");
     try {
-      const next = await uploadConversationDocument(conversationId, file, token, controller.signal, setUploadProgress);
+      const next = await uploadConversationDocument(conversation, file, token, controller.signal, setUploadProgress);
       if (controller.signal.aborted) return;
-      if (next.conversation_id !== conversationId) throw new Error("Upload was saved to a different conversation.");
+      if (next.conversation_id !== conversation) throw new Error("Upload was saved to a different conversation.");
       setUploads((current) => [next, ...current.filter((item) => item.id !== next.id)]);
     } catch (cause) {
       if (controller.signal.aborted) return;
       if (cause instanceof DocumentRequestError && cause.status === 503 && cause.documentId) {
         try {
-          const next = await getConversationUpload(conversationId, cause.documentId, token, controller.signal);
+          const next = await getConversationUpload(conversation, cause.documentId, token, controller.signal);
           if (!controller.signal.aborted) setUploads((current) => [next, ...current.filter((item) => item.id !== next.id)]);
         } catch { /* The list retry can recover an upload whose handoff was unconfirmed. */ }
       }
@@ -141,36 +239,158 @@ function ConnectedChat({ courseId, materials, token, userId }: { courseId: numbe
     } finally { if (!controller.signal.aborted) { pendingUpload.current = null; setUploading(false); } }
   }
 
-  async function ask(text: string, ids: number[], append = true) {
-    if (pendingQuestion.current || !conversationId || !text.trim() || !ids.length || ids.length > 20) return;
-    const eligible = selectedDocumentIds(references, selected);
-    if (ids.some((id) => !eligible.includes(id))) return;
+  // Shared by new questions and retries. `bubble` is the message being answered.
+  async function answer(bubble: (message: ChatMessage) => boolean, run: (conversation: number, signal: AbortSignal) => Promise<QuestionResult>) {
+    const conversation = activeRef.current;
+    if (!conversation) return;
     const controller = new AbortController(); pendingQuestion.current = controller;
-    lastQuestion.current = { text, ids };
-    if (append) setSaved((current) => ({ ...current, messages: [...current.messages, { id: `user-${++sequence.current}`, role: "user", text }] }));
     setStatus("sending"); setError("");
     try {
-      const answer = await askConversationQuestion(conversationId, text, ids, token, controller.signal);
-      if (controller.signal.aborted) return;
-      const message: ChatMessage = answer.status === "ANSWERED" ? {
-        id: `assistant-${++sequence.current}`, role: "assistant", text: answer.answer,
-        citations: answer.citations.map((item) => citationView(item, references)),
-      } : { id: `assistant-${++sequence.current}`, role: "assistant", text: "I couldn’t find enough information in the selected references to answer that question." };
-      setSaved((current) => ({ ...current, messages: [...current.messages, message] }));
+      const result = await run(conversation, controller.signal);
+      // Aborted (thread switched, deleted or stopped) or no longer the active thread:
+      // never write this reply into whatever thread is showing now.
+      if (controller.signal.aborted || activeRef.current !== conversation) return;
+      setMessages((current) => replaceMessage(current, bubble, [result.question, result.reply]));
       setStatus("idle");
+      void refreshThreads();
     } catch (cause) {
-      if (!controller.signal.aborted) { setError(problem(cause, "Pandu could not answer right now. Please try again.")); setStatus("error"); }
-    } finally { if (!controller.signal.aborted) pendingQuestion.current = null; }
+      if (controller.signal.aborted || activeRef.current !== conversation) return;
+      setError(problem(cause, "Pandu could not answer right now. Please try again."));
+      setStatus("error");
+      if (cause instanceof QuestionRequestError && cause.question) {
+        const question = cause.question;
+        setMessages((current) => replaceMessage(current, bubble, [question]));
+        void refreshThreads();
+      } else {
+        // Unknown outcome (network, 404, 409): the saved history is the truth.
+        setMessages((current) => current.map((item) => bubble(item) ? { ...item, state: "failed" } : item));
+        reloadHistory();
+      }
+    } finally { if (pendingQuestion.current === controller) pendingQuestion.current = null; }
   }
 
+  function ask(text: string, ids: number[]) {
+    if (pendingQuestion.current || !activeRef.current || !text.trim() || !ids.length || ids.length > 20) return;
+    const eligible = selectedDocumentIds(references, selected);
+    if (ids.some((id) => !eligible.includes(id))) return;
+    const localId = `local-${++sequence.current}`;
+    setMessages((current) => [...current, { id: localId, role: "user", text, state: "sending" }]);
+    void answer((item) => item.id === localId, (conversation, signal) => askConversationQuestion(conversation, text, ids, token, signal));
+  }
+
+  function retry(message: ChatMessage) {
+    const messageId = message.serverId;
+    if (pendingQuestion.current || !activeRef.current || messageId === undefined) return;
+    const ids = selectedDocumentIds(references, selected);
+    if (!ids.length) { setError("Select at least one source, then retry."); setStatus("error"); return; }
+    const isQuestion = (item: ChatMessage) => item.role === "user" && item.serverId === messageId;
+    setMessages((current) => current.map((item) => isQuestion(item) ? { ...item, state: "sending" } : item));
+    void answer(isQuestion, (conversation, signal) => retryConversationQuestion(conversation, messageId, ids, token, signal));
+  }
+
+  function stop() {
+    if (!pendingQuestion.current) return;
+    pendingQuestion.current.abort(); pendingQuestion.current = null;
+    setStatus("idle");
+    reloadHistory();
+  }
+
+  async function createThread() {
+    if (creating) return;
+    setCreating(true); setThreadsError("");
+    try {
+      const created = await createCourseConversation(courseId, token, lifetime.current.signal);
+      if (created.course_id !== courseId) throw new Error("The returned conversation does not match this course.");
+      setThreads([created, ...threadsRef.current.filter((item) => item.id !== created.id)]);
+      selectThread(created.id);
+    } catch (cause) {
+      if (!lifetime.current.signal.aborted) setThreadsError(problem(cause, "A new chat could not be started. Please try again."));
+    } finally { if (!lifetime.current.signal.aborted) setCreating(false); }
+  }
+
+  async function deleteThread(id: number) {
+    if (deletingId !== null) return;
+    const wasActive = activeRef.current === id;
+    // Cancel this thread's in-flight question first, so its reply cannot appear later.
+    if (wasActive && pendingQuestion.current) { cancelPending(); setStatus("idle"); }
+    setDeletingId(id); setThreadsError("");
+    let removed = false;
+    try {
+      await deleteConversation(id, token, lifetime.current.signal);
+      removed = true;
+    } catch (cause) {
+      if (lifetime.current.signal.aborted) return;
+      // 404: it is already gone (or no longer the student's), so it must leave the list.
+      if (cause instanceof DocumentRequestError && cause.status === 404) removed = true;
+      else {
+        setThreadsError(problem(cause, "This chat could not be deleted. Please try again."));
+        if (wasActive && activeRef.current === id) reloadHistory();
+      }
+    } finally { if (!lifetime.current.signal.aborted) setDeletingId(null); }
+    if (!removed) return;
+    const remaining = threadsRef.current.filter((item) => item.id !== id);
+    setThreads(remaining);
+    if (activeRef.current === id) selectThread(remaining[0]?.id ?? null);
+  }
+
+  async function deleteUpload(documentId: number) {
+    const conversation = activeRef.current;
+    if (!conversation || deletingUploadId !== null) return;
+    setDeletingUploadId(documentId); setUploadDeleteError("");
+    let removed = false;
+    try {
+      await deleteConversationUpload(conversation, documentId, token, lifetime.current.signal);
+      removed = true;
+    } catch (cause) {
+      if (lifetime.current.signal.aborted) return;
+      if (cause instanceof DocumentRequestError && cause.status === 404) removed = true;
+      else if (activeRef.current === conversation) setUploadDeleteError(problem(cause, "The upload could not be deleted. Please try again."));
+    } finally { if (!lifetime.current.signal.aborted) setDeletingUploadId(null); }
+    if (!removed || activeRef.current !== conversation) return;
+    setUploads((current) => current.filter((item) => item.id !== documentId));
+    setSession((current) => ({ ...current, selected: current.selected.filter((item) => item !== `upload-${documentId}`) }));
+  }
+
+  // PDFs open in a new tab at the cited page; DOCX and PPTX download.
+  async function openCitation(citation: ChatCitation) {
+    const source = citation.source;
+    setNotice("");
+    if (!source) return;
+    if (!source.available) { setNotice("This source is no longer available."); return; }
+    // The tab must be opened during the click: after an await, browsers block it as a pop-up.
+    const tab = source.format === "pdf" ? window.open("", "_blank") : null;
+    if (source.format === "pdf" && !tab) { setNotice("Your browser blocked the new tab. Allow pop-ups for StudyForge to open sources."); return; }
+    if (tab) tab.opener = null;
+    try {
+      const blob = await fetchSourceFile(source.documentId, token, lifetime.current.signal);
+      const url = URL.createObjectURL(blob);
+      // Revoked later, not at once: the new tab or download still needs the URL.
+      setTimeout(() => URL.revokeObjectURL(url), OBJECT_URL_LIFETIME);
+      if (tab) { tab.location.href = `${url}#page=${source.page}`; return; }
+      const link = document.createElement("a");
+      link.href = url; link.download = fileName(source); link.hidden = true;
+      document.body.append(link); link.click(); link.remove();
+    } catch (cause) {
+      tab?.close();
+      if (!lifetime.current.signal.aborted) setNotice(sourceProblem(cause));
+    }
+  }
+
+  const deletingActive = deletingId !== null && deletingId === activeId;
   return <div className="demo-chat-container">
-    <CourseChat courseId={courseId} chatReady={ready && !!conversationId} messages={saved.messages} references={references} selectedReferences={selected} status={status} error={error}
-      loadingReferences={loadingReferences} referenceError={referenceError} onRetryReferences={() => setReload((value) => value + 1)}
-      uploading={uploading} uploadProgress={uploadProgress} uploadError={uploadError} uploadStatusViews={statusViews}
-      onReferencesChange={(ids) => setSaved((current) => ({ ...current, selected: reconcileSelection(references, ids) }))}
-      onAddDocuments={(files) => void addDocuments(files)} onSend={(text, ids) => void ask(text, ids)}
-      onRetry={() => { if (lastQuestion.current) void ask(lastQuestion.current.text, lastQuestion.current.ids, false); }}
-      onStop={() => { pendingQuestion.current?.abort(); pendingQuestion.current = null; setStatus("idle"); }} onCitation={setCitation} />
-    {citation && <div className="chat-detail" role="region" aria-label="Citation details"><strong>{citation.label}</strong><p>{citation.detail}</p><button type="button" autoFocus onClick={() => setCitation(null)}>Close citation</button></div>}
+    <CourseChat courseId={courseId} chatReady={activeId !== null && !historyLoading && !historyError && !deletingActive}
+      messages={messages} references={references} selectedReferences={selected} status={status} error={error}
+      loadingReferences={historyLoading} referenceError="" uploading={uploading} uploadProgress={uploadProgress} uploadError={uploadError} uploadStatusViews={statusViews}
+      onReferencesChange={(ids) => setSession((current) => ({ ...current, selected: reconcileSelection(references, ids) }))}
+      onAddDocuments={(files) => void addDocuments(files)} onSend={ask} onStop={stop} onCitation={(citation) => void openCitation(citation)}
+      onRetryMessage={retry} historyLoading={historyLoading} historyError={historyError} onReloadHistory={reloadHistory}
+      onDeleteUpload={(documentId) => void deleteUpload(documentId)} deletingUploadId={deletingUploadId} uploadDeleteError={uploadDeleteError}
+      notice={notice} onDismissNotice={() => setNotice("")}
+      threads={{
+        items: threads.map((item) => ({ id: item.id, title: item.title, updatedAt: item.updated_at })),
+        activeId, loading: threadsLoading, error: threadsError, creating, deletingId,
+        onSelect: selectThread, onCreate: () => void createThread(), onDelete: (id) => void deleteThread(id),
+        onRetry: threads.length ? undefined : () => setThreadsRequest((value) => value + 1),
+      }} />
   </div>;
 }
