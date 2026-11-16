@@ -239,6 +239,44 @@ it("keeps the chat and its messages and shows an error when deletion fails", asy
   expect(within(chats()).getByRole("button", { current: true })).toHaveTextContent("Cells");
 });
 
+it("shows one error, not a reload error too, when deleting the open chat fails while offline", async () => {
+  render(<ConnectedCourseChat courseId={42} materials={[material(1, 42, "Lecture.pdf")]} />);
+  await ready();
+  const loads = vi.mocked(listConversationMessages).mock.calls.length;
+  // Offline: every request fails.
+  vi.mocked(deleteConversation).mockRejectedValue(new TypeError("Failed to fetch"));
+  vi.mocked(listConversationMessages).mockRejectedValue(new TypeError("Failed to fetch"));
+  fireEvent.click(screen.getByRole("button", { name: "Delete chat Cells" }));
+  fireEvent.click(within(screen.getByRole("group", { name: "Delete Cells?" })).getByRole("button", { name: "Delete" }));
+  expect(await screen.findByText("This chat could not be deleted. Please try again.")).toBeInTheDocument();
+  await act(async () => { await new Promise((done) => setTimeout(done, 50)); });
+  // Nothing was cancelled, so the messages shown are current: no reload, no second error.
+  expect(vi.mocked(listConversationMessages).mock.calls.length).toBe(loads);
+  expect(screen.queryByText("This chat could not be loaded. Please try again.")).not.toBeInTheDocument();
+  expect(screen.getByText("Mitosis.")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("checkbox", { name: /Lecture.pdf/ }));
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "Still usable?" } });
+  expect(screen.getByRole("button", { name: "Send to Pandu" })).toBeEnabled();
+});
+
+it("reloads the open chat when a failed delete had cancelled a send, so its question shows as saved", async () => {
+  render(<ConnectedCourseChat courseId={42} materials={[material(1, 42, "Lecture.pdf")]} />);
+  await ready();
+  const pending = deferred<QuestionResult>();
+  vi.mocked(askConversationQuestion).mockReturnValueOnce(pending.promise);
+  vi.mocked(deleteConversation).mockRejectedValue(new DocumentRequestError(503, { code: "UNAVAILABLE", message: "Deletion is unavailable right now." }));
+  await sendQuestion("Cancelled question");
+  // The server saved the question; the browser stopped waiting when the delete started.
+  history[9] = [...history[9], question(5, "Cancelled question", "FAILED")];
+  fireEvent.click(screen.getByRole("button", { name: "Delete chat Cells" }));
+  fireEvent.click(within(screen.getByRole("group", { name: "Delete Cells?" })).getByRole("button", { name: "Delete" }));
+  expect(await screen.findByText("Deletion is unavailable right now.")).toBeInTheDocument();
+  expect(await screen.findByRole("button", { name: "Retry" })).toBeInTheDocument();
+  expect(screen.getAllByText("Cancelled question")).toHaveLength(1);
+  await act(async () => pending.resolve(answered(question(5, "Cancelled question"), reply(6, 5, "Ghost answer"))));
+  expect(screen.queryByText("Ghost answer")).not.toBeInTheDocument();
+});
+
 it("treats a 404 on delete as already deleted and removes the chat", async () => {
   vi.mocked(deleteConversation).mockRejectedValue(new DocumentRequestError(404, { code: "RESOURCE_NOT_FOUND", message: "Resource not found." }));
   render(<ConnectedCourseChat courseId={42} materials={[]} />);

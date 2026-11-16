@@ -310,9 +310,9 @@ function ConnectedChat({ courseId, materials, token, userId }: { courseId: numbe
 
   async function deleteThread(id: number) {
     if (deletingId !== null) return;
-    const wasActive = activeRef.current === id;
     // Cancel this thread's in-flight question first, so its reply cannot appear later.
-    if (wasActive && pendingQuestion.current) { cancelPending(); setStatus("idle"); }
+    const cancelledSend = activeRef.current === id && pendingQuestion.current !== null;
+    if (cancelledSend) { cancelPending(); setStatus("idle"); }
     setDeletingId(id); setThreadsError("");
     let removed = false;
     try {
@@ -324,7 +324,10 @@ function ConnectedChat({ courseId, materials, token, userId }: { courseId: numbe
       if (cause instanceof DocumentRequestError && cause.status === 404) removed = true;
       else {
         setThreadsError(problem(cause, "This chat could not be deleted. Please try again."));
-        if (wasActive && activeRef.current === id) reloadHistory();
+        // Only a cancelled send needs a reload, to show its question as the server saved
+        // it. Otherwise the messages shown are current, and reloading them (for example
+        // while offline) would only add a second, misleading "could not be loaded" error.
+        if (cancelledSend && activeRef.current === id) reloadHistory();
       }
     } finally { if (!lifetime.current.signal.aborted) setDeletingId(null); }
     if (!removed) return;
