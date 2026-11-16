@@ -1,9 +1,14 @@
 """Persistence only: uploading, dispatch, and processing live elsewhere."""
 
+from pathlib import PurePosixPath
+
 from django.conf import settings
 from django.core.validators import MinValueValidator, RegexValidator
 from django.db import models
 from django.utils import timezone
+
+# Matches the upload formats accepted in apps.documents.validation.FORMATS.
+SOURCE_FORMATS = ("pdf", "docx", "pptx")
 
 
 class Document(models.Model):
@@ -116,6 +121,12 @@ class Document(models.Model):
 
     def __str__(self):
         return self.title
+
+    @property
+    def source_format(self):
+        """The upload format ("pdf", "docx" or "pptx") from the stored name; else None."""
+        suffix = PurePosixPath(self.file.name or "").suffix.lower().lstrip(".")
+        return suffix if suffix in SOURCE_FORMATS else None
 
 
 class Job(models.Model):

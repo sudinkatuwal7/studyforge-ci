@@ -33,3 +33,12 @@ def owned_conversations(user):
 def owned_conversation(user, conversation_id):
     """A missing or foreign conversation has the same private lookup result."""
     return owned_conversations(user).filter(pk=conversation_id).first()
+
+
+def readable_documents(user):
+    """Documents whose source file the user may open: their course materials and
+    uploads in conversations they can still reach (owned_conversations rules)."""
+    return Document.objects.filter(owner=user).filter(
+        Q(course__owner=user, conversation__isnull=True)
+        | Q(conversation__in=owned_conversations(user))
+    )

@@ -2,7 +2,7 @@
 
 from django.core.exceptions import RequestDataTooBig, SuspiciousOperation
 from django.db import DatabaseError, transaction
-from django.http import Http404
+from django.http import FileResponse, Http404
 from rest_framework import exceptions
 from rest_framework.parsers import JSONParser
 from rest_framework.permissions import IsAuthenticated
@@ -16,8 +16,8 @@ from apps.documents.models import Document
 from apps.documents.parsers import DocumentMultipartParser
 from apps.documents.serializers import DocumentSerializer, validate_display_name
 from apps.documents.services import delete_material, locked_material, store_and_dispatch
-from apps.documents.validation import validate_document
-from apps.identity.ownership import owned_course, owned_documents
+from apps.documents.validation import FORMATS, validate_document
+from apps.identity.ownership import owned_course, owned_documents, readable_documents
 
 
 def resource_id(value):
@@ -133,3 +133,34 @@ class DocumentDetailView(DocumentAPIView):
         if document is None:
             raise Http404
         return Response(DocumentSerializer(document).data)
+
+
+class DocumentFileView(DocumentAPIView):
+    """GET /documents/{id}/file/: the original upload, for opening a cited source.
+
+    Covers course materials and the user's own chat uploads (readable_documents),
+    so a citation's document_id is enough. Foreign and missing IDs share one 404.
+    PDFs are served inline so a viewer can open them at a page; DOCX and PPTX
+    download, since browsers cannot open them at a location.
+    """
+
+    def handle_exception(self, exc):
+        if isinstance(exc, (DatabaseError, OSError)):
+            return Response(error_body("MATERIAL_UNAVAILABLE"), status=503)
+        return super().handle_exception(exc)
+
+    def get(self, request, document_id):
+        document = readable_documents(request.user).filter(pk=resource_id(document_id)).first()
+        if document is None:
+            raise Http404
+        source_format = document.source_format
+        suffix = f".{source_format}" if source_format else ""
+        filename = document.title if document.title.lower().endswith(suffix) else document.title + suffix
+        response = FileResponse(
+            document.file.open("rb"),
+            content_type=FORMATS.get(suffix, "application/octet-stream"),
+            as_attachment=source_format != "pdf",
+            filename=filename,
+        )
+        response["X-Content-Type-Options"] = "nosniff"
+        return response

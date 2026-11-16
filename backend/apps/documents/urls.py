@@ -1,7 +1,7 @@
 from django.db import transaction
 from django.urls import path
 
-from apps.documents.views import DocumentDetailView, DocumentUploadView
+from apps.documents.views import DocumentDetailView, DocumentFileView, DocumentUploadView
 
 
 urlpatterns = [
@@ -16,4 +16,5 @@ urlpatterns = [
         transaction.non_atomic_requests(DocumentDetailView.as_view()),
         name="document-detail",
     ),
+    path("documents/<str:document_id>/file/", DocumentFileView.as_view(), name="document-file"),
 ]
