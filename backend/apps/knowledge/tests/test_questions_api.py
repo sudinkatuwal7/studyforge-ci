@@ -433,3 +433,74 @@ class QuestionsAPITests(TestCase):
                 serializer = AnswerResultSerializer(data=self.answer, context=context)
                 self.assertFalse(serializer.is_valid())
                 Document.objects.filter(pk=self.document.pk).update(owner=self.owner, status=Document.Status.READY)
+
+    # --- SCRUM-24: tool trace from the search that actually ran -------------------
+
+    def conversation_upload(self, conversation, title="Chat upload", *, with_chunk=True):
+        upload = Document.objects.create(
+            owner=self.owner, conversation=conversation, title=title, sha256="a" * 64,
+            file=f"documents/{title}.pdf", status=Document.Status.READY,
+        )
+        if with_chunk:
+            self.make_chunk(upload, "Uploaded notes: the page table maps pages to frames.")
+        return upload
+
+    def test_trace_reports_course_material_search_and_what_it_found(self):
+        from apps.knowledge.services import answer_question
+
+        result = answer_question(self.owner, [self.document.pk, self.second.pk], "Page faults?")
+        self.assertEqual(result["tool_trace"], [{"tool": "search_sources", "sources": {
+            "course_materials": {"documents_searched": 2, "passages_used": 2}}}])
+
+    def test_one_combined_search_is_one_trace_entry_with_a_breakdown(self):
+        from apps.knowledge.services import answer_question
+
+        conversation = Conversation.objects.create(owner=self.owner, course=self.course)
+        upload = self.conversation_upload(conversation)
+        empty_upload = self.conversation_upload(conversation, "Empty upload", with_chunk=False)
+        result = answer_question(self.owner, [upload.pk, self.document.pk, empty_upload.pk],
+                                 "Page tables?", conversation=conversation)
+        # One embedding and one ranked search, so one entry; counts from real retrieval.
+        self.embed.assert_called_once()
+        self.assertEqual(result["tool_trace"], [{"tool": "search_sources", "sources": {
+            "course_materials": {"documents_searched": 1, "passages_used": 1},
+            "chat_uploads": {"documents_searched": 2, "passages_used": 1},
+        }}])
+
+    def test_passages_used_zero_can_mean_outranked_in_the_shared_top_results(self):
+        from apps.knowledge.services import answer_question
+
+        conversation = Conversation.objects.create(owner=self.owner, course=self.course)
+        upload = self.conversation_upload(conversation, with_chunk=False)
+        # The upload has a passage, but it is less similar than five course passages.
+        self.make_chunk(upload, "Uploaded notes on paging.", vector=[0.0, 1.0] + [0.0] * 766)
+        for number in range(4):
+            self.make_chunk(self.document, f"Course passage {number} about page faults.")
+        result = answer_question(self.owner, [self.document.pk, upload.pk], "Page faults?",
+                                 conversation=conversation)
+        self.assertEqual(result["tool_trace"][0]["sources"], {
+            "course_materials": {"documents_searched": 1, "passages_used": 5},
+            "chat_uploads": {"documents_searched": 1, "passages_used": 0},
+        })
+
+    def test_trace_is_kept_when_the_search_finds_nothing(self):
+        from apps.knowledge.services import answer_question
+
+        empty = self.make_document("No chunks")
+        result = answer_question(self.owner, [empty.pk], "Anything?")
+        self.assertEqual(result["status"], "INSUFFICIENT_CONTEXT")
+        self.assertEqual(result["tool_trace"], [{"tool": "search_sources", "sources": {
+            "course_materials": {"documents_searched": 1, "passages_used": 0}}}])
+        self.sdk.chat.completions.create.assert_not_called()
+
+    def test_failed_search_raises_without_a_trace(self):
+        from apps.knowledge.services import RAGServiceError, answer_question
+
+        self.embed.side_effect = RetryableProcessingError("embedding down")
+        with self.assertRaises(RAGServiceError):
+            answer_question(self.owner, [self.document.pk], "Page faults?")
+
+    def test_generic_rag_endpoint_does_not_expose_the_trace(self):
+        response = self.post()
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertNotIn("tool_trace", response.json())

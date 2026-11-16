@@ -19,6 +19,33 @@ class RAGServiceError(Exception):
     """Safe boundary for provider failures and unverifiable generated output."""
 
 
+SEARCH_SOURCES = "search_sources"
+
+
+def _search_trace(document_ids, passages):
+    """One trace entry for the one search that ran, broken down by source kind.
+
+    Retrieval embeds the question once and ranks every selected document together,
+    so this is a single step, not one per kind. passages_used counts each kind's
+    share of the shared top results: 0 can mean "outranked", not "nothing relevant".
+    Kinds that were not selected are left out.
+    """
+    uploads = set(Document.objects.filter(
+        pk__in=document_ids, conversation__isnull=False
+    ).values_list("pk", flat=True))
+    sources = {}
+    for kind, ids in (
+        ("course_materials", {pk for pk in document_ids if pk not in uploads}),
+        ("chat_uploads", uploads),
+    ):
+        if ids:
+            sources[kind] = {
+                "documents_searched": len(ids),
+                "passages_used": sum(passage["document_id"] in ids for passage in passages),
+            }
+    return [{"tool": SEARCH_SOURCES, "sources": sources}]
+
+
 def _authorized_document_ids(user, document_ids, conversation=None):
     authorized_ids = list(
         question_documents(user, conversation).filter(
@@ -51,6 +78,8 @@ def answer_question(user, document_ids, question, *, conversation=None):
                                                      conversation=conversation)
     except (ProcessingError, ImproperlyConfigured, ValueError):
         raise RAGServiceError("The question could not be answered right now.") from None
+    # Recorded only once the search has really run (a failed search raises above).
+    tool_trace = _search_trace(authorized_ids, passages)
 
     if not passages:
         result = {"status": "INSUFFICIENT_CONTEXT", "answer": None, "citations": []}
@@ -103,4 +132,5 @@ def answer_question(user, document_ids, question, *, conversation=None):
     )
     if not serializer.is_valid():
         raise RAGServiceError("The question could not be answered right now.")
-    return dict(serializer.validated_data)
+    # Server-built, never from model output; added after validation of the answer.
+    return {**serializer.validated_data, "tool_trace": tool_trace}

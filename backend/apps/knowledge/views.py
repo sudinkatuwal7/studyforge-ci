@@ -28,4 +28,6 @@ class RAGQuestionView(APIView):
                 },
                 status=status.HTTP_503_SERVICE_UNAVAILABLE,
             )
+        # This endpoint's contract predates tool traces; only Pandu chat returns them.
+        result.pop("tool_trace", None)
         return Response(result, status=status.HTTP_200_OK)
