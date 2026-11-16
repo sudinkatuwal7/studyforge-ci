@@ -174,7 +174,7 @@
   .app-shell-course .topbar { flex: none; }
   .course-workspace { gap: 0; }
   /* Keep the toggle beside the back link, above the full-width course name. */
-  .course-workspace-header a { min-height: 3rem; }
+  .course-workspace-header a { min-height: 3.5rem; }
   .course-workspace-header h2 { margin: .15rem 0; }
   .course-workspace-header p { display: none; }
   /* On a narrow screen the header stays above Pandu so My courses remains reachable. */
