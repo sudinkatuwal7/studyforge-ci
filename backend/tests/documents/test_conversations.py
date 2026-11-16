@@ -109,7 +109,7 @@ def test_storage_failure_rolls_back_conversation_cascade(owner, course):
 def test_question_endpoint_checks_conversation_before_calling_rag(owner_client, owner, course):
     conversation = Conversation.objects.create(owner=owner, course=course)
     with patch("apps.conversations.views.answer_question", return_value={
-        "status": "INSUFFICIENT_CONTEXT", "answer": None, "citations": []
+        "status": "INSUFFICIENT_CONTEXT", "answer": None, "citations": [], "tool_trace": []
     }) as answer:
         response = owner_client.post(
             f"/api/v1/conversations/{conversation.pk}/questions/",

@@ -111,6 +111,7 @@ def save_answer(message, result):
             status=result["status"],
             content=result["answer"] or "",
             citations=result["citations"],
+            tool_trace=result["tool_trace"],
             reply_to=question,
         )
         question.status = Status.ANSWERED

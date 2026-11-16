@@ -23,8 +23,10 @@ ANSWER = {
     "status": "ANSWERED", "answer": "Paging maps pages to frames.",
     "citations": [{"chunk_id": 7, "document_id": 3, "page_number": 2,
                    "excerpt": "maps pages to frames"}],
+    "tool_trace": [{"tool": "search_sources", "sources": {
+        "course_materials": {"documents_searched": 1, "passages_used": 1}}}],
 }
-NO_CONTEXT = {"status": "INSUFFICIENT_CONTEXT", "answer": None, "citations": []}
+NO_CONTEXT = {"status": "INSUFFICIENT_CONTEXT", "answer": None, "citations": [], "tool_trace": []}
 
 
 def ask(client, conversation, question="Explain paging", document_ids=(1,)):
@@ -56,6 +58,7 @@ def test_answered_question_and_reply_are_saved_in_order(owner_client, conversati
     question, reply = saved
     assert question["content"] == "Explain paging" and question["reply_to"] is None
     assert reply["content"] == ANSWER["answer"] and reply["citations"] == ANSWER["citations"]
+    assert reply["tool_trace"] == ANSWER["tool_trace"] and question["tool_trace"] == []
     assert reply["reply_to"] == question["id"]
     assert body["question"] == question and body["reply"] == reply
 
@@ -66,6 +69,7 @@ def test_insufficient_context_reply_is_saved_without_text_or_citations(owner_cli
     question, reply = history(owner_client, conversation)
     assert question["status"] == "ANSWERED"
     assert (reply["status"], reply["content"], reply["citations"]) == ("INSUFFICIENT_CONTEXT", "", [])
+    assert reply["tool_trace"] == []
 
 
 def test_failed_answer_keeps_the_question_as_failed(owner_client, conversation):
@@ -316,6 +320,7 @@ def test_two_finishing_attempts_keep_only_the_first_answer(conversation):
     _, first = save_answer(question, ANSWER)
     _, second = save_answer(question, NO_CONTEXT)
     assert second.pk == first.pk and second.status == "ANSWERED"
+    assert second.tool_trace == ANSWER["tool_trace"]
     assert ConversationMessage.objects.filter(role="assistant").count() == 1
 
 

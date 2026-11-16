@@ -143,7 +143,7 @@ def answer_and_save(request, conversation, question, document_ids):
     # Built from the saved reply: if another attempt answered first, the client
     # gets that answer, matching what history will show.
     return Response({"status": reply.status, "answer": reply.content or None,
-                     "citations": reply.citations,
+                     "citations": reply.citations, "tool_trace": reply.tool_trace,
                      "question": ConversationMessageSerializer(question).data,
                      "reply": ConversationMessageSerializer(reply).data})
 

@@ -46,6 +46,10 @@ class ConversationMessage(models.Model):
     status = models.CharField(max_length=32, choices=Status.choices)
     content = models.TextField(blank=True)
     citations = models.JSONField(default=list, blank=True)
+    # Replies only: one entry per tool call that produced the answer, e.g.
+    # [{"tool": "search_sources", "sources": {"course_materials":
+    #   {"documents_searched": 2, "passages_used": 3}}}].
+    tool_trace = models.JSONField(default=list, blank=True)
     # One reply per question, enforced by the database.
     reply_to = models.OneToOneField(
         "self", on_delete=models.CASCADE, related_name="reply", null=True, blank=True
