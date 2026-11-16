@@ -18,9 +18,9 @@ browser checklist below matters as much as the test run.
 ## Review status
 
 - Reviewer: Gaurav
-- Report status: `[not started / in progress / complete]`
-- Overall result: `[satisfactory / satisfactory with changes / unsatisfactory]`
-- Final recommendation: `[approve / approve with changes / do not approve]`
+- Report status: complete
+- Overall result: satisfactory with changes
+- Final recommendation: approve with changes
 
 ## Branch under review
 
@@ -445,91 +445,187 @@ should turn the conversation into the documentation record below afterward.
 
 ## Validation report from the chat
 
-After the conversation, replace the placeholders below with a concise account of
-the teammate's answers. Preserve important disagreement and uncertainty. The
-teammate's feedback is the primary outcome of this exercise.
-
 ### Environment
 
-- Name: `[teammate name]`
-- Date: `[date]`
-- Operating system: `[answer]`
-- Browser and version: `[answer]`
-- Node.js version: `[answer]`
-- Python version: `[answer]`
-- Branch/commit tested: `[answer]`
+- Name: Gaurav
+- Date: 2026-11-15
+- Operating system: macOS 26.0.1 (Darwin 25.0.0)
+- Browser and version: Google Chrome 157.0.8103.52
+- Node.js version: v22.14.0
+- Python version: 3.12.8
+- Branch/commit tested: `feature/SCRUM-124-dashboard-navigation-responsive`
+  at `a872c92` (Nischal Rimal, 2026-11-15, "docs(SCRUM-124): record teammate
+  validation and task context")
 
 ### Results
 
-- `tsc -b`: `[PASS / FAIL / NOT RUN]`
-- Lint: `[PASS / FAIL / NOT RUN]`
-- Frontend tests: `[PASS / FAIL / NOT RUN]` (`[passed / total]`)
-- Build: `[PASS / FAIL / NOT RUN]`
-- A. Navigation (A1–A6): `[PASS / FAIL / NOT RUN]`
-- B. No horizontal scroll (B1–B5): `[PASS / FAIL / NOT RUN]`
-- C. Course URLs and history (C1–C4): `[PASS / FAIL / NOT RUN]`
-- D. Dashboard (D1–D5): `[PASS / FAIL / NOT RUN]`
-- E. Empty states (E1–E8): `[PASS / FAIL / NOT RUN]`
-- F. Colours and contrast (F1–F2): `[PASS / FAIL / NOT RUN]`
-- Failed item numbers: `[list or none]`
+- `tsc -b`: PASS
+- Lint: PASS (0 errors, 9 warnings; see Problem 6)
+- Frontend tests: PASS (536 / 536, 53 test files)
+- Build: PASS
+- A. Navigation (A1–A6): PASS with one partial failure (A4)
+- B. No horizontal scroll (B1–B5): PASS with one partial failure (B3)
+- C. Course URLs and history (C1–C4): PASS
+- D. Dashboard (D1–D5): PASS
+- E. Empty states (E1–E8): PASS with one partial failure (E3); E8 not run in
+  the browser
+- F. Colours and contrast (F1–F2): PASS
+- Failed item numbers: A4 (partial), B3 (partial), E3 (partial). Not run: E8.
+
+Browser summary: 26 of 30 checks pass, 3 partly fail, 1 not run.
 
 ### Teammate feedback summarized
 
-`[Summarize the teammate's open-ended feedback, including improvements,
-concerns, positive observations, and suggested changes.]`
+The automated checks are in good shape: type-check, lint, all 536 tests and the
+build pass on macOS. The known slow `CourseDetailPage` test did not time out
+in this run. Routing, URLs and history (section C) and the dashboard (section
+D) work as described in a real browser, including Back/Forward through section
+and Pandu changes and keeping an in-progress quiz.
+
+The concerns are about layout and accessibility, which the unit tests cannot
+cover because jsdom applies no CSS:
+
+- The mobile drawer traps focus and returns it, but does not move focus into
+  the drawer when it opens (A4).
+- The floating AI Assistant button covers content at 1024px and below (B3).
+- One of the three "create a course" shortcuts (the To-Do panel's) navigates
+  to `/courses` instead of focusing the form on the dashboard (E3).
+- The report says the `react(immutability)` lint warnings already existed.
+  They are new on this branch (Problem 6).
+
+Gaurav had no further design suggestions beyond the problems listed below.
 
 ## Problems encountered
 
-Record every problem reported by the teammate, including problems that were
-resolved during the session.
-
 | # | Problem or unexpected behavior | Where it occurred | Evidence | Impact | Resolved? | Recommended action |
 |---|---|---|---|---|---|---|
-| 1 | `[description]` | `[setup / routing / navigation / dashboard / layout / empty states / tests / docs]` | `[output, screenshot or checklist item]` | `[low / medium / high]` | `[yes / no / partial]` | `[action]` |
+| 1 | When the drawer opens, focus stays on `<body>` instead of moving into the drawer. Tab/Shift+Tab stay inside, and Esc returns focus to the menu button. `AppShell.tsx` line 48 calls `focus()` while the sidebar is still `visibility: hidden` because of `transition: … visibility 0.2s` (`dashboard.css` line 541). Calling `focus()` 300 ms later works | navigation (AC7) | A4, reproduced 3 times with mouse and keyboard | medium (accessibility) | no | In `.app-shell-nav-open .sidebar` use `transition: transform 0.2s ease, visibility 0s` so the drawer is visible at once on open and still hides after the slide on close |
+| 2 | The floating AI Assistant button covers content at 1024px and below. When Pandu is closed, it sits over "Search materials" or the upload hint. When Pandu is open at 375, it overlaps a long course name. The console check still prints `0` | layout (AC8) | B3; `.course-workspace-grid-collapsed .assistant-toggle` (`bottom: 1rem`) | low–medium | no | Reserve space for the button, or keep it in the header row instead of floating |
+| 3 | The To-Do panel's "Create a course" is a link to `/courses`, so on the dashboard the URL changes and nothing is focused. The quick-links and My Courses shortcuts work. Arriving at `/courses` from `/tasks` or `/calendar` also does not focus the form | empty states (AC9) | E3; `TodoList.tsx` line 34 | low–medium | no | Pass a focus action from the dashboard, as the other two shortcuts do, and focus the form when `/courses` is opened from a "create a course" link |
+| 4 | After signing in, the dashboard keeps the login page's scroll position (opened 227px down). Login and dashboard share `/`, so the scroll position is not reset. Nav links do reset to the top | dashboard | Observed during setup | low | no | Scroll to the top when the signed-in user changes |
+| 5 | Cosmetic issues: at 375 a long course heading uses only about 55% of the width; `/calendar` shows "Calendar" twice (top bar and page heading); "Open calendar" and "+ New" are 19–23px tall at 375, below the 44px that F2 asks of the empty-state buttons | layout | B3, B4, F2 | low | no | Optional |
+| 6 | The report says the `react(immutability)` lint warnings already existed. They are new on this branch. Lint on `664a859` (just before the first SCRUM-124 commit) shows 4 warnings and no immutability ones; this branch shows 9. The 5 new warnings come from the `AddressProbe` helpers in `CourseDetailPage.test.tsx` (lines 132–133) and `CourseWorkspace.test.tsx` (lines 31–33), added in `a797042` | tests / docs | `npm run lint` on both commits | low (test code only) | no | Correct the "Expected results" note, or write the probe values through a ref or callback so the rule is not triggered |
+| 7 | Setup on macOS: port 8000 was taken by another local project, and Postgres.app can hold port 5432. In both cases sign-in fails. Vite moving to another port when 5173 is busy is blocked by CORS. The health check reports OK even when the database is down | setup | Seen before the browser run | low | yes (Docker on 5433, ports freed, `npm run dev -- --port 5173 --strictPort`) | Add macOS notes to the setup: check ports 8000, 5173 and 5432 first, and use `--strictPort` |
 
-If no problems were found, write:
+Probably existing issues, not caused by this branch (follow-up tickets
+suggested):
 
-```text
-No problems were reported during the teammate validation.
-```
+- Two page loads in quick succession signed the user out. The likely cause:
+  each load refreshes the rotating, blacklisted refresh cookie, and the first
+  load's response is dropped when the second load interrupts it.
+- `/api/v1/health/` and "Backend connected" report OK while Postgres is down,
+  so a stopped database only shows up when sign-in fails.
 
 ## Positive observations
 
-`[Record what the teammate found clear, useful, reliable, or well designed.]`
+- Section and Pandu state in the URL, reload, and Back/Forward all behave
+  exactly as described (C1–C4). An in-progress quiz kept its question and
+  answers across section switches and history (C4).
+- Dashboard Upcoming is correct: the next 7 days, soonest first, overdue,
+  completed and day-8+ items excluded, and the stat card matches and updates
+  without a reload (D1, D2).
+- The quick links, the deleted-course message and the per-account
+  separation work (D3–D5).
+- No horizontal scrolling on any page at 375, 768 or 1440. Long course names
+  are clamped to 2 lines with an ellipsis (B1–B5).
+- The contrast fix works: link text is 5.0–5.3:1, and empty-state buttons are
+  12.63:1 and 44px tall at 375 (F1, F2).
+- The report clearly separates what the unit tests prove from what needs a
+  browser, which made it easy to see where the remaining problems were.
 
 ## Suggested improvements
 
 | # | Suggested improvement | Reason given by teammate | Priority | Planned action |
 |---|---|---|---|---|
-| 1 | `[suggestion]` | `[reason]` | `[high / medium / low]` | `[action or decision]` |
+| 1 | Move focus into the drawer when it opens | Keyboard and screen-reader users start outside the drawer; AC7 expects focus to be handled by the drawer | high | Fix before merge (Problem 1) |
+| 2 | Stop the AI Assistant button covering content at 1024px and below | AC8 asks for no cut-off content | medium | Fix before merge (Problem 2) |
+| 3 | Make the To-Do panel's "create a course" shortcut focus the form like the other two | E3 expects every shortcut to scroll to and focus the form without changing the URL | medium | Fix before merge (Problem 3) |
+| 4 | Correct the lint note in "Expected results" | The 5 `react(immutability)` warnings are new on this branch | low | Fix before merge (Problem 6) |
+| 5 | Reset the scroll position after sign-in | The dashboard opens partway down the page | low | Follow-up (Problem 4) |
+| 6 | Add macOS setup notes (ports 8000/5173/5432, `--strictPort`) | Sign-in failed on macOS until ports were freed | low | Follow-up (Problem 7) |
+| 7 | Cosmetic tidy-ups at 375px and on `/calendar` | Minor visual issues | low | Deferred (Problem 5) |
 
 ## Evidence collected
 
-Paste concise evidence from the teammate's run. Never include secrets, API keys,
-tokens, passwords, or private connection strings.
-
 ```text
-Commands run:
+Commands run (macOS zsh, from frontend/):
+  npx tsc -b
+  npm run lint
+  npm test
+  npm run build
+  npx oxlint on 664a859 (the commit before SCRUM-124), for the lint comparison
 
 Test, type-check, lint and build results:
+  tsc -b         exit 0, no errors
+  npm run lint   exit 0; 0 errors, 9 warnings
+                 4 that already existed: set-state-in-effect (CourseTasks.tsx,
+                   CalendarMonth.tsx x2), only-export-components (AuthContext.tsx)
+                 5 new: react(immutability) in CourseDetailPage.test.tsx:132-133
+                   and CourseWorkspace.test.tsx:31-33
+  npm test       Test Files 53 passed (53); Tests 536 passed (536); 27.94s
+  npm run build  built in 287ms; dist/assets/index-*.js 387.35 kB (gzip 115.64 kB)
 
-Browser checks (item numbers, widths, pass/fail):
+Browser checks (Chrome 157, fake AI generators, Docker Postgres on 5433):
+  A1 PASS  A2 PASS  A3 PASS  A4 PARTIAL  A5 PASS  A6 PASS
+  B1 PASS  B2 PASS  B3 PARTIAL  B4 PASS  B5 PASS     (console check 0 at 375/768/1440)
+  C1 PASS  C2 PASS  C3 PASS  C4 PASS
+  D1 PASS  D2 PASS  D3 PASS  D4 PASS  D5 PASS
+  E1 PASS  E2 PASS  E3 PARTIAL  E4 PASS  E5 PASS  E6 PASS  E7 PASS  E8 NOT RUN
+  F1 PASS  F2 PASS
+  Notes:
+  - 375 and 768 were also checked in same-origin iframes of exactly that width,
+    because a Chrome window cannot be narrower than 500px.
+  - E7 delayed the document requests by 3 s instead of using Slow 3G.
+  - Tasks seeded as "today" landed on the next local day because Django runs
+    on UTC (seed data only, not the app).
+  - E8 (reduced motion) was not run in the browser; it is covered by
+    focusCourseForm.test.ts.
 
 Screenshots of failures:
+  No separate screenshots; the reviewer keeps the screen recordings of the run.
 
 Error messages or console logs:
+  None from the app during the checks.
 ```
 
 ### Facilitator conclusion
 
-`[Convert the conversation into a clear conclusion. List accepted suggestions,
-required fixes, unresolved questions, and the next action.]`
+SCRUM-124 meets its acceptance criteria for routing, URLs, history, the
+dashboard, quick links, empty-state content and contrast. Every automated check
+passes, and 26 of 30 browser checks pass.
+
+Three browser checks fail partly, each against a stated criterion:
+
+- AC7: focus does not move into the drawer when it opens.
+- AC8: the AI Assistant button covers content at 1024px and below.
+- AC9: the To-Do panel's "create a course" shortcut navigates instead of
+  focusing the form.
+
+None of these break the main flows. They should be fixed before merge,
+together with the inaccurate lint note.
+
+The scroll position after sign-in, the macOS setup notes and the cosmetic items
+can follow in later tickets. The two probably-existing problems (sign-out on
+quick reloads, the health check ignoring the database) are not from this branch
+and should get their own tickets.
+
+E8 should be checked by hand with macOS Reduce motion turned on, when the fixes
+are re-checked.
+
+Next action: Nischal fixes Problems 1, 2, 3 and 6. Gaurav re-runs A4, B3, E3 and
+E8 and the four automated checks, then approves.
 
 ## Final decision
 
-- Problems requiring fixes before merge: `[list or none]`
-- Accepted improvements: `[list or none]`
-- Deferred improvements: `[list or none]`
-- Follow-up owner: `[name]`
-- Follow-up issue or task: `[identifier]`
-- Final recommendation: `[approve / approve with changes / do not approve]`
+- Problems requiring fixes before merge: Problem 1 (drawer focus on open, A4),
+  Problem 2 (AI Assistant button overlap, B3), Problem 3 (To-Do panel "Create
+  a course" shortcut, E3), Problem 6 (lint note in Expected results)
+- Accepted improvements: Problem 4 (reset scroll after sign-in), Problem 7
+  (macOS setup notes)
+- Deferred improvements: Problem 5 (cosmetic items); the two problems that
+  probably already existed (sign-out on quick reloads, health check ignoring
+  the database)
+- Follow-up owner: Nischal
+- Follow-up issue or task: SCRUM-124 (fixes on this branch); new tickets for
+  the deferred items
+- Final recommendation: approve with changes
