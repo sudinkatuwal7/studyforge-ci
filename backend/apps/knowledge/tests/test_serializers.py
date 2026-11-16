@@ -88,6 +88,17 @@ class RAGSerializerTests(TestCase):
         )
         self.assertTrue(serializer.is_valid(), serializer.errors)
 
+    def test_citation_accepts_pdf_whitespace_line_breaks(self):
+        serializer = AnswerResultSerializer(
+            data={
+                "status": "ANSWERED",
+                "answer": "Supported.",
+                "citations": [self.citation(excerpt="requested page is\nnot in RAM")],
+            },
+            context=self.context(),
+        )
+        self.assertTrue(serializer.is_valid(), serializer.errors)
+
     def test_citation_rejects_other_user_or_document_or_wrong_provenance(self):
         cases = [
             self.citation(chunk_id=self.other_chunk.pk, document_id=self.other_document.pk),
@@ -102,12 +113,12 @@ class RAGSerializerTests(TestCase):
                 )
                 self.assertFalse(serializer.is_valid())
 
-    def test_empty_citations_mean_insufficient_context(self):
+    def test_answered_response_may_omit_citations_but_abstention_rules_remain(self):
         insufficient = AnswerResultSerializer(
             data={"status": "INSUFFICIENT_CONTEXT", "answer": None, "citations": []},
             context=self.context(),
         )
-        unsupported_answer = AnswerResultSerializer(
+        uncited_answer = AnswerResultSerializer(
             data={"status": "ANSWERED", "answer": "Unsupported.", "citations": []},
             context=self.context(),
         )
@@ -116,5 +127,5 @@ class RAGSerializerTests(TestCase):
             context=self.context(),
         )
         self.assertTrue(insufficient.is_valid(), insufficient.errors)
-        self.assertFalse(unsupported_answer.is_valid())
+        self.assertTrue(uncited_answer.is_valid(), uncited_answer.errors)
         self.assertFalse(cited_insufficient.is_valid())

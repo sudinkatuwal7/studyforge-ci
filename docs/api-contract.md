@@ -683,10 +683,10 @@ Before an answer is returned, each citation must:
   Document.owner matching the authenticated user and Document.status still READY.
 - Match the stored document ID and page number. These are canonical identifiers,
   not page numbers or source names invented by the model.
-- Include a nonblank verbatim excerpt present in the bounded passage actually
-  sent to the model and in the current stored chunk. Excerpts are not paraphrased
-  or silently repaired. Stored chunk text must still match the retrieval snapshot
-  at the service's verification step.
+- Include a nonblank excerpt whose text is present in the bounded passage actually
+  sent to the model and in the current stored chunk. Whitespace layout may differ;
+  other characters must match. Stored chunk text must still match the retrieval
+  snapshot at the service's verification step.
 
 The generator and service enforce the retrieved-ID allowlist; the final serializer
 independently verifies current ownership, readiness, page and excerpt. Its document
@@ -694,10 +694,11 @@ allowlist alone does not establish retrieval membership. The entire selected
 document set is rechecked after provider calls and at final answer validation,
 including selected documents that did not contribute a citation.
 
-`ANSWERED` with no citations, or `INSUFFICIENT_CONTEXT` with answer text or
-citations, is invalid. Empty retrieval returns `200` with the exact abstention
-object above without constructing or calling the generation client. A model can
-also explicitly abstain after receiving evidence.
+`ANSWERED` may have an empty citations list when the retrieved passages support
+the answer. `INSUFFICIENT_CONTEXT` with answer text or citations is invalid.
+Empty retrieval returns `200` with the exact abstention object above without
+constructing or calling the generation client. A model can also explicitly
+abstain after receiving evidence.
 
 ### HTTP results and errors
 
@@ -777,3 +778,84 @@ Deleting a conversation or its course cascades to its uploads. Chat upload files
 are deleted from private storage as part of the database deletion transaction.
 As with normal material deletion, a later database commit failure cannot restore
 a file already removed from storage.
+
+## Survival quiz (SCRUM-52)
+
+Survival is a quiz played one question at a time with 3 lives. The server holds
+the lives, score and current question, so reloading the page or editing the client
+cannot change them. Every route requires a valid JWT (`401` otherwise) and is
+scoped to the caller: another student's course or session returns `404`, exactly
+like one that does not exist.
+
+| Route | Method | Contract |
+| --- | --- | --- |
+| `/api/v1/courses/{course_id}/survival-sessions/` | POST | Start a game from `{"document_ids":[...], "num_questions":5\|10}`. Generates a new quiz with the same rules and errors as quiz generation. `201` with the session state. |
+| `/api/v1/survival-sessions/{id}/` | GET | The current session state. Use after a reload to resume. |
+| `/api/v1/survival-sessions/{id}/answers/` | POST | Answer the current question with `{"question_id":1, "selected_option_index":0}`. `200` with feedback and the new state. |
+
+### Session state
+
+```json
+{
+  "id": 7,
+  "quiz_id": 42,
+  "course": 3,
+  "status": "ACTIVE",
+  "lives": 2,
+  "max_lives": 3,
+  "score": 1,
+  "current_position": 3,
+  "total_questions": 5,
+  "current_question": {"id": 103, "position": 3, "text": "...", "options": ["...", "..."]},
+  "started_at": "2026-11-11T18:44:00Z",
+  "ended_at": null
+}
+```
+
+- `status` is `ACTIVE`, `GAME_OVER` (lives reached 0) or `COMPLETED` (every
+  question answered with lives left). Losing the last life on the last question is
+  `GAME_OVER`.
+- `current_question` never includes `correct_option_index` or `explanation`, and
+  is `null` once the game has ended. Later questions are never sent.
+- After the game ends, `current_position` stays on the last question answered.
+
+### Answer response
+
+```json
+{
+  "question_id": 103,
+  "selected_option_index": 1,
+  "is_correct": false,
+  "correct_option_index": 2,
+  "explanation": "...",
+  "session": { "...": "the new session state" }
+}
+```
+
+A correct answer adds 1 to `score`; a wrong one removes 1 life. Either way the
+game moves to the next question. The correct option and explanation are revealed
+only for the question just answered.
+
+### Errors
+
+| Status | `code` | When |
+| --- | --- | --- |
+| 400 | field errors | Missing or invalid field, or `selected_option_index` is not an option of the current question. No life is lost. |
+| 404 | - | Course, document or session missing or owned by another student. |
+| 409 | `DOCUMENT_NOT_READY` / `DOCUMENT_HAS_NO_TEXT` | Same as quiz generation. Nothing is created. |
+| 503 | `QUIZ_GENERATION_FAILED` | The model call failed. Nothing is created; retry. |
+| 409 | `SURVIVAL_SESSION_ENDED` | The game is over. The body includes `session` with the final state. |
+| 409 | `QUESTION_NOT_CURRENT` | `question_id` is not the question being asked: a double click, a retry or a stale tab. The body includes `session` so the client can show the real current question. Nothing is recorded. |
+
+`POST /api/v1/quizzes/{quiz_id}/submit/` on a Survival quiz returns `409`
+`QUIZ_IN_SURVIVAL_MODE` with `survival_session_id`, because grading it there would
+reveal every answer mid-game.
+
+### Result and history
+
+When a game ends, its result is saved as an ordinary quiz submission: `score`,
+`total_questions` (every question in the game) and one answer per question.
+Questions never reached are saved as unanswered (`selected_option_index: null`) and
+count as incorrect, the same rule as a regular quiz. The full review is then
+available from `GET /api/v1/quizzes/{quiz_id}/results/`. Nothing is saved to
+history while a game is still running; an abandoned game stays `ACTIVE`.

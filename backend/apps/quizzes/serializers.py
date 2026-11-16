@@ -1,7 +1,7 @@
 from rest_framework import serializers
 
 from apps.quizzes.llm import ALLOWED_QUESTION_COUNTS
-from apps.quizzes.models import Question, Quiz, QuizSubmission
+from apps.quizzes.models import Question, Quiz, QuizSubmission, SurvivalAnswer, SurvivalSession
 
 MAX_SOURCE_DOCUMENTS = 20
 
@@ -122,5 +122,80 @@ class QuizResultSerializer(serializers.ModelSerializer):
             "percentage",
             "submitted_at",
             "questions",
+        ]
+        read_only_fields = fields
+
+
+class SurvivalAnswerInputSerializer(serializers.Serializer):
+    """One Survival answer. The client names the question it is answering,
+    so a double click or a stale tab cannot land on the next question.
+    Whether the option exists is checked against the question itself."""
+
+    question_id = serializers.IntegerField(min_value=1)
+    selected_option_index = serializers.IntegerField(min_value=0)
+
+
+class SurvivalSessionSerializer(serializers.ModelSerializer):
+    """The game state. Built only from the database, so a reload shows the
+    same lives, score and question. Only the current question is sent, and
+    without its answer; future questions never leave the server."""
+
+    quiz_id = serializers.IntegerField(read_only=True)
+    course = serializers.IntegerField(source="quiz.course_id", read_only=True)
+    max_lives = serializers.SerializerMethodField()
+    total_questions = serializers.SerializerMethodField()
+    current_question = serializers.SerializerMethodField()
+
+    class Meta:
+        model = SurvivalSession
+        fields = [
+            "id",
+            "quiz_id",
+            "course",
+            "status",
+            "lives",
+            "max_lives",
+            "score",
+            "current_position",
+            "total_questions",
+            "current_question",
+            "started_at",
+            "ended_at",
+        ]
+        read_only_fields = fields
+
+    def get_max_lives(self, session):
+        return SurvivalSession.MAX_LIVES
+
+    def get_total_questions(self, session):
+        return len(session.quiz.questions.all())
+
+    def get_current_question(self, session):
+        if not session.is_active:
+            return None
+        question = next(
+            q for q in session.quiz.questions.all() if q.position == session.current_position
+        )
+        return QuestionPublicSerializer(question).data
+
+
+class SurvivalAnswerResultSerializer(serializers.ModelSerializer):
+    """Feedback for the question just answered. Its answer and explanation
+    are revealed here, and only after it has been answered."""
+
+    question_id = serializers.IntegerField(read_only=True)
+    correct_option_index = serializers.IntegerField(
+        source="question.correct_option_index", read_only=True
+    )
+    explanation = serializers.CharField(source="question.explanation", read_only=True)
+
+    class Meta:
+        model = SurvivalAnswer
+        fields = [
+            "question_id",
+            "selected_option_index",
+            "is_correct",
+            "correct_option_index",
+            "explanation",
         ]
         read_only_fields = fields

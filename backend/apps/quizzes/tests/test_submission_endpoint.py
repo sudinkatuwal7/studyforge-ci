@@ -2,7 +2,7 @@ from unittest import mock
 
 from django.db import IntegrityError
 
-from apps.quizzes.models import Quiz, QuizSubmission, SubmittedAnswer
+from apps.quizzes.models import Quiz, QuizSubmission, SubmittedAnswer, SurvivalSession
 from apps.quizzes.tests.test_generation_endpoint import HIDDEN_FIELDS, QuizEndpointTestCase
 
 
@@ -213,3 +213,19 @@ class QuizDetailAfterSubmissionTests(QuizSubmissionTestCase):
 
     def test_new_quiz_is_not_submitted(self):
         self.assertFalse(self.post().json()["is_submitted"])
+
+
+class SubmitSurvivalQuizTests(QuizSubmissionTestCase):
+    """A Survival quiz is played one answer at a time, never submitted whole."""
+
+    def test_submitting_a_survival_quiz_returns_409_and_reveals_nothing(self):
+        session = SurvivalSession.objects.create(quiz=self.quiz)
+
+        response = self.submit()
+
+        self.assertEqual(response.status_code, 409)
+        body = response.json()
+        self.assertEqual(body["code"], "QUIZ_IN_SURVIVAL_MODE")
+        self.assertEqual(body["survival_session_id"], session.pk)
+        self.assertNotIn("questions", body)
+        self.assertFalse(QuizSubmission.objects.exists())

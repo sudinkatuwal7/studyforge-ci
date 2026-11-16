@@ -6,6 +6,7 @@ from rest_framework.exceptions import NotAuthenticated
 
 from apps.documents.models import Document
 from apps.identity.ownership import owned_conversation
+from apps.knowledge.citation_matching import excerpt_matches
 from apps.knowledge.llm import LLMError, generate_answer, validate_answer
 from apps.knowledge.models import Chunk
 from apps.knowledge.query_embeddings import QueryEmbeddingError
@@ -91,7 +92,7 @@ def answer_question(user, document_ids, question, *, conversation=None):
                 or chunk.document_id != citation["document_id"]
                 or chunk.page_number != citation["page_number"]
                 or chunk.content != source["content"]
-                or citation["excerpt"] not in chunk.content
+                or not excerpt_matches(citation["excerpt"], chunk.content)
             ):
                 raise RAGServiceError("The question could not be answered right now.")
 

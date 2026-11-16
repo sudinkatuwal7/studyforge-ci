@@ -163,6 +163,38 @@ Quiz 1:N Question
 
 The `options` shape and the index range are validated by `full_clean()`, not by database constraints. Neither `save()` nor DRF's `ModelSerializer` calls `Model.clean()`, so SCRUM-42 must call `full_clean()` on each Quiz and Question before saving (or repeat these checks in the serializer's `validate()`). Source documents are not linked yet; that is deferred to SCRUM-42 pending SCRUM-98.
 
+## SCRUM-52: Survival session schema
+
+Defined in `apps.quizzes.models`. A Survival game runs over its own generated Quiz; owner and course are read through `quiz`, as for `QuizSubmission`. No model here links to a document (SCRUM-98).
+
+```text
+Quiz 1:0..1 SurvivalSession 1:N SurvivalAnswer N:1 Question
+```
+
+### SurvivalSession
+
+| Field | Storage and default |
+|---|---|
+| `quiz` | Required `OneToOneField` to Quiz, `CASCADE`, reverse name `survival_session`. |
+| `current_position` | `PositiveSmallIntegerField`, default `1`, checked `>= 1`. The position of the question being asked; after the game ends it stays on the last question answered. |
+| `lives` | `PositiveSmallIntegerField`, default `3`, checked `<= 3`. |
+| `score` | `PositiveSmallIntegerField`, default `0`. One point per correct answer. |
+| `status` | `CharField(10)`: `ACTIVE` (default), `GAME_OVER` or `COMPLETED`, checked in the database. |
+| `started_at` | Set automatically on create. |
+| `ended_at` | Nullable. A database check requires it to be set exactly when `status` is not `ACTIVE`. |
+
+### SurvivalAnswer
+
+| Field | Storage and default |
+|---|---|
+| `session` | Required FK to SurvivalSession, `CASCADE`, reverse name `answers`. |
+| `question` | Required FK to Question, `CASCADE`, reverse name `survival_answers`. |
+| `selected_option_index` | `PositiveSmallIntegerField`; never null during play. |
+| `is_correct` | Graded on arrival against `Question.correct_option_index`. |
+| `answered_at` | Set automatically on create. |
+
+`(session, question)` is unique, so a question cannot be answered twice. When a game ends, the result is also written to `QuizSubmission` and `SubmittedAnswer` (unreached questions as null) so quiz history reads one table for both modes. `quizzes/0004_survival_sessions.py` creates both models and depends on `quizzes/0003_quiz_submissions`. The API is in the [Survival contract](api-contract.md#survival-quiz-scrum-52).
+
 ## SCRUM-82: Study session schema
 
 Defined in `apps.courses.models.StudySession`. This stores one dated study session. The calendar reads these rows together with existing To-Do due dates; there is no separate calendar or aggregate table.

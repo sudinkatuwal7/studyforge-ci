@@ -153,3 +153,107 @@ class SubmittedAnswer(models.Model):
 
     def __str__(self):
         return f"Answer to question {self.question_id} in submission {self.submission_id}"
+
+
+SURVIVAL_MAX_LIVES = 3
+
+
+class SurvivalStatus(models.TextChoices):
+    ACTIVE = "ACTIVE", "Active"
+    GAME_OVER = "GAME_OVER", "Game over"  # lives reached 0
+    COMPLETED = "COMPLETED", "Completed"  # every question answered with lives left
+
+
+class SurvivalSession(models.Model):
+    """One game of Survival over its own generated quiz.
+
+    Lives, score and the current question live here, on the server, so
+    reloading the page or editing the client cannot change them. Owner
+    and course come from the quiz, the same way QuizSubmission does it.
+    """
+
+    Status = SurvivalStatus
+    MAX_LIVES = SURVIVAL_MAX_LIVES
+
+    quiz = models.OneToOneField(
+        Quiz,
+        on_delete=models.CASCADE,
+        related_name="survival_session",
+    )
+    # The position of the question being asked. Once the game ends it
+    # stays on the last question answered.
+    current_position = models.PositiveSmallIntegerField(default=1)
+    lives = models.PositiveSmallIntegerField(default=SURVIVAL_MAX_LIVES)
+    score = models.PositiveSmallIntegerField(default=0)
+    status = models.CharField(
+        max_length=10,
+        choices=SurvivalStatus.choices,
+        default=SurvivalStatus.ACTIVE,
+    )
+    started_at = models.DateTimeField(auto_now_add=True)
+    ended_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=models.Q(lives__lte=SURVIVAL_MAX_LIVES),
+                name="survival_lives_within_max",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(current_position__gte=1),
+                name="survival_position_positive",
+            ),
+            models.CheckConstraint(
+                condition=models.Q(status__in=SurvivalStatus.values),
+                name="survival_status_valid",
+            ),
+            # A game has an end time exactly when it has ended.
+            models.CheckConstraint(
+                condition=(
+                    models.Q(status=SurvivalStatus.ACTIVE, ended_at__isnull=True)
+                    | (~models.Q(status=SurvivalStatus.ACTIVE) & models.Q(ended_at__isnull=False))
+                ),
+                name="survival_ended_at_matches_status",
+            ),
+        ]
+
+    @property
+    def is_active(self):
+        return self.status == SurvivalStatus.ACTIVE
+
+    def __str__(self):
+        return f"Survival session {self.pk} for quiz {self.quiz_id}"
+
+
+class SurvivalAnswer(models.Model):
+    """One answer given during a Survival game, graded when it arrived.
+
+    The unique constraint is the last guard against a question being
+    answered twice (double click, two tabs).
+    """
+
+    session = models.ForeignKey(
+        SurvivalSession,
+        on_delete=models.CASCADE,
+        related_name="answers",
+    )
+    question = models.ForeignKey(
+        Question,
+        on_delete=models.CASCADE,
+        related_name="survival_answers",
+    )
+    selected_option_index = models.PositiveSmallIntegerField()
+    is_correct = models.BooleanField()
+    answered_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["question__position"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["session", "question"],
+                name="survival_answer_unique_per_question",
+            ),
+        ]
+
+    def __str__(self):
+        return f"Answer to question {self.question_id} in survival session {self.session_id}"

@@ -35,6 +35,13 @@ it("sends the exact SCRUM-76 question payload and preserves validated citation m
   expect((await askConversationQuestion(9, "Unknown", [13], "token", signal)).status).toBe("INSUFFICIENT_CONTEXT");
 });
 
+it("accepts an answered response without citations", async () => {
+  const answer = { status: "ANSWERED", answer: "Cells divide.", citations: [] };
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(answer)));
+  const result = await askConversationQuestion(9, "Explain", [13], "token", new AbortController().signal);
+  expect(result).toEqual(answer);
+});
+
 it("reports measured upload progress and returns a conversation-scoped document", async () => {
   class FakeXHR {
     upload: { onprogress?: (event: ProgressEvent) => void } = {};

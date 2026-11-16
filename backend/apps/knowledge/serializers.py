@@ -10,6 +10,7 @@ from rest_framework import serializers
 from apps.documents.models import Document
 from apps.knowledge.models import Chunk
 from apps.knowledge.scope import question_documents
+from apps.knowledge.citation_matching import excerpt_matches
 
 
 MAX_IDENTIFIER = 9_223_372_036_854_775_807
@@ -81,7 +82,7 @@ class CitationSerializer(serializers.Serializer):
             raise serializers.ValidationError("Citation chunk is not authorized for this document.")
         if attrs["page_number"] != chunk.page_number:
             raise serializers.ValidationError("Citation page does not match the cited chunk.")
-        if not attrs["excerpt"].strip() or attrs["excerpt"] not in chunk.content:
+        if not attrs["excerpt"].strip() or not excerpt_matches(attrs["excerpt"], chunk.content):
             raise serializers.ValidationError("Citation excerpt is not present in the cited chunk.")
         return {
             "chunk_id": chunk.pk,
@@ -122,10 +123,6 @@ class AnswerResultSerializer(serializers.Serializer):
         if status == self.Status.ANSWERED:
             if answer is None:
                 raise serializers.ValidationError({"answer": "Supported answers require text."})
-            if not citations:
-                raise serializers.ValidationError(
-                    {"citations": "Supported answers require at least one citation."}
-                )
         else:
             if answer is not None:
                 raise serializers.ValidationError(

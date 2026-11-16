@@ -1,0 +1,205 @@
+/* Survival Quiz (SCRUM-37). Selectors start with .survival or .survival-summary so
+   they outrank the generic `.course-workspace button` rules in course-workspace.css. */
+
+/* Mode choice in the shared quiz setup. */
+.quiz-mode { display: flex; flex-direction: column; gap: .25rem; }
+.quiz-mode label { display: flex; align-items: flex-start; gap: .6rem; padding: .45rem 0; cursor: pointer; }
+.quiz-mode input { margin-top: .25rem; }
+.quiz-mode small { display: block; color: #707a91; }
+
+.survival, .survival-summary {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+  width: 100%;
+  max-width: 46rem;
+  min-width: 0;
+  margin: 0 auto;
+  container-type: inline-size;
+}
+
+/* Heads-up display: hearts on the left, score on the right; wraps on very narrow screens.
+   Sticky so lives and score (and the lost-heart animation) stay in view when the
+   course panel (.course-content-scroll) scrolls down to the feedback. z-index keeps
+   it above options, whose animations create their own stacking contexts. */
+.survival-hud {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  /* First shadow: a solid white copy of the bar, moved up 1.25rem and 0.5rem larger all
+     round. The bar sticks at the panel's content edge, so without it the panel's top
+     padding (1.2rem, or .8rem on narrow screens) shows options scrolling past, including
+     beside the rounded corners and the 6px shake. Shadows paint under the bar's own
+     border and never add scroll area. Invisible when not stuck (white on white padding).
+     Second shadow: the soft drop shadow under the bar. */
+  box-shadow: 0 -1.25rem 0 .5rem #fff, 0 4px 12px #26334d14;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: .75rem;
+  padding: .6rem .9rem;
+  border: 1px solid #e3e6ed;
+  border-radius: 1rem;
+  background: #fff;
+}
+.survival-hearts { display: flex; gap: .3rem; }
+.survival-heart { display: block; overflow: visible; }
+.survival-heart path { stroke-width: 1.6; stroke-linejoin: round; }
+.survival-heart-full path { fill: #e0465a; stroke: #e0465a; }
+/* The resting style of a just-lost heart is empty, so it is correct with or without animation. */
+.survival-heart-empty path, .survival-heart-losing path { fill: transparent; stroke: #c5c4db; }
+.survival-score { margin: 0; color: #26334d; font-size: 1.05rem; }
+.survival-score strong { display: inline-block; min-width: 1.5ch; font-size: 1.4rem; text-align: center; }
+
+.survival-progress p { margin: 0 0 .3rem; color: #707a91; font-size: .9rem; }
+.survival-progress progress { width: 100%; height: .55rem; accent-color: #5f52b5; }
+
+.survival-question { margin: 0; font-size: 1.15rem; line-height: 1.4; overflow-wrap: anywhere; }
+/* When focus scrolls one of these into view, leave room for the sticky HUD so it isn't hidden underneath. */
+.survival-question, .survival-option, .survival-feedback { scroll-margin-top: 5.5rem; }
+.survival-question:focus:not(:focus-visible) { outline: none; }
+
+/* One column on phones; two once the game itself is wide enough. */
+.survival-options { display: grid; grid-template-columns: minmax(0, 1fr); gap: .6rem; }
+@container (min-width: 34rem) {
+  .survival-options { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+.survival .survival-option {
+  display: flex;
+  align-items: center;
+  gap: .7rem;
+  width: 100%;
+  min-height: 3.25rem;
+  padding: .75rem .9rem;
+  border: 2px solid #e3e6ed;
+  border-radius: .9rem;
+  background: #fff;
+  color: #26334d;
+  text-align: left;
+  overflow-wrap: anywhere;
+  transition: border-color .15s, background-color .15s;
+}
+.survival .survival-option:hover:not(:disabled) { border-color: #c9c5ea; background: #f8f7ff; }
+.survival .survival-option:focus-visible { outline: 3px solid #5f52b5; outline-offset: 2px; }
+/* Disabled while an answer is sent or revealed, but still readable. */
+.survival .survival-option:disabled { opacity: 1; cursor: default; }
+.survival-option-letter {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 1.9rem;
+  height: 1.9rem;
+  border-radius: 50%;
+  background: #f0edff;
+  color: #473c70;
+  font-weight: 700;
+  font-size: .85rem;
+}
+.survival-option-text { flex: 1; min-width: 0; }
+.survival-option-tag { flex: none; font-size: .75rem; font-weight: 700; }
+.survival .survival-option-pending { border-color: #5f52b5; background: #f0edff; }
+.survival .survival-option-correct { border-color: #2e7d32; background: #e6f4ea; color: #1b5e20; }
+.survival .survival-option-correct .survival-option-letter { background: #2e7d32; color: #fff; }
+.survival .survival-option-wrong { border-color: #b3261e; background: #fdecea; color: #8c1d18; }
+.survival .survival-option-wrong .survival-option-letter { background: #b3261e; color: #fff; }
+/* Dim options are always disabled, so this must match `.survival .survival-option:disabled`
+   (same specificity) and come after it to win. */
+.survival .survival-option-dim:disabled { opacity: .6; }
+
+.survival-notice { margin: 0; padding: .6rem .9rem; border-radius: .8rem; background: #fff7e6; color: #6b4a00; }
+
+.survival-feedback { padding: .9rem 1rem; border-radius: 1rem; border: 1px solid; }
+.survival-feedback-correct { border-color: #b7dcc0; background: #f1f9f3; }
+.survival-feedback-wrong { border-color: #f1c0bc; background: #fdf3f2; }
+.survival-verdict { margin: 0 0 .35rem; font-size: 1.1rem; font-weight: 700; }
+.survival-feedback-correct .survival-verdict { color: #1b5e20; }
+.survival-feedback-wrong .survival-verdict { color: #8c1d18; }
+.survival-answer { margin: 0 0 .35rem; color: #26334d; overflow-wrap: anywhere; }
+.survival-answer strong { color: #1b5e20; }
+.survival-explanation { margin: 0 0 .8rem; color: #4a5368; }
+
+.survival .survival-primary, .survival-summary .survival-primary {
+  min-height: 2.75rem;
+  padding: .6rem 1.2rem;
+  border-color: #5f52b5;
+  background: #5f52b5;
+  color: #fff;
+  font-weight: 600;
+}
+.survival .survival-primary:hover:not(:disabled), .survival-summary .survival-primary:hover:not(:disabled) { background: #4c4199; }
+
+.survival-sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* Summary */
+.survival-summary {
+  align-items: center;
+  padding: 1.5rem 1rem;
+  border: 1px solid #e3e6ed;
+  border-radius: 1.2rem;
+  background: #fff;
+  text-align: center;
+}
+.survival-summary h3 { margin: 0; font-size: 1.6rem; }
+.survival-summary h3:focus:not(:focus-visible) { outline: none; }
+.survival-summary-won h3 { color: #1b5e20; }
+.survival-summary-lost h3 { color: #8c1d18; }
+.survival-final-score { margin: 0; color: #26334d; font-size: 1.2rem; }
+.survival-final-score strong { font-size: 1.6rem; }
+.survival-actions { display: flex; flex-wrap: wrap; justify-content: center; gap: .6rem; width: 100%; }
+.survival-summary .survival-actions button { min-height: 2.75rem; min-width: 8rem; }
+/* The review is a reading list, so it spans the card and is left-aligned. */
+.survival-review { width: 100%; text-align: left; }
+.survival-review h4 { margin: .5rem 0 .75rem; font-size: 1.1rem; }
+.survival-review h4:focus:not(:focus-visible) { outline: none; }
+.survival-review .quiz-review { padding-left: 1.2rem; }
+
+/* Animations. Each one is decoration: the colours, text and hearts show the same result without them. */
+.survival-was-correct .survival-option-correct { animation: survival-pop .45s ease-out; }
+.survival-was-wrong .survival-option-wrong { animation: survival-shake .4s ease-in-out; }
+.survival-was-wrong .survival-hud { animation: survival-flash .6s ease-out; }
+.survival-bump { animation: survival-bump .5s ease-out; }
+.survival-heart-losing { animation: survival-heart-break .7s ease-out; }
+.survival-heart-losing path { animation: survival-heart-drain .7s ease-out; }
+.survival-feedback { animation: survival-rise .25s ease-out; }
+.survival-summary h3 { animation: survival-pop .5s ease-out; }
+
+@keyframes survival-pop { 0% { transform: scale(1); } 40% { transform: scale(1.04); } 100% { transform: scale(1); } }
+@keyframes survival-shake {
+  0%, 100% { transform: translateX(0); }
+  20% { transform: translateX(-6px); }
+  40% { transform: translateX(6px); }
+  60% { transform: translateX(-4px); }
+  80% { transform: translateX(4px); }
+}
+@keyframes survival-flash { 0% { background: #fde2df; } 100% { background: #fff; } }
+@keyframes survival-bump { 0% { transform: scale(1); } 35% { transform: scale(1.5); color: #2e7d32; } 100% { transform: scale(1); } }
+@keyframes survival-heart-break {
+  0% { transform: scale(1); }
+  30% { transform: scale(1.35) rotate(-10deg); }
+  60% { transform: scale(.75) rotate(8deg); }
+  100% { transform: scale(1) rotate(0); }
+}
+@keyframes survival-heart-drain { 0%, 35% { fill: #e0465a; stroke: #e0465a; } 100% { fill: transparent; stroke: #c5c4db; } }
+@keyframes survival-rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+/* The student's system asked for reduced motion: no animation at all, only the static result. */
+@media (prefers-reduced-motion: reduce) {
+  .survival *, .survival *::before, .survival *::after,
+  .survival-summary *, .survival-summary *::before, .survival-summary *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+}

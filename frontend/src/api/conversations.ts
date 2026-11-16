@@ -84,6 +84,6 @@ export async function askConversationQuestion(id: number, question: string, docu
   if (!record(value)) throw new Error("The server returned an invalid answer.");
   if (value.status === "INSUFFICIENT_CONTEXT" && value.answer === null && Array.isArray(value.citations) && value.citations.length === 0) return value as QuestionResult;
   if (value.status === "ANSWERED" && typeof value.answer === "string" && value.answer.trim() && Array.isArray(value.citations) &&
-    value.citations.length > 0 && value.citations.every((citation) => record(citation) && positive(citation.chunk_id) && positive(citation.document_id) && positive(citation.page_number) && typeof citation.excerpt === "string")) return value as QuestionResult;
+    value.citations.every((citation) => record(citation) && positive(citation.chunk_id) && positive(citation.document_id) && positive(citation.page_number) && typeof citation.excerpt === "string")) return value as QuestionResult;
   throw new Error("The server returned an invalid answer.");
 }

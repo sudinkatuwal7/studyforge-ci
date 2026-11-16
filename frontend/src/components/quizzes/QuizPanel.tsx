@@ -3,9 +3,14 @@ import { generateQuiz, getQuiz, getQuizResults, QuizRequestError, submitQuiz } f
 import { useAuth } from "../../context/AuthContext";
 import type { TrackedDocument } from "../../types/document";
 import type { Quiz, QuizAnswer, QuizLength, QuizResult } from "../../types/quiz";
+import type { QuizMode } from "../../types/survival";
 import QuizPlayer from "./QuizPlayer";
 import QuizResults from "./QuizResults";
 import QuizSetup from "./QuizSetup";
+import SurvivalGame from "./SurvivalGame";
+import SurvivalSummary from "./SurvivalSummary";
+import { generateErrorMessage } from "./quizErrors";
+import { hasSavedGame, survivalStorageKey, useSurvivalGame } from "./useSurvivalGame";
 
 type Props = { courseId: number; materials: TrackedDocument[] };
 
@@ -25,18 +30,6 @@ function saveQuizId(key: string, quizId: number | null) {
   } catch { /* The quiz stays open until the page reloads. */ }
 }
 
-// Words each failure for the student. The API layer only reports status and code.
-function generateErrorMessage(cause: unknown): string {
-  if (cause instanceof QuizRequestError) {
-    if (cause.code === "DOCUMENT_NOT_READY") return "Some selected materials are still processing. Wait for them to be ready, or deselect them.";
-    if (cause.code === "DOCUMENT_HAS_NO_TEXT") return "No readable text could be found in some selected materials. Deselect them and try again.";
-    if (cause.code === "QUIZ_GENERATION_FAILED") return "The quiz could not be generated right now. Please try again.";
-    if (cause.status === 400) return "Choose at least one material and a quiz length.";
-    if (cause.status === 404) return "One of the selected materials could not be found. Refresh the page and try again.";
-  }
-  return "The quiz could not be generated. Please try again.";
-}
-
 function submitErrorMessage(cause: unknown): string {
   if (cause instanceof QuizRequestError && cause.status === 400) return "Your answers could not be accepted. Reload the page and start a new quiz.";
   return "Your answers could not be submitted. They are still here, so try again.";
@@ -46,18 +39,25 @@ export default function QuizPanel(props: Props) {
   const { accessToken, user } = useAuth();
   if (!accessToken || !user) return <p role="alert">Sign in to take a quiz.</p>;
   // A new account or course starts from a clean slate.
-  return <Quizzes key={`${user.id}:${props.courseId}`} {...props} accessToken={accessToken} storageKey={quizKey(user.id, props.courseId)} />;
+  return <Quizzes key={`${user.id}:${props.courseId}`} {...props} accessToken={accessToken}
+    storageKey={quizKey(user.id, props.courseId)} survivalKey={survivalStorageKey(user.id, props.courseId)} />;
 }
 
-function Quizzes({ courseId, materials, accessToken, storageKey }: Props & { accessToken: string; storageKey: string }) {
-  // Selection and length live here, not in QuizSetup, so "Take another quiz" keeps them.
+type QuizzesProps = Props & { accessToken: string; storageKey: string; survivalKey: string };
+
+// Chooses the screen and runs the regular quiz. Survival's logic lives in useSurvivalGame.
+function Quizzes({ courseId, materials, accessToken, storageKey, survivalKey }: QuizzesProps) {
+  const game = useSurvivalGame({ courseId, accessToken, storageKey: survivalKey, onStart: () => saveQuizId(storageKey, null) });
+  // Selection, length and mode live here, not in QuizSetup, so "Take another quiz" keeps them.
+  const [mode, setMode] = useState<QuizMode>(() => hasSavedGame(survivalKey) ? "survival" : "regular");
   const [selected, setSelected] = useState<string[]>([]);
   const [length, setLength] = useState<QuizLength>(5);
   const [quiz, setQuiz] = useState<Quiz | null>(null);
   const [result, setResult] = useState<QuizResult | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [restoring, setRestoring] = useState(() => readQuizId(storageKey) !== null);
+  // A saved Survival game takes priority; the hook restores that one.
+  const [restoring, setRestoring] = useState(() => !hasSavedGame(survivalKey) && readQuizId(storageKey) !== null);
   const controller = useRef<AbortController | null>(null);
 
   // Cancel any request still in flight when the student leaves the course.
@@ -101,6 +101,7 @@ function Quizzes({ courseId, materials, accessToken, storageKey }: Props & { acc
     try {
       const created = await generateQuiz(courseId, documentIds, length, accessToken, signal);
       if (signal.aborted) return;
+      game.exit();
       saveQuizId(storageKey, created.id);
       // Defensive: a quiz returned already graded goes straight to its results.
       if (created.is_submitted) setResult(await getQuizResults(created.id, accessToken, signal));
@@ -134,9 +135,20 @@ function Quizzes({ courseId, materials, accessToken, storageKey }: Props & { acc
 
   const restart = () => { saveQuizId(storageKey, null); setQuiz(null); setResult(null); setError(""); };
 
-  if (restoring) return <p role="status">Loading your quiz…</p>;
+  if (restoring || game.restoring) return <p role="status">Loading your quiz…</p>;
+  const { session } = game;
+  // Feedback for the final answer is shown before the summary, so the student sees what they got wrong.
+  if (session && (game.feedback || session.status === "ACTIVE")) {
+    return <SurvivalGame session={session} feedback={game.feedback} answering={game.busy} error={game.error} notice={game.notice}
+      onAnswer={game.answer} onContinue={game.next} />;
+  }
+  if (session) {
+    return <SurvivalSummary key={session.id} session={session} busy={game.busy} review={game.review} reviewState={game.reviewState}
+      onReview={game.loadReview} onPlayAgain={game.playAgain} onExit={game.exit} />;
+  }
   if (result) return <QuizResults result={result} onRestart={restart} />;
   if (quiz) return <QuizPlayer key={quiz.id} quiz={quiz} submitting={busy} error={error} onSubmit={submit} />;
-  return <QuizSetup materials={materials} selected={selected} onSelectedChange={setSelected}
-    length={length} onLengthChange={setLength} busy={busy} error={error} onGenerate={generate} />;
+  return <QuizSetup mode={mode} onModeChange={setMode} materials={materials} selected={selected} onSelectedChange={setSelected}
+    length={length} onLengthChange={setLength} busy={busy || game.busy} error={mode === "survival" ? game.error : error}
+    onGenerate={mode === "survival" ? (documentIds) => game.start(documentIds, length) : generate} />;
 }

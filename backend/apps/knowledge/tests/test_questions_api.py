@@ -243,7 +243,6 @@ class QuestionsAPITests(TestCase):
         bad = [completion(raw="SECRET not JSON"), completion(raw="```json\n{}\n```"),
                completion(payload=[]), completion(payload={}),
                completion({**self.answer, "status": "UNKNOWN"}),
-               completion({**self.answer, "citations": []}),
                completion({**self.answer, "answer": None}),
                completion({**ABSTENTION, "answer": "invented"}),
                completion({**ABSTENTION, "citations": self.answer["citations"]}),
@@ -253,6 +252,27 @@ class QuestionsAPITests(TestCase):
             with self.subTest(output=output):
                 self.sdk.chat.completions.create.return_value = output
                 self.assert_safe_failure(self.post())
+
+    def test_answer_without_citations_is_returned_from_retrieved_chunks(self):
+        uncited = {**self.answer, "citations": []}
+        self.sdk.chat.completions.create.return_value = completion(uncited)
+        response = self.post()
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.json(), uncited)
+        self.embed.assert_called_once()
+        self.sdk.chat.completions.create.assert_called_once()
+
+    def test_final_service_accepts_citation_with_different_whitespace(self):
+        citation = {**self.citation(self.chunk), "excerpt": "requested   page is\nnot in RAM."}
+        answer = {**self.answer, "citations": [citation]}
+        self.sdk.chat.completions.create.return_value = completion(answer)
+
+        response = self.post()
+
+        self.assertEqual(response.status_code, 200, response.data)
+        self.assertEqual(response.json(), answer)
+        self.embed.assert_called_once()
+        self.sdk.chat.completions.create.assert_called_once()
 
     def test_fabricated_foreign_and_mismatched_citations_are_rejected(self):
         unselected = self.make_document("Unselected")
@@ -276,6 +296,17 @@ class QuestionsAPITests(TestCase):
         self.assertEqual(result.json(), self.answer)
         self.assertNotIn("SECRET", result.content.decode())
         self.assertEqual(self.sdk.chat.completions.create.call_count, 2)
+
+    def test_invalid_citation_can_be_repaired_with_supported_uncited_answer(self):
+        invented = {**self.answer, "citations": [{**self.citation(self.chunk), "excerpt": "invented SECRET"}]}
+        uncited = {**self.answer, "citations": []}
+        self.sdk.chat.completions.create.side_effect = [completion(invented), completion(uncited)]
+        result = self.post()
+        self.assertEqual(result.status_code, 200, result.data)
+        self.assertEqual(result.json(), uncited)
+        self.assertNotIn("SECRET", result.content.decode())
+        self.assertEqual(self.sdk.chat.completions.create.call_count, 2)
+        self.embed.assert_called_once()
 
     def test_unrepaired_citation_is_never_returned(self):
         invented = {**self.answer, "citations": [{**self.citation(self.chunk), "excerpt": "invented SECRET"}]}

@@ -4,7 +4,7 @@ from django.shortcuts import get_object_or_404
 
 from apps.courses.models import Course
 from apps.notes.selectors import get_ordered_chunks
-from apps.quizzes.models import Quiz, QuizSubmission
+from apps.quizzes.models import Quiz, QuizSubmission, SurvivalSession
 
 
 def get_owned_course(user, course_id):
@@ -15,7 +15,9 @@ def get_owned_course(user, course_id):
 
 def get_owned_quiz(user, quiz_id):
     return get_object_or_404(
-        Quiz.objects.select_related("submission").prefetch_related("questions", "source_documents"),
+        Quiz.objects.select_related("submission", "survival_session").prefetch_related(
+            "questions", "source_documents"
+        ),
         pk=quiz_id,
         owner=user,
     )
@@ -28,6 +30,16 @@ def get_owned_submission(user, quiz_id):
     return get_object_or_404(
         QuizSubmission.objects.select_related("quiz").prefetch_related("answers__question"),
         quiz_id=quiz_id,
+        quiz__owner=user,
+    )
+
+
+def get_owned_survival_session(user, session_id):
+    """404 for another student's session, exactly as for one that does
+    not exist, so session ids cannot be probed."""
+    return get_object_or_404(
+        SurvivalSession.objects.select_related("quiz").prefetch_related("quiz__questions"),
+        pk=session_id,
         quiz__owner=user,
     )
 
