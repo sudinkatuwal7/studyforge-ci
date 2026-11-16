@@ -1,13 +1,18 @@
-"""Private conversation and upload APIs for SCRUM-75 to consume."""
+"""Private conversation, upload, and chat history APIs."""
 
 from django.db import transaction
 from django.http import Http404
+from django.utils import timezone
 from rest_framework.parsers import JSONParser
 from rest_framework.response import Response
 
-from apps.conversations.models import Conversation
+from apps.conversations.models import Conversation, ConversationMessage
 from apps.conversations.serializers import (
-    ConversationCreateSerializer, ConversationSerializer, ConversationUploadSerializer,
+    ConversationCreateSerializer, ConversationMessageSerializer, ConversationSerializer,
+    ConversationUploadSerializer, QuestionRetrySerializer,
+)
+from apps.conversations.services import (
+    QuestionNotRetryable, mark_failed, save_answer, start_question, start_retry,
 )
 from apps.documents.models import Document
 from apps.documents.services import store_and_dispatch
@@ -99,7 +104,53 @@ class ConversationDocumentDetailView(DocumentAPIView):
         return Response(status=204)
 
 
+class ConversationMessagesView(DocumentAPIView):
+    parser_classes = [JSONParser]
+
+    def get(self, request, conversation_id):
+        conversation = conversation_for_request(request, conversation_id)
+        messages = conversation.messages.order_by("created_at", "pk")
+        # One "now" for the whole list so every timed-out question is judged alike.
+        return Response(ConversationMessageSerializer(
+            messages, many=True, context={"now": timezone.now()}).data)
+
+
+def answer_and_save(request, conversation, question, document_ids):
+    """Answer a saved PENDING question outside any transaction, then save the reply.
+
+    Both question routes are non-atomic, so the AI call never holds a database
+    transaction open. Any failure leaves the question in history as FAILED.
+    """
+    try:
+        result = answer_question(request.user, document_ids, question.content,
+                                 conversation=conversation)
+    except RAGServiceError:
+        mark_failed(question)
+        try:
+            question.refresh_from_db()
+        except ConversationMessage.DoesNotExist:
+            # The thread was deleted while Pandu was answering.
+            raise Http404 from None
+        return Response({"code": "RAG_GENERATION_FAILED",
+                         "detail": "The question could not be answered right now. Please try again.",
+                         "question": ConversationMessageSerializer(question).data},
+                        status=503)
+    except Exception:
+        # e.g. a selected document is no longer available (404).
+        mark_failed(question)
+        raise
+    question, reply = save_answer(question, result)
+    # Built from the saved reply: if another attempt answered first, the client
+    # gets that answer, matching what history will show.
+    return Response({"status": reply.status, "answer": reply.content or None,
+                     "citations": reply.citations,
+                     "question": ConversationMessageSerializer(question).data,
+                     "reply": ConversationMessageSerializer(reply).data})
+
+
 class ConversationQuestionView(DocumentAPIView):
+    """Save a new question as PENDING, then answer it."""
+
     parser_classes = [JSONParser]
 
     def post(self, request, conversation_id):
@@ -107,11 +158,25 @@ class ConversationQuestionView(DocumentAPIView):
         serializer = RAGQuerySerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
         data = serializer.validated_data
+        question = start_question(conversation, data["question"])
+        return answer_and_save(request, conversation, question, data["document_ids"])
+
+
+class QuestionRetryView(DocumentAPIView):
+    """Re-answer the same FAILED (or timed-out) question; no new question is saved."""
+
+    parser_classes = [JSONParser]
+
+    def post(self, request, conversation_id, message_id):
+        conversation = conversation_for_request(request, conversation_id)
+        message_pk = resource_id(message_id)
+        serializer = QuestionRetrySerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
         try:
-            result = answer_question(request.user, data["document_ids"], data["question"],
-                                     conversation=conversation)
-        except RAGServiceError:
-            return Response({"code": "RAG_GENERATION_FAILED",
-                             "detail": "The question could not be answered right now. Please try again."},
-                            status=503)
-        return Response(result)
+            question = start_retry(conversation, message_pk)
+        except QuestionNotRetryable:
+            return Response({"code": "QUESTION_NOT_RETRYABLE",
+                             "detail": "Only a question that failed can be retried."},
+                            status=409)
+        return answer_and_save(request, conversation, question,
+                               serializer.validated_data["document_ids"])

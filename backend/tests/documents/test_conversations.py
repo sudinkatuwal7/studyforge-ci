@@ -148,7 +148,8 @@ def test_every_conversation_route_hides_foreign_and_missing_ids(
         ("/", "get", None), ("/", "delete", None),
         ("/documents/", "get", None), ("/documents/", "post", {}),
         ("/documents/1/", "get", None), ("/documents/1/", "delete", None),
-        ("/questions/", "post", {}),
+        ("/questions/", "post", {}), ("/messages/", "get", None),
+        ("/messages/1/retry/", "post", {}),
     ]:
         foreign_url = f"/api/v1/conversations/{conversation.pk}{suffix}"
         missing_url = f"/api/v1/conversations/9223372036854775807{suffix}"

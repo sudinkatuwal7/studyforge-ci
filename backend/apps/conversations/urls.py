@@ -3,7 +3,8 @@ from django.urls import path
 
 from apps.conversations.views import (
     ConversationDetailView, ConversationDocumentDetailView,
-    ConversationDocumentsView, ConversationListView, ConversationQuestionView,
+    ConversationDocumentsView, ConversationListView, ConversationMessagesView,
+    ConversationQuestionView, QuestionRetryView,
 )
 
 
@@ -16,6 +17,14 @@ urlpatterns = [
          name="conversation-documents"),
     path("conversations/<str:conversation_id>/documents/<str:document_id>/",
          ConversationDocumentDetailView.as_view(), name="conversation-document-detail"),
+    path("conversations/<str:conversation_id>/messages/",
+         ConversationMessagesView.as_view(), name="conversation-messages"),
+    # Both question routes are non-atomic so the AI call never runs inside a
+    # request-wide transaction.
     path("conversations/<str:conversation_id>/questions/",
-         ConversationQuestionView.as_view(), name="conversation-questions"),
+         transaction.non_atomic_requests(ConversationQuestionView.as_view()),
+         name="conversation-questions"),
+    path("conversations/<str:conversation_id>/messages/<str:message_id>/retry/",
+         transaction.non_atomic_requests(QuestionRetryView.as_view()),
+         name="conversation-question-retry"),
 ]
