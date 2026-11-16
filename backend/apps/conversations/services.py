@@ -8,6 +8,7 @@ from django.http import Http404
 from django.utils import timezone
 
 from apps.conversations.models import Conversation, ConversationMessage
+from apps.identity.ownership import readable_documents
 
 TITLE_LENGTH = 60
 # A question still PENDING after this is reported as FAILED and may be retried.
@@ -35,6 +36,19 @@ def shown_status(message, now=None):
             and message.attempted_at <= (now or timezone.now()) - PENDING_TIMEOUT):
         return Status.FAILED
     return message.status
+
+
+def citation_sources(user, messages):
+    """{document_id: Document} for every cited document the user can still open.
+
+    One query for the whole response. A cited document missing from the result
+    was deleted or is no longer the user's; its citation is shown as unavailable.
+    """
+    ids = {citation["document_id"] for message in messages for citation in message.citations}
+    if not ids:
+        return {}
+    documents = readable_documents(user).filter(pk__in=ids).only("pk", "title", "file")
+    return {document.pk: document for document in documents}
 
 
 def _touch(conversation_id):

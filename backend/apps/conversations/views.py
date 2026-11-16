@@ -12,7 +12,8 @@ from apps.conversations.serializers import (
     ConversationUploadSerializer, QuestionRetrySerializer,
 )
 from apps.conversations.services import (
-    QuestionNotRetryable, mark_failed, save_answer, start_question, start_retry,
+    QuestionNotRetryable, citation_sources, mark_failed, save_answer, start_question,
+    start_retry,
 )
 from apps.documents.models import Document
 from apps.documents.services import store_and_dispatch
@@ -109,10 +110,12 @@ class ConversationMessagesView(DocumentAPIView):
 
     def get(self, request, conversation_id):
         conversation = conversation_for_request(request, conversation_id)
-        messages = conversation.messages.order_by("created_at", "pk")
-        # One "now" for the whole list so every timed-out question is judged alike.
-        return Response(ConversationMessageSerializer(
-            messages, many=True, context={"now": timezone.now()}).data)
+        messages = list(conversation.messages.order_by("created_at", "pk"))
+        # One "now" for the whole list so every timed-out question is judged alike,
+        # and one lookup for every cited source.
+        return Response(ConversationMessageSerializer(messages, many=True, context={
+            "now": timezone.now(), "sources": citation_sources(request.user, messages),
+        }).data)
 
 
 def answer_and_save(request, conversation, question, document_ids):
@@ -142,10 +145,12 @@ def answer_and_save(request, conversation, question, document_ids):
     question, reply = save_answer(question, result)
     # Built from the saved reply: if another attempt answered first, the client
     # gets that answer, matching what history will show.
+    reply_data = ConversationMessageSerializer(reply, context={
+        "sources": citation_sources(request.user, [reply])}).data
     return Response({"status": reply.status, "answer": reply.content or None,
-                     "citations": reply.citations, "tool_trace": reply.tool_trace,
+                     "citations": reply_data["citations"], "tool_trace": reply.tool_trace,
                      "question": ConversationMessageSerializer(question).data,
-                     "reply": ConversationMessageSerializer(reply).data})
+                     "reply": reply_data})
 
 
 class ConversationQuestionView(DocumentAPIView):

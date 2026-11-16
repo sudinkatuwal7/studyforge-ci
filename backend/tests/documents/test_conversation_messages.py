@@ -26,7 +26,14 @@ ANSWER = {
     "tool_trace": [{"tool": "search_sources", "sources": {
         "course_materials": {"documents_searched": 1, "passages_used": 1}}}],
 }
-NO_CONTEXT = {"status": "INSUFFICIENT_CONTEXT", "answer": None, "citations": [], "tool_trace": []}
+# ANSWER cites document 3, which these tests never create: it is shown as unavailable.
+UNAVAILABLE = {"document_name": None, "source_format": None, "available": False}
+DESCRIBED = [{**citation, **UNAVAILABLE} for citation in ANSWER["citations"]]
+NO_CONTEXT = {
+    "status": "INSUFFICIENT_CONTEXT", "answer": None, "citations": [],
+    "tool_trace": [{"tool": "search_sources", "sources": {
+        "chat_uploads": {"documents_searched": 1, "passages_used": 0}}}],
+}
 
 
 def ask(client, conversation, question="Explain paging", document_ids=(1,)):
@@ -50,14 +57,15 @@ def test_answered_question_and_reply_are_saved_in_order(owner_client, conversati
         response = ask(owner_client, conversation)
     assert response.status_code == 200, response.content
     body = response.json()
-    # The existing answer fields are unchanged for current clients.
-    assert {key: body[key] for key in ANSWER} == ANSWER
+    # The existing answer fields keep their meaning; citations gain source details.
+    assert {key: body[key] for key in ANSWER} == {**ANSWER, "citations": DESCRIBED}
     saved = history(owner_client, conversation)
     assert [(row["role"], row["status"]) for row in saved] == [
         ("user", "ANSWERED"), ("assistant", "ANSWERED")]
     question, reply = saved
     assert question["content"] == "Explain paging" and question["reply_to"] is None
-    assert reply["content"] == ANSWER["answer"] and reply["citations"] == ANSWER["citations"]
+    assert reply["content"] == ANSWER["answer"] and reply["citations"] == DESCRIBED
+    # The search steps survive a refresh on the reply; questions carry none.
     assert reply["tool_trace"] == ANSWER["tool_trace"] and question["tool_trace"] == []
     assert reply["reply_to"] == question["id"]
     assert body["question"] == question and body["reply"] == reply
@@ -69,7 +77,8 @@ def test_insufficient_context_reply_is_saved_without_text_or_citations(owner_cli
     question, reply = history(owner_client, conversation)
     assert question["status"] == "ANSWERED"
     assert (reply["status"], reply["content"], reply["citations"]) == ("INSUFFICIENT_CONTEXT", "", [])
-    assert reply["tool_trace"] == []
+    # The search still ran and found nothing; that is shown, not hidden.
+    assert reply["tool_trace"] == NO_CONTEXT["tool_trace"]
 
 
 def test_failed_answer_keeps_the_question_as_failed(owner_client, conversation):
@@ -82,6 +91,8 @@ def test_failed_answer_keeps_the_question_as_failed(owner_client, conversation):
     # A refresh (a new GET) still shows the question, with no reply.
     assert [(row["role"], row["status"], row["content"]) for row in history(owner_client, conversation)] == [
         ("user", "FAILED", "Explain paging")]
+    # Agreed: a failed answer keeps no trace, in the response or in history.
+    assert "tool_trace" not in body and body["question"]["tool_trace"] == []
 
 
 def test_other_errors_also_keep_the_question_as_failed(owner_client, conversation):
@@ -320,7 +331,7 @@ def test_two_finishing_attempts_keep_only_the_first_answer(conversation):
     _, first = save_answer(question, ANSWER)
     _, second = save_answer(question, NO_CONTEXT)
     assert second.pk == first.pk and second.status == "ANSWERED"
-    assert second.tool_trace == ANSWER["tool_trace"]
+    assert second.tool_trace == ANSWER["tool_trace"]  # the losing attempt's trace is not mixed in
     assert ConversationMessage.objects.filter(role="assistant").count() == 1
 
 
@@ -386,7 +397,7 @@ def test_old_attempt_finishing_during_a_retry_wins_end_to_end(owner_client, conv
     body = response.json()
     # B's client gets A's saved answer, matching what a refresh shows.
     assert (body["status"], body["answer"], body["citations"]) == (
-        "ANSWERED", ANSWER["answer"], ANSWER["citations"])
+        "ANSWERED", ANSWER["answer"], DESCRIBED)
     saved = history(owner_client, conversation)
     assert [(row["role"], row["status"], row["content"]) for row in saved] == [
         ("user", "ANSWERED", "Explain paging"), ("assistant", "ANSWERED", ANSWER["answer"])]

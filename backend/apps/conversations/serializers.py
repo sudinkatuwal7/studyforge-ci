@@ -22,9 +22,27 @@ class ConversationSerializer(serializers.ModelSerializer):
 class ConversationMessageSerializer(serializers.ModelSerializer):
     reply_to = serializers.PrimaryKeyRelatedField(read_only=True)
     status = serializers.SerializerMethodField()
+    citations = serializers.SerializerMethodField()
 
     def get_status(self, message):
         return shown_status(message, self.context.get("now"))
+
+    def get_citations(self, message):
+        """Saved citations plus the source as it is now (context["sources"] from
+        citation_sources): its current name and format, or available=False."""
+        if not message.citations:
+            return []
+        sources = self.context["sources"]
+        described = []
+        for citation in message.citations:
+            document = sources.get(citation["document_id"])
+            described.append({
+                **citation,
+                "document_name": document.title if document else None,
+                "source_format": document.source_format if document else None,
+                "available": document is not None,
+            })
+        return described
 
     class Meta:
         model = ConversationMessage
