@@ -62,6 +62,7 @@ export type CourseChatProps = {
   error?: string;
   demo?: boolean;
   onSend: (text: string, documentIds: number[]) => void;
+  onTranscribeAudio?: (audio: Blob, signal: AbortSignal) => Promise<string>;
   onStop?: () => void;
   onRetry?: () => void;
   onReferencesChange: (ids: string[]) => void;

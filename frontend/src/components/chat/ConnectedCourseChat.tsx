@@ -6,6 +6,7 @@ import {
 } from "../../api/conversations";
 import { DocumentRequestError, validateDocument } from "../../api/documents";
 import { fetchSourceFile } from "../../api/sourceFiles";
+import { transcribeRecording } from "../../api/voice";
 import { useAuth } from "../../context/AuthContext";
 import type { ChatCitation, ChatMessage, ChatReference, ChatStatus, CitationSource } from "../../types/chat";
 import type { TrackedDocument } from "../../types/document";
@@ -385,7 +386,7 @@ function ConnectedChat({ courseId, materials, token, userId }: { courseId: numbe
       messages={messages} references={references} selectedReferences={selected} status={status} error={error}
       loadingReferences={historyLoading} referenceError="" uploading={uploading} uploadProgress={uploadProgress} uploadError={uploadError} uploadStatusViews={statusViews}
       onReferencesChange={(ids) => setSession((current) => ({ ...current, selected: reconcileSelection(references, ids) }))}
-      onAddDocuments={(files) => void addDocuments(files)} onSend={ask} onStop={stop} onCitation={(citation) => void openCitation(citation)}
+      onAddDocuments={(files) => void addDocuments(files)} onSend={ask} onTranscribeAudio={(audio, signal) => transcribeRecording(audio, tokenRef.current, signal)} onStop={stop} onCitation={(citation) => void openCitation(citation)}
       onRetryMessage={retry} historyLoading={historyLoading} historyError={historyError} onReloadHistory={reloadHistory}
       onDeleteUpload={(documentId) => void deleteUpload(documentId)} deletingUploadId={deletingUploadId} uploadDeleteError={uploadDeleteError}
       notice={notice} onDismissNotice={() => setNotice("")}

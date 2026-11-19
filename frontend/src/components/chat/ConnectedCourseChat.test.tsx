@@ -8,6 +8,7 @@ import {
   uploadConversationDocument, type Conversation, type ConversationMessage, type QuestionCitation, type QuestionResult, type ToolTraceEntry,
 } from "../../api/conversations";
 import { fetchSourceFile } from "../../api/sourceFiles";
+import { transcribeRecording } from "../../api/voice";
 
 // Mutable so a test can refresh the access token while the chat stays mounted.
 const auth = vi.hoisted(() => ({ user: { id: 1 }, accessToken: "token" }));
@@ -20,6 +21,7 @@ vi.mock("../../api/conversations", async (original) => ({
   deleteConversation: vi.fn(), deleteConversationUpload: vi.fn(),
 }));
 vi.mock("../../api/sourceFiles", () => ({ fetchSourceFile: vi.fn() }));
+vi.mock("../../api/voice", () => ({ transcribeRecording: vi.fn() }));
 
 const SESSION = "studyforge:course-chat:1:42";
 const thread = (id: number, title = "", courseId = 42) => ({ id, course_id: courseId, title, created_at: "2026-11-16", updated_at: "2026-11-16T10:00:00Z" });
@@ -64,6 +66,7 @@ beforeEach(() => {
   vi.mocked(deleteConversation).mockReset().mockResolvedValue(undefined);
   vi.mocked(deleteConversationUpload).mockReset().mockResolvedValue(undefined);
   vi.mocked(fetchSourceFile).mockReset().mockResolvedValue(new Blob(["file"]));
+  vi.mocked(transcribeRecording).mockReset();
 });
 afterEach(() => { cleanup(); vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); });
 
@@ -78,6 +81,39 @@ async function sendQuestion(text: string, source = /Lecture.pdf/) {
   fireEvent.click(screen.getByRole("button", { name: "Send to Pandu" }));
 }
 async function ready(text = "Mitosis.") { await within(messagesLog()).findByText(text); }
+
+function microphone(finishOnStop = true) {
+  const track = { stop: vi.fn() };
+  const stream = { getTracks: () => [track] } as unknown as MediaStream;
+  const getUserMedia = vi.fn().mockResolvedValue(stream);
+  const browserNavigator = new Proxy(navigator, {
+    get(target, property) { return property === "mediaDevices" ? { getUserMedia } : Reflect.get(target, property, target); },
+  });
+  vi.stubGlobal("navigator", browserNavigator);
+  vi.stubGlobal("SpeechRecognition", undefined);
+  vi.stubGlobal("webkitSpeechRecognition", undefined);
+  class Recorder {
+    static isTypeSupported = () => true;
+    mimeType = "audio/webm";
+    state = "inactive";
+    ondataavailable: ((event: { data: Blob }) => void) | null = null;
+    onstop: (() => void) | null = null;
+    onerror: (() => void) | null = null;
+    start() { this.state = "recording"; }
+    stop = vi.fn(() => {
+      if (this.state === "inactive") throw new DOMException("Already stopped", "InvalidStateError");
+      this.state = "inactive";
+      if (finishOnStop) {
+        this.ondataavailable?.({ data: new Blob(["recording"], { type: this.mimeType }) });
+        this.onstop?.();
+      }
+    });
+  }
+  const recorder = vi.fn(function () { return new Recorder(); });
+  Object.assign(recorder, { isTypeSupported: Recorder.isTypeSupported });
+  vi.stubGlobal("MediaRecorder", recorder);
+  return { track, stream, getUserMedia, recorder };
+}
 
 // --- Threads and history (criteria 1, 2, 8) -------------------------------------------
 
@@ -119,6 +155,56 @@ it("switches chats and never shows a slower earlier load in the newer chat", asy
   await act(async () => slow.resolve(history[10]));
   expect(screen.queryByText("Water moves.")).not.toBeInTheDocument();
   expect(within(chats()).getByRole("button", { current: true })).toHaveTextContent("Cells");
+});
+
+it("cancels transcription when switching chats and ignores the old transcript", async () => {
+  microphone();
+  const pending = deferred<string>();
+  vi.mocked(transcribeRecording).mockReturnValue(pending.promise);
+  render(<ConnectedCourseChat courseId={42} materials={[]} />);
+  await ready();
+  fireEvent.change(screen.getByRole("textbox"), { target: { value: "Typed draft" } });
+  fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Stop recording" }));
+  const signal = vi.mocked(transcribeRecording).mock.calls[0][2];
+  fireEvent.click(threadButton("Osmosis"));
+  await ready("Water moves.");
+  expect(signal.aborted).toBe(true);
+  await act(async () => pending.resolve("A question from the old chat"));
+  expect(screen.getByRole("textbox")).toHaveValue("Typed draft");
+});
+
+it("releases a microphone granted after the student switches chats", async () => {
+  const mic = microphone();
+  const permission = deferred<MediaStream>();
+  mic.getUserMedia.mockReturnValue(permission.promise);
+  render(<ConnectedCourseChat courseId={42} materials={[]} />);
+  await ready();
+  fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
+  fireEvent.click(threadButton("Osmosis"));
+  await ready("Water moves.");
+  await act(async () => permission.resolve(mic.stream));
+  expect(mic.track.stop).toHaveBeenCalledOnce();
+  expect(mic.recorder).not.toHaveBeenCalled();
+  expect(transcribeRecording).not.toHaveBeenCalled();
+});
+
+it("cleans up a stopped recording before its stop event arrives", async () => {
+  const mic = microphone(false);
+  render(<ConnectedCourseChat courseId={42} materials={[]} />);
+  await ready();
+  fireEvent.click(screen.getByRole("button", { name: "Start voice input" }));
+  fireEvent.click(await screen.findByRole("button", { name: "Stop recording" }));
+  const capture = mic.recorder.mock.results[0].value;
+  expect(capture.state).toBe("inactive");
+  fireEvent.click(screen.getByRole("button", { name: "Stop recording" }));
+  expect(capture.stop).toHaveBeenCalledOnce();
+  fireEvent.click(threadButton("Osmosis"));
+  await ready("Water moves.");
+  expect(capture.stop).toHaveBeenCalledOnce();
+  expect(capture.onstop).toBeNull();
+  expect(mic.track.stop).toHaveBeenCalledOnce();
+  expect(transcribeRecording).not.toHaveBeenCalled();
 });
 
 it("cancels an in-flight reply when switching chats; the saved answer appears only back in its own chat", async () => {
