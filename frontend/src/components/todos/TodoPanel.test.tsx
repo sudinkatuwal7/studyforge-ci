@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../../api/client";
 import { listCourses } from "../../api/courses";
-import { createTodo, listTodos, updateTodoCompletion } from "../../api/todos";
+import { createTodo, deleteTodo, listTodos, updateTodoCompletion, updateTodoTitle } from "../../api/todos";
 import { useAuth } from "../../context/AuthContext";
 import type { Course } from "../../types/course";
 import type { TodoItem } from "../../types/todo";
@@ -14,6 +14,8 @@ vi.mock("../../api/todos", () => ({
   listTodos: vi.fn(),
   createTodo: vi.fn(),
   updateTodoCompletion: vi.fn(),
+  updateTodoTitle: vi.fn(),
+  deleteTodo: vi.fn(),
 }));
 vi.mock("../../context/AuthContext", () => ({ useAuth: vi.fn() }));
 
@@ -128,5 +130,66 @@ describe("dashboard task list", () => {
 
     expect(await screen.findByRole("listitem")).toHaveTextContent("Read chapter");
     expect(screen.queryByText(/You have no tasks yet./)).not.toBeInTheDocument();
+  });
+
+  it("edits a task, validates blank input, and updates the displayed title", async () => {
+    const user = userEvent.setup();
+    vi.mocked(updateTodoTitle).mockResolvedValue({ ...tasks[3], title: "Review notes" });
+    render(<TodoPanel refreshKey={0} />);
+    await user.click(await screen.findByRole("button", { name: "Edit Soon" }));
+    const input = screen.getByLabelText("Edit task Soon");
+    await user.clear(input);
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(screen.getByRole("alert")).toHaveTextContent("Use a task title");
+    expect(updateTodoTitle).not.toHaveBeenCalled();
+    await user.type(input, "  Review notes  ");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(updateTodoTitle).toHaveBeenCalledWith("test-access-token", 4, "Review notes");
+    expect(await screen.findByRole("checkbox", { name: "Mark complete: Review notes" })).toBeInTheDocument();
+  });
+
+  it("keeps the editor and previous title when an edit fails", async () => {
+    const user = userEvent.setup();
+    vi.mocked(updateTodoTitle).mockRejectedValue(new Error("Invalid task title."));
+    render(<TodoPanel refreshKey={0} />);
+    await user.click(await screen.findByRole("button", { name: "Edit Soon" }));
+    const input = screen.getByLabelText("Edit task Soon");
+    await user.clear(input);
+    await user.type(input, "New title");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Invalid task title.");
+    expect(screen.getByText("Soon")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(screen.getByRole("button", { name: "Edit Soon" })).toBeInTheDocument();
+  });
+
+  it("confirms task deletion and updates the list only after success", async () => {
+    const user = userEvent.setup();
+    vi.mocked(deleteTodo).mockResolvedValue();
+    render(<TodoPanel refreshKey={0} />);
+    await user.click(await screen.findByRole("button", { name: "Delete Soon" }));
+    expect(screen.getByRole("dialog", { name: "Delete task Soon?" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    expect(deleteTodo).not.toHaveBeenCalled();
+    expect(screen.getByText("Soon")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Delete Soon" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    expect(deleteTodo).toHaveBeenCalledWith("test-access-token", 4);
+    await waitFor(() => expect(screen.queryByText("Soon")).not.toBeInTheDocument());
+    expect(screen.getByRole("button", { name: "Edit Later" })).toBeEnabled();
+  });
+
+  it("keeps the task and allows retry when deletion fails", async () => {
+    const user = userEvent.setup();
+    vi.mocked(deleteTodo).mockRejectedValueOnce(new ApiError(503)).mockResolvedValueOnce();
+    render(<TodoPanel refreshKey={0} />);
+    await user.click(await screen.findByRole("button", { name: "Delete Soon" }));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    expect(await screen.findByRole("alert")).toHaveTextContent("Could not delete the task");
+    expect(screen.getByText("Soon")).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Delete task Soon?" })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await waitFor(() => expect(screen.queryByText("Soon")).not.toBeInTheDocument());
+    expect(deleteTodo).toHaveBeenCalledTimes(2);
   });
 });

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { CreateTodoInput, TodoItem } from "../types/todo";
 import { ApiError } from "./client";
-import { createTodo, listTodos, updateTodoCompletion } from "./todos";
+import { createTodo, deleteTodo, listTodos, updateTodoCompletion, updateTodoTitle } from "./todos";
 
 const token = "test-access-token";
 const savedTodo: TodoItem = {
@@ -67,6 +67,33 @@ describe("To-Do API requests", () => {
     expect(new Headers(options.headers).get("Content-Type")).toBe("application/json");
     expect(JSON.parse(options.body as string)).toEqual({ is_completed: isCompleted });
   });
+
+  it("PATCH edits only the title", async () => {
+    const updated = { ...savedTodo, title: "Review homework" };
+    const fetch = vi.fn().mockResolvedValue(Response.json(updated));
+    vi.stubGlobal("fetch", fetch);
+    expect(await updateTodoTitle(token, 12, updated.title)).toEqual(updated);
+    const [url, options] = fetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://api.test/api/v1/todos/12/");
+    expect(options.method).toBe("PATCH");
+    expect(new Headers(options.headers).get("Authorization")).toBe(`Bearer ${token}`);
+    expect(JSON.parse(options.body as string)).toEqual({ title: updated.title });
+  });
+
+  it("DELETE accepts an empty 204 response", async () => {
+    const fetch = vi.fn().mockResolvedValue(new Response(null, { status: 204 }));
+    vi.stubGlobal("fetch", fetch);
+    await expect(deleteTodo(token, 12)).resolves.toBeUndefined();
+    const [url, options] = fetch.mock.calls[0] as [string, RequestInit];
+    expect(url).toBe("http://api.test/api/v1/todos/12/");
+    expect(options.method).toBe("DELETE");
+    expect(new Headers(options.headers).get("Authorization")).toBe(`Bearer ${token}`);
+  });
+
+  it("uses backend title validation messages", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json({ title: ["Blank title."] }, { status: 400 })));
+    await expect(updateTodoTitle(token, 12, " ")).rejects.toMatchObject({ status: 400, message: "Blank title." });
+  });
 });
 
 const operations = [
@@ -85,6 +112,8 @@ const operations = [
     call: (accessToken: string | null) => updateTodoCompletion(accessToken, 12, true),
     errorStatus: 404,
   },
+  { name: "edit title", call: (accessToken: string | null) => updateTodoTitle(accessToken, 12, "Study"), errorStatus: 400 },
+  { name: "delete", call: (accessToken: string | null) => deleteTodo(accessToken, 12), errorStatus: 404 },
 ];
 
 describe.each(operations)("To-Do API errors: $name", ({ call, errorStatus }) => {

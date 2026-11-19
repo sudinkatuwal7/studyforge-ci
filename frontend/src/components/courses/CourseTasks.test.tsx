@@ -1,10 +1,10 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, expect, it, vi } from "vitest";
-import { listTodos } from "../../api/todos";
+import { deleteTodo, listTodos, updateTodoTitle } from "../../api/todos";
 import CourseTasks from "./CourseTasks";
 
-vi.mock("../../api/todos", () => ({ listTodos: vi.fn() }));
+vi.mock("../../api/todos", () => ({ listTodos: vi.fn(), updateTodoTitle: vi.fn(), deleteTodo: vi.fn() }));
 vi.mock("../../context/AuthContext", () => ({ useAuth: () => ({ accessToken: "token" }) }));
 beforeEach(() => vi.resetAllMocks());
 
@@ -40,4 +40,20 @@ it("points an empty course task list to the Tasks page", async () => {
   render(<CourseTasks courseId={7} />, { wrapper: MemoryRouter });
   expect(await screen.findByText("No tasks for this course yet.")).toBeInTheDocument();
   expect(screen.getByRole("link", { name: "Add a task" })).toHaveAttribute("href", "/tasks");
+});
+
+it("edits and deletes tasks from the open course", async () => {
+  const task = { id: 1, course: 7, title: "Read chapter", due_date: null, is_completed: false, created_at: "2026-10-29" };
+  vi.mocked(listTodos).mockResolvedValue([task]);
+  vi.mocked(updateTodoTitle).mockResolvedValue({ ...task, title: "Review chapter" });
+  vi.mocked(deleteTodo).mockResolvedValue();
+  render(<CourseTasks courseId={7} />, { wrapper: MemoryRouter });
+  fireEvent.click(await screen.findByRole("button", { name: "Edit Read chapter" }));
+  fireEvent.change(screen.getByLabelText("Edit task Read chapter"), { target: { value: "Review chapter" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(await screen.findByText("Review chapter")).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Delete Review chapter" }));
+  expect(screen.getByRole("dialog", { name: "Delete task Review chapter?" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+  expect(await screen.findByText("No tasks for this course yet.")).toBeInTheDocument();
 });
