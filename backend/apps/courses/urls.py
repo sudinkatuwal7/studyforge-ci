@@ -5,7 +5,7 @@ from apps.courses.views import (
     CourseDetailView,
     StudySessionDetailView,
     StudySessionListCreateView,
-    TodoCompletionView,
+    TodoDetailView,
     TodoListCreateView,
 )
 
@@ -15,7 +15,7 @@ urlpatterns = [
     # GET /api/v1/courses/7/ opens course 7 if the logged-in user owns it.
     path("courses/<int:course_id>/", CourseDetailView.as_view(), name="course-detail"),
     path("todos/", TodoListCreateView.as_view(), name="todo-list-create"),
-    path("todos/<int:todo_id>/", TodoCompletionView.as_view(), name="todo-completion"),
+    path("todos/<int:todo_id>/", TodoDetailView.as_view(), name="todo-completion"),
     path("study-sessions/", StudySessionListCreateView.as_view(), name="study-session-list-create"),
     path(
         "study-sessions/<int:session_id>/",

@@ -154,6 +154,52 @@ class CourseAPITests(APITestCase):
                 # Matching errors avoid revealing that another student's course exists.
                 self.assertEqual(private.data, missing.data)
 
+    def test_rename_updates_detail_and_list_without_changing_other_fields(self):
+        response = self.client.patch(
+            self.detail_url(self.course_a.pk), {"name": "  Data Structures  "}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["name"], "Data Structures")
+        self.assertEqual(response.data["description"], "Lecture notes")
+        self.course_a.refresh_from_db()
+        self.assertEqual(self.course_a.name, "Data Structures")
+        self.assertEqual(self.client.get(self.detail_url(self.course_a.pk)).data["name"], "Data Structures")
+        self.assertEqual(self.client.get(self.list_url).data[0]["name"], "Data Structures")
+
+    def test_rename_rejects_invalid_names(self):
+        for payload in ({}, {"name": ""}, {"name": "  \t "}, {"name": None},
+                        {"name": 12}, {"name": "x" * 201}, {"name": "Bad\nname"}):
+            with self.subTest(payload=payload):
+                response = self.client.patch(self.detail_url(self.course_a.pk), payload, format="json")
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.assertIn("name", response.data)
+                self.assertTrue(response.data["name"][0])
+                self.course_a.refresh_from_db()
+                self.assertEqual(self.course_a.name, "Algorithms")
+
+    def test_rename_and_delete_hide_foreign_courses(self):
+        for method, payload in (("patch", {"name": "Changed"}), ("delete", {})):
+            with self.subTest(method=method):
+                response = getattr(self.client, method)(
+                    self.detail_url(self.course_b.pk), payload, format="json"
+                )
+                self.assertEqual(response.status_code, status.HTTP_404_NOT_FOUND)
+        self.course_b.refresh_from_db()
+        self.assertEqual(self.course_b.name, "Databases")
+
+    def test_delete_owned_course_and_require_authentication(self):
+        url = self.detail_url(self.course_a.pk)
+        self.client.credentials()
+        self.assertEqual(self.client.patch(url, {"name": "No"}, format="json").status_code, 401)
+        self.assertEqual(self.client.delete(url).status_code, 401)
+        self.authenticate(self.student_a)
+        response = self.client.delete(url)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(response.content, b"")
+        self.assertFalse(Course.objects.filter(pk=self.course_a.pk).exists())
+        self.assertTrue(Course.objects.filter(pk=self.course_b.pk).exists())
+        self.assertEqual(self.client.delete(url).status_code, status.HTTP_404_NOT_FOUND)
+
 
 class TodoAPITests(APITestCase):
     @classmethod
@@ -289,7 +335,7 @@ class TodoAPITests(APITestCase):
     def test_completion_endpoint_does_not_change_title_or_course(self):
         response = self.client.patch(
             self.detail_url(self.todo_a.pk),
-            {"is_completed": True, "title": "Changed", "course": self.course_b.pk},
+            {"is_completed": True, "course": self.course_b.pk, "due_date": "2026-10-20"},
             format="json",
         )
         self.assertEqual(response.status_code, status.HTTP_200_OK)
@@ -297,6 +343,43 @@ class TodoAPITests(APITestCase):
         self.assertEqual(self.todo_a.title, "Read chapter 1")
         self.assertEqual(self.todo_a.course_id, self.course_a.pk)
         self.assertTrue(self.todo_a.is_completed)
+
+    def test_edit_title_preserves_completion_course_and_date(self):
+        self.todo_a.is_completed = True
+        self.todo_a.due_date = "2026-10-20"
+        self.todo_a.save(update_fields=["is_completed", "due_date"])
+        response = self.client.patch(
+            self.detail_url(self.todo_a.pk), {"title": "  Read chapter 2  "}, format="json"
+        )
+        self.assertEqual(response.status_code, status.HTTP_200_OK)
+        self.assertEqual(response.data["title"], "Read chapter 2")
+        self.assertTrue(response.data["is_completed"])
+        self.assertEqual(response.data["course"], self.course_a.pk)
+        self.assertEqual(response.data["due_date"], "2026-10-20")
+        self.assertEqual(self.client.get(self.list_url).data[0]["title"], "Read chapter 2")
+
+    def test_edit_rejects_invalid_title(self):
+        for payload in ({}, {"title": ""}, {"title": "  \t "}, {"title": None},
+                        {"title": 12}, {"title": "x" * 201}, {"title": "Bad\ntext"}):
+            with self.subTest(payload=payload):
+                response = self.client.patch(self.detail_url(self.todo_a.pk), payload, format="json")
+                self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
+                self.todo_a.refresh_from_db()
+                self.assertEqual(self.todo_a.title, "Read chapter 1")
+
+    def test_delete_owned_todo_and_hide_foreign_todos(self):
+        foreign_url = self.detail_url(self.todo_b.pk)
+        self.assertEqual(self.client.patch(foreign_url, {"title": "Changed"}, format="json").status_code, 404)
+        self.assertEqual(self.client.delete(foreign_url).status_code, 404)
+        self.todo_b.refresh_from_db()
+        self.assertEqual(self.todo_b.title, "Private task")
+        own_url = self.detail_url(self.todo_a.pk)
+        response = self.client.delete(own_url)
+        self.assertEqual(response.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(response.content, b"")
+        self.assertFalse(TodoItem.objects.filter(pk=self.todo_a.pk).exists())
+        self.assertTrue(TodoItem.objects.filter(pk=self.todo_b.pk).exists())
+        self.assertEqual(self.client.delete(own_url).status_code, 404)
 
     def test_invalid_completion_is_rejected_without_changing_task(self):
         for payload in ({}, {"is_completed": None}, {"is_completed": "invalid"}):
@@ -328,6 +411,8 @@ class TodoAPITests(APITestCase):
                 ("get", self.list_url, {}),
                 ("post", self.list_url, {"title": "Study", "course": self.course_a.pk}),
                 ("patch", self.detail_url(self.todo_a.pk), {"is_completed": True}),
+                ("patch", self.detail_url(self.todo_a.pk), {"title": "Unauthorized edit"}),
+                ("delete", self.detail_url(self.todo_a.pk), {}),
             )
             for method, url, payload in requests:
                 with self.subTest(token=token, method=method):
@@ -336,3 +421,4 @@ class TodoAPITests(APITestCase):
         self.assertEqual(TodoItem.objects.count(), initial_count)
         self.todo_a.refresh_from_db()
         self.assertFalse(self.todo_a.is_completed)
+        self.assertEqual(self.todo_a.title, "Read chapter 1")

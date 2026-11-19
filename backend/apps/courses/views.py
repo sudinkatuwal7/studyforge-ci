@@ -1,3 +1,6 @@
+import logging
+
+from django.db import transaction
 from django.db.models import F
 from django.http import Http404
 from django.shortcuts import get_object_or_404
@@ -10,11 +13,14 @@ from rest_framework_simplejwt.authentication import JWTAuthentication
 from .models import Course, StudySession, TodoItem
 from .serializers import (
     CourseSerializer,
+    CourseRenameSerializer,
     StudySessionCreateSerializer,
     StudySessionSerializer,
-    TodoCompletionSerializer,
+    TodoUpdateSerializer,
     TodoItemSerializer,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class CourseCreateView(APIView):
@@ -42,13 +48,46 @@ class CourseDetailView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
 
-    def get(self, request, course_id):
+    def get_course(self, request, course_id):
         # Reject IDs outside the database's supported integer range.
         if not 0 < course_id <= 9223372036854775807:
             raise Http404
         # Missing courses and another student's courses both return 404.
-        course = get_object_or_404(Course, pk=course_id, owner=request.user)
+        return get_object_or_404(Course, pk=course_id, owner=request.user)
+
+    def get(self, request, course_id):
+        return Response(CourseSerializer(self.get_course(request, course_id)).data)
+
+    def patch(self, request, course_id):
+        course = self.get_course(request, course_id)
+        serializer = CourseRenameSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        course.name = serializer.validated_data["name"]
+        course.save(update_fields=["name"])
         return Response(CourseSerializer(course).data)
+
+    def delete(self, request, course_id):
+        # Course, material, and conversation signals delete private files while
+        # the transaction is open. A storage error rolls back the database rows.
+        try:
+            # Match material deletion: commit this outer transaction before 204.
+            # Storage cannot be rolled back if the final database commit fails.
+            with transaction.atomic(durable=True):
+                if not 0 < course_id <= 9223372036854775807:
+                    raise Http404
+                course = get_object_or_404(
+                    Course.objects.select_for_update(), pk=course_id, owner=request.user
+                )
+                course.delete()
+        except Http404:
+            raise
+        except Exception:
+            logger.exception("Could not delete course %s.", course_id)
+            return Response(
+                {"detail": "The course could not be deleted. Please try again later."},
+                status=status.HTTP_503_SERVICE_UNAVAILABLE,
+            )
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class TodoListCreateView(APIView):
@@ -90,20 +129,27 @@ class TodoListCreateView(APIView):
         return Response(TodoItemSerializer(todo).data, status=response_status)
 
 
-class TodoCompletionView(APIView):
+class TodoDetailView(APIView):
     authentication_classes = [JWTAuthentication]
     permission_classes = [IsAuthenticated]
 
-    def patch(self, request, todo_id):
+    def get_todo(self, request, todo_id):
         if not 0 < todo_id <= 9223372036854775807:
             raise Http404
-        todo = get_object_or_404(TodoItem, pk=todo_id, course__owner=request.user)
-        serializer = TodoCompletionSerializer(data=request.data)
+        return get_object_or_404(TodoItem, pk=todo_id, course__owner=request.user)
+
+    def patch(self, request, todo_id):
+        todo = self.get_todo(request, todo_id)
+        serializer = TodoUpdateSerializer(data=request.data)
         serializer.is_valid(raise_exception=True)
-        # Only completion can change through this endpoint.
-        todo.is_completed = serializer.validated_data["is_completed"]
-        todo.save(update_fields=["is_completed"])
+        for field, value in serializer.validated_data.items():
+            setattr(todo, field, value)
+        todo.save(update_fields=list(serializer.validated_data))
         return Response(TodoItemSerializer(todo).data)
+
+    def delete(self, request, todo_id):
+        self.get_todo(request, todo_id).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
 
 class StudySessionListCreateView(APIView):

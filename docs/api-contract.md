@@ -129,7 +129,7 @@ Course integration update: `GET /courses/`, `POST /courses/`, and
 authentication and are scoped to the current owner. Course detail returns the same
 fields as course creation/listing. The frontend course page passes the selected
 course ID to `CourseMaterials` for upload and material management. Course
-PATCH/DELETE remain planned. Document collection GET is implemented by SCRUM-61.
+PATCH/DELETE are implemented by SCRUM-85. Document collection GET is implemented by SCRUM-61.
 
 ```text
 POST   /api/v1/auth/register/
@@ -149,6 +149,29 @@ GET    /api/v1/notes/{id}/
 ```
 
 Notes and study guides are specified in [notes-api.md](notes-api.md).
+
+### Course and to-do actions (SCRUM-85)
+
+`PATCH /api/v1/courses/{id}/` accepts a `name` of 1–200 characters after
+trimming and returns the updated course. `PATCH /api/v1/todos/{id}/` accepts a
+`title` of 1–200 trimmed characters, an `is_completed` value, or both, and
+returns the updated task. Blank, non-string, and control-character names and
+titles receive `400` with a field error. Other fields remain unchanged.
+
+Both `DELETE` endpoints return an empty `204`. All four actions require a valid
+bearer token; missing and other students' resources return the same `404`.
+Course deletion cascades its documents, chunks, jobs, notes, quizzes, tasks,
+study sessions, conversations, and course uploads. Standalone conversations
+and other students' data remain. Existing file signals remove associated
+source files. The course transaction is durable, so `204` means the database
+commit completed. Storage failures return a safe `503` and roll back database
+rows when possible.
+
+As with material deletion below, storage and PostgreSQL are not one atomic
+system. If a file deletion succeeds and a later file deletion, database
+commit, or process fails, rolled-back rows may reference missing files. A
+retry accepts missing files. Eliminating this limit needs durable cleanup
+coordination outside this endpoint's existing synchronous deletion model.
 
 ## Google sign-in (SCRUM-114)
 
