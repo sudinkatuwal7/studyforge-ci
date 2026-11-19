@@ -1,0 +1,17 @@
+.confirm-delete-dialog {
+  max-width: min(28rem, calc(100vw - 2rem));
+  border: 1px solid #e8dfdd;
+  border-radius: 1rem;
+  padding: 1.4rem;
+  background: #fffdf9;
+  color: #303048;
+  box-shadow: 0 1rem 3rem #29213840;
+}
+
+.confirm-delete-dialog::backdrop { background: #1e1a3266; }
+.confirm-delete-dialog h3 { margin: 0 0 .65rem; }
+.confirm-delete-dialog p { margin: 0 0 1rem; line-height: 1.5; }
+.confirm-delete-actions { display: flex; justify-content: flex-end; flex-wrap: wrap; gap: .6rem; }
+.confirm-delete-actions button { border: 1px solid #d8d0dd; border-radius: .6rem; padding: .5rem .9rem; background: #f7f3fa; cursor: pointer; }
+.confirm-delete-actions .confirm-delete-confirm { border-color: #a6404a; background: #a6404a; color: #fff; }
+.confirm-delete-actions button:disabled { opacity: .55; cursor: not-allowed; }

@@ -1,0 +1,9 @@
+.course-list li { display: flex; flex-direction: column; }
+.course-list li > .course-card { flex: 1; height: auto; }
+.course-actions { display: flex; flex-wrap: wrap; gap: .45rem; margin-top: .5rem; }
+.course-actions > button, .course-actions form button { border: 1px solid #d8d0dd; border-radius: .55rem; padding: .35rem .7rem; background: #f7f3fa; color: #384466; cursor: pointer; }
+.course-actions > button:hover, .course-actions form button:hover { background: #e9e3fa; }
+.course-actions form { display: flex; align-items: center; flex-wrap: wrap; gap: .45rem; width: 100%; }
+.course-actions form label { font-size: .9rem; font-weight: 700; }
+.course-actions form input { min-width: 10rem; flex: 1; border: 1px solid #d8d0dd; border-radius: .55rem; padding: .4rem .6rem; }
+.course-actions form .form-error { flex-basis: 100%; margin: 0; }
