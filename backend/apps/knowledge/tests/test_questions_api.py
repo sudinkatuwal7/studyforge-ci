@@ -496,7 +496,7 @@ class QuestionsAPITests(TestCase):
     def test_failed_search_raises_without_a_trace(self):
         from apps.knowledge.services import RAGServiceError, answer_question
 
-        self.embed.side_effect = RetryableProcessingError("embedding down")
+        self.embed.side_effect = RetryableQueryEmbeddingError("embedding down")
         with self.assertRaises(RAGServiceError):
             answer_question(self.owner, [self.document.pk], "Page faults?")
 

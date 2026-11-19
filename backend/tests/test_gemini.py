@@ -37,6 +37,7 @@ class GeminiTests(TestCase):
         with patch.dict(os.environ, {
             "GEMINI_API_KEY": "test-key", "NOTES_LLM_BACKEND": "gemini",
             "QUIZ_LLM_BACKEND": "gemini", "RAG_LLM_BACKEND": "gemini",
+            "AI_FALLBACK_ENABLED": "false",
         }), patch("apps.gemini.genai.Client") as client:
             for factory, expected in [(notes, GeminiStudyGuideLLM), (quizzes, GeminiQuizLLM), (rag, GeminiRAGLLM)]:
                 self.assertIsInstance(factory(), expected)
