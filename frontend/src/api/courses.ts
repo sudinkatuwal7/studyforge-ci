@@ -1,4 +1,4 @@
-import { getJson, postJson } from "./client";
+import { ApiError, getJson, postJson, request } from "./client";
 import type { Course } from "../types/course";
 
 // Lets the course list show a login message without sending an unauthenticated request.
@@ -40,4 +40,24 @@ export function getCourse(
   }
 
   return getJson<Course>(`/courses/${encodeURIComponent(courseId)}/`, accessToken);
+}
+
+export async function renameCourse(accessToken: string | null, courseId: number, name: string): Promise<Course> {
+  if (!accessToken) throw new NotLoggedInError();
+  const response = await request(`/courses/${courseId}/`, {
+    method: "PATCH",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ name }),
+  }, accessToken);
+  if (!response.ok) {
+    const data = await response.json().catch(() => null) as { name?: string[] } | null;
+    throw new ApiError(response.status, data?.name?.[0]);
+  }
+  return await response.json() as Course;
+}
+
+export async function deleteCourse(accessToken: string | null, courseId: number): Promise<void> {
+  if (!accessToken) throw new NotLoggedInError();
+  const response = await request(`/courses/${courseId}/`, { method: "DELETE" }, accessToken);
+  if (!response.ok) throw new ApiError(response.status);
 }

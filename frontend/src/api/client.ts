@@ -5,8 +5,8 @@ export const API_BASE_URL = import.meta.env.VITE_API_BASE_URL;
 export class ApiError extends Error {
   status: number;
 
-  constructor(status: number) {
-    super(`Request failed with status ${status}`);
+  constructor(status: number, message = `Request failed with status ${status}`) {
+    super(message);
     this.name = "ApiError";
     this.status = status;
   }
