@@ -5,6 +5,7 @@ import type { MaterialsLoadState, TrackedDocument } from "../../types/document";
 import ConnectedCourseChat from "../chat/ConnectedCourseChat";
 import CourseMaterials from "./CourseMaterials";
 import CourseTasks from "./CourseTasks";
+import CourseActions from "./CourseActions";
 import { type CourseSection, coursePath, courseSections } from "./courseSections";
 import NotesPanel from "../notes/NotesPanel";
 import QuizPanel from "../quizzes/QuizPanel";
@@ -12,7 +13,11 @@ import "../../styles/course-workspace.css";
 
 // Matches the compact breakpoint in course-workspace.css and dashboard.css.
 const compactQuery = "(max-width: 64rem)";
-export default function CourseWorkspace({ course, section }: { course: Course; section: CourseSection }) {
+export default function CourseWorkspace({ course, section, onRenamed, onDeleted }: {
+  course: Course; section: CourseSection;
+  onRenamed?: (course: Course) => void;
+  onDeleted?: () => void;
+}) {
   const navigate = useNavigate();
   const { search } = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -58,6 +63,7 @@ export default function CourseWorkspace({ course, section }: { course: Course; s
       <header className="course-workspace-header">
         <Link to="/courses">← My courses</Link>
         <h2>{course.name}</h2>
+        {onRenamed && onDeleted && <CourseActions course={course} onRenamed={onRenamed} onDeleted={onDeleted} />}
         {course.description && <p>{course.description}</p>}
       </header>
       <section ref={contentRef} className="course-content" aria-label="Course content">

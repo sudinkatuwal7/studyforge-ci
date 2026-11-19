@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, Navigate, useLocation, useParams } from "react-router-dom";
+import { Link, Navigate, useLocation, useNavigate, useParams } from "react-router-dom";
 import { ApiError } from "../api/client";
 import { getCourse } from "../api/courses";
 import CourseWorkspace from "../components/courses/CourseWorkspace";
@@ -14,8 +14,12 @@ type CourseState =
   | { status: "ready"; course: Course }
   | { status: "error"; message: string };
 
-function CourseDetail({ courseId, section, userId }: { courseId: string; section: CourseSection; userId: number | undefined }) {
+function CourseDetail({ courseId, section, userId, onCourseChanged }: {
+  courseId: string; section: CourseSection; userId: number | undefined;
+  onCourseChanged?: () => void;
+}) {
   const { accessToken } = useAuth();
+  const navigate = useNavigate();
   const [state, setState] = useState<CourseState>({ status: "loading" });
 
   useEffect(() => {
@@ -52,7 +56,13 @@ function CourseDetail({ courseId, section, userId }: { courseId: string; section
   }, [accessToken, courseId, userId]);
 
   // Hand the authenticated course to the workspace only after it loads successfully.
-  if (state.status === "ready") return <CourseWorkspace course={state.course} section={section} />;
+  if (state.status === "ready") return <CourseWorkspace course={state.course} section={section}
+    onRenamed={(updated) => { setState({ status: "ready", course: updated }); onCourseChanged?.(); }}
+    onDeleted={() => {
+      if (userId !== undefined) forgetLastCourse(userId, state.course.id);
+      onCourseChanged?.();
+      navigate("/courses", { replace: true });
+    }} />;
 
   return (
     <section className="course-detail">
@@ -64,7 +74,7 @@ function CourseDetail({ courseId, section, userId }: { courseId: string; section
   );
 }
 
-export default function CourseDetailPage() {
+export default function CourseDetailPage({ onCourseChanged }: { onCourseChanged?: () => void } = {}) {
   // For /courses/7/notes, React Router provides courseId "7" and section "notes".
   const { courseId = "", section } = useParams();
   const { search } = useLocation();
@@ -77,5 +87,5 @@ export default function CourseDetailPage() {
 
   // Reset for another course or account, but preserve in-flight chat work when the token refreshes.
   // The key leaves out the section so switching sections keeps the workspace (and Pandu) mounted.
-  return <CourseDetail key={`${courseId}:${user?.id ?? "signed-out"}`} courseId={courseId} section={section} userId={user?.id} />;
+  return <CourseDetail key={`${courseId}:${user?.id ?? "signed-out"}`} courseId={courseId} section={section} userId={user?.id} onCourseChanged={onCourseChanged} />;
 }

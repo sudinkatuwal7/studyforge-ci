@@ -5,6 +5,8 @@ import { useAuth } from "../../context/AuthContext";
 import type { Course } from "../../types/course";
 import EmptyState from "../shared/EmptyState";
 import { focusCourseForm } from "./focusCourseForm";
+import { forgetLastCourse } from "./lastCourse";
+import CourseActions from "./CourseActions";
 
 // The list shows one of these states: loading, logged out, an error, or courses.
 type ListState =
@@ -23,15 +25,17 @@ function CourseList({
   refreshKey,
   onCourses,
   onLoadFailed,
+  onCourseChanged,
   embedded = false,
 }: {
   refreshKey: number;
   onCourses?: (courses: Course[]) => void;
   // Lets the dashboard stop waiting for courses (for example, its quick links) when loading fails.
   onLoadFailed?: () => void;
+  onCourseChanged?: () => void;
   embedded?: boolean;
 }) {
-  const { accessToken } = useAuth();
+  const { accessToken, user } = useAuth();
   const [state, setState] = useState<ListState>({ status: "loading" });
 
   useEffect(() => {
@@ -106,6 +110,18 @@ function CourseList({
                 {course.description !== "" && <p>{course.description}</p>}
                 <span className="course-card-action">Open course →</span>
               </Link>
+              <CourseActions course={course} onRenamed={(updated) => {
+                setState((current) => current.status === "ready" ? {
+                  ...current, courses: current.courses.map((item) => item.id === updated.id ? updated : item),
+                } : current);
+                onCourseChanged?.();
+              }} onDeleted={() => {
+                if (user) forgetLastCourse(user.id, course.id);
+                setState((current) => current.status === "ready" ? {
+                  ...current, courses: current.courses.filter((item) => item.id !== course.id),
+                } : current);
+                onCourseChanged?.();
+              }} />
             </li>
           ))}
         </ul>

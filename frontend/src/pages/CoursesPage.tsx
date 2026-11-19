@@ -28,7 +28,7 @@ export default function CoursesPage({
           + New
         </button>
       </div>
-      <CourseList refreshKey={refreshKey} embedded />
+      <CourseList refreshKey={refreshKey} onCourseChanged={onCourseCreated} embedded />
       <CourseForm onCreated={onCourseCreated} />
     </div>
   );

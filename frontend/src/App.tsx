@@ -160,7 +160,7 @@ function App() {
           />
         } />
         <Route path="/tasks" element={<TasksPage key={user.id} refreshKey={courseListVersion} />} />
-        <Route path="/courses/:courseId/:section?" element={<CourseDetailPage />} />
+        <Route path="/courses/:courseId/:section?" element={<CourseDetailPage onCourseChanged={() => setCourseListVersion((version) => version + 1)} />} />
         <Route path="/calendar" element={<CalendarPage />} />
         <Route path="/login" element={<Navigate to="/" replace />} />
         <Route path="/register" element={<Navigate to="/" replace />} />
