@@ -6,9 +6,11 @@ from apps.conversations.views import (
     ConversationDocumentsView, ConversationListView, ConversationMessagesView,
     ConversationQuestionView, QuestionRetryView,
 )
+from apps.conversations.voice import VoiceTranscriptionView
 
 
 urlpatterns = [
+    path("voice/transcriptions/", VoiceTranscriptionView.as_view(), name="voice-transcription"),
     path("conversations/", ConversationListView.as_view(), name="conversation-list"),
     path("conversations/<str:conversation_id>/", ConversationDetailView.as_view(),
          name="conversation-detail"),
