@@ -52,6 +52,14 @@
   text-decoration: line-through;
 }
 
+.todo-actions { display: flex; flex-wrap: wrap; gap: .4rem; margin-top: .5rem; }
+.todo-actions > button, .todo-actions form button { border: 1px solid #d8d0dd; border-radius: .55rem; padding: .3rem .6rem; background: #f7f3fa; color: #384466; cursor: pointer; }
+.todo-actions form { display: flex; flex-wrap: wrap; align-items: center; gap: .4rem; width: 100%; }
+.todo-actions form label { flex-basis: 100%; font-size: .9rem; }
+.todo-actions form input { width: 100%; border: 1px solid #d8d0dd; border-radius: .5rem; padding: .35rem .55rem; }
+.todo-actions form .form-error { flex-basis: 100%; }
+.todo-actions button:disabled { opacity: .55; cursor: not-allowed; }
+
 .todo-panel {
   display: flex;
   flex-direction: column;

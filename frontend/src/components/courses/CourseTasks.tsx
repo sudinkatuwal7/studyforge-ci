@@ -5,6 +5,7 @@ import { useAuth } from "../../context/AuthContext";
 import type { TodoItem } from "../../types/todo";
 import EmptyState from "../shared/EmptyState";
 import { sortTodos } from "../todos/sortTodos";
+import TodoActions from "../todos/TodoActions";
 import "../todos/TodoList.css";
 
 type TaskState =
@@ -54,6 +55,11 @@ export default function CourseTasks({ courseId }: { courseId: number }) {
                 <strong className="todo-item-title">{todo.title}</strong>
                 <p>{todo.is_completed ? "Completed" : "Pending"}</p>
                 <p>{todo.due_date ? <>Due: <time dateTime={todo.due_date}>{todo.due_date}</time></> : "No due date"}</p>
+                <TodoActions todo={todo} onUpdated={(updated) => setState((current) => current.status === "ready" ? {
+                  ...current, todos: sortTodos(current.todos.map((item) => item.id === updated.id ? updated : item)),
+                } : current)} onDeleted={(todoId) => setState((current) => current.status === "ready" ? {
+                  ...current, todos: current.todos.filter((item) => item.id !== todoId),
+                } : current)} />
               </div>
             </li>
           ))}

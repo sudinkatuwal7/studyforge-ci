@@ -3,12 +3,16 @@ import type { Course } from "../../types/course";
 import type { TodoItem } from "../../types/todo";
 import EmptyState from "../shared/EmptyState";
 import "./TodoList.css";
+import TodoActions from "./TodoActions";
 
 type TodoListProps = {
   todos: TodoItem[];
   courses: Course[];
   updatingId: number | null;
   onToggle: (todo: TodoItem) => void;
+  onUpdated?: (todo: TodoItem) => void;
+  onDeleted?: (todoId: number) => void;
+  onBusyChange?: (todoId: number, busy: boolean) => void;
   // The dashboard has a course form on the same page; /tasks navigates to one.
   onCreateCourse?: () => void;
   // Moves to the "Add a task" form; offered when the list is empty and a course exists.
@@ -25,7 +29,7 @@ function formatDueDate(dueDate: string | null): string {
   return `${monthName} ${day}, ${year}`;
 }
 
-export default function TodoList({ todos, courses, updatingId, onToggle, onCreateCourse, onAddFirst }: TodoListProps) {
+export default function TodoList({ todos, courses, updatingId, onToggle, onUpdated, onDeleted, onBusyChange, onCreateCourse, onAddFirst }: TodoListProps) {
   const courseNames = new Map(courses.map((course) => [course.id, course.name]));
 
   if (todos.length === 0) {
@@ -65,6 +69,7 @@ export default function TodoList({ todos, courses, updatingId, onToggle, onCreat
               <strong className="todo-item-title">{todo.title}</strong>
               <p>{courseName}</p>
               <p>{formatDueDate(todo.due_date)}</p>
+              {onUpdated && onDeleted && <TodoActions todo={todo} disabled={updatingId !== null} onUpdated={onUpdated} onDeleted={onDeleted} onBusyChange={(busy) => onBusyChange?.(todo.id, busy)} />}
             </div>
           </li>
         );

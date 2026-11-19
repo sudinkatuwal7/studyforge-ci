@@ -66,6 +66,18 @@ export default function TodoPanel({
     });
   }
 
+  function updateTodo(todo: TodoItem) {
+    setState((current) => current.status === "ready" ? {
+      ...current, todos: sortTodos(current.todos.map((item) => item.id === todo.id ? todo : item)),
+    } : current);
+  }
+
+  function removeTodo(todoId: number) {
+    setState((current) => current.status === "ready" ? {
+      ...current, todos: current.todos.filter((item) => item.id !== todoId),
+    } : current);
+  }
+
   async function toggleTodo(todo: TodoItem) {
     if (updatingId !== null) return;
     setUpdatingId(todo.id);
@@ -98,6 +110,9 @@ export default function TodoPanel({
             courses={state.courses}
             updatingId={updatingId}
             onToggle={toggleTodo}
+            onUpdated={updateTodo}
+            onDeleted={removeTodo}
+            onBusyChange={(todoId, busy) => setUpdatingId(busy ? todoId : null)}
             onCreateCourse={onCreateCourse}
             // The task form's first field is its title.
             onAddFirst={() => revealAndFocus(panelRef.current?.querySelector<HTMLInputElement>(".todo-form input"))}
