@@ -97,6 +97,47 @@ storage container, and verifies the same database key and object bytes afterward
 The test removes only its own generated containers and volume. It does not use
 production credentials or prove production deployment behavior.
 
+## Full S3 end-to-end check
+
+The harness never pulls images. With Docker running, fetch the pinned
+SeaweedFS image once:
+
+```
+docker pull chrislusf/seaweedfs@sha256:ccad23e18639c8b98cee17e7100b95830a06077b56d8e5b006d6dcf8ec5e94a0
+```
+
+Then run `python scripts/check_processing_live.py --storage s3` with an environment that
+has both backend and document-processing requirements. Without `--storage`, or
+with `--storage filesystem`, the harness keeps its original Django-stream run.
+
+The S3 run starts a disposable Compose PostgreSQL and Redis, a disposable
+SeaweedFS container and volume, a real Django HTTP server and a standalone
+Celery worker. SeaweedFS gets two runtime-generated identities: Django can read,
+write and list the bucket; the worker can only read. Gemini and the answer
+provider are replaced with fakes. It checks, in order:
+
+1. Django readiness and the worker's own readiness probe report storage `ok`.
+2. An HTTP upload reaches `READY` through Redis, the worker and the callback, and
+   its chunks are used by retrieval, Pandu and notes.
+3. The source exists only in the bucket under its `documents/` key with a
+   matching SHA-256; nothing is written to `MEDIA_ROOT`; the API response does
+   not expose the key or endpoint; Django served
+   `GET /internal/v1/jobs/{id}/object/` and never `.../document/`.
+4. The worker identity can read the object but `PutObject` and `DeleteObject`
+   are denied.
+5. After stopping and starting SeaweedFS and replacing the worker process, the
+   first source is unchanged and downloadable, and a second upload reaches
+   `READY` through the locator.
+6. Deleting the first material through the API removes its object and keeps
+   the second one.
+
+The harness removes only its own Compose project, SeaweedFS container and
+volume. It is outside `scripts/check.py` and CI. It does not cover TLS, OCI
+Object Storage behavior (IAM policies, Customer Secret Keys, S3 compatibility
+of newer boto3 checksum defaults) or `PROCESSING_REQUIRE_DIRECT_STORAGE=1`,
+which requires an HTTPS Django URL; verify those against an approved staging
+bucket before production cutover.
+
 ## Cutover and restart verification
 
 1. Provision a private, persistent S3-compatible bucket, separate backend and
