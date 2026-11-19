@@ -46,6 +46,20 @@ def test_voice_transcription_provider_failure_is_safe(owner_client):
     assert "secret provider detail" not in str(response.content)
 
 
+def test_voice_transcription_empty_transcript_is_retryable(owner_client):
+    with patch("apps.conversations.voice.transcribe_audio", return_value=""):
+        response = owner_client.post(URL, {"audio": recording()}, format="multipart")
+    assert response.status_code == 422
+    assert "No speech was heard" in response.json()["detail"]
+
+
+def test_voice_transcription_accepts_safari_mp4(owner_client):
+    with patch("apps.conversations.voice.transcribe_audio", return_value="A Safari question") as transcribe:
+        response = owner_client.post(URL, {"audio": recording(mime="audio/mp4")}, format="multipart")
+    assert response.status_code == 200
+    assert transcribe.call_args.args[1] == "audio/m4a"
+
+
 def test_voice_transcription_uses_gemini_audio_and_key(monkeypatch):
     monkeypatch.setenv("GEMINI_API_KEY", "test-key")
     monkeypatch.setenv("GEMINI_VOICE_MODEL", "gemini-2.5-flash")
