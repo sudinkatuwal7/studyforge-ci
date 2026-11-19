@@ -3,18 +3,22 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
-import { createCourse, listCourses } from "../api/courses";
+import { createCourse, deleteCourse, listCourses, renameCourse } from "../api/courses";
 import type { Course } from "../types/course";
+import { readLastCourse, saveLastCourse } from "../components/courses/lastCourse";
+import QuickLinks from "../components/dashboard/QuickLinks";
 import CoursesPage from "./CoursesPage";
 
 vi.mock("../api/courses", async (original) => ({
   ...await original<typeof import("../api/courses")>(),
   listCourses: vi.fn(),
   createCourse: vi.fn(),
+  renameCourse: vi.fn(),
+  deleteCourse: vi.fn(),
 }));
 vi.mock("../context/AuthContext", () => ({ useAuth: () => ({ user: { id: 1 }, accessToken: "token" }) }));
 
-afterEach(() => vi.clearAllMocks());
+afterEach(() => { vi.clearAllMocks(); localStorage.clear(); });
 
 const biology: Course = { id: 7, name: "Biology", description: "Cells", owner: 1, created_at: "2026-10-01" };
 const history: Course = { id: 8, name: "History", description: "", owner: 1, created_at: "2026-10-02" };
@@ -31,6 +35,81 @@ it("lists the student's courses, each opening its course page", async () => {
 
   expect(await screen.findByRole("link", { name: /Biology/ })).toHaveAttribute("href", "/courses/7");
   expect(screen.getByRole("link", { name: /History/ })).toHaveAttribute("href", "/courses/8");
+});
+
+it("renames a course and updates its card without a page refresh", async () => {
+  const user = userEvent.setup();
+  vi.mocked(listCourses).mockResolvedValueOnce([biology]).mockResolvedValue([{ ...biology, name: "Cell Biology" }]);
+  vi.mocked(renameCourse).mockResolvedValue({ ...biology, name: "Cell Biology" });
+  render(<MemoryRouter><Harness /></MemoryRouter>);
+  await user.click(await screen.findByRole("button", { name: "Rename Biology" }));
+  const input = screen.getByLabelText("New name for Biology");
+  await user.clear(input);
+  await user.type(input, "  Cell Biology  ");
+  await user.click(screen.getByRole("button", { name: "Save" }));
+  expect(renameCourse).toHaveBeenCalledWith("token", 7, "Cell Biology");
+  expect(await screen.findByRole("link", { name: /Cell Biology/ })).toHaveAttribute("href", "/courses/7");
+});
+
+it("validates a course rename and keeps the form after an API error", async () => {
+  const user = userEvent.setup();
+  vi.mocked(listCourses).mockResolvedValue([biology]);
+  vi.mocked(renameCourse).mockRejectedValue(new Error("This name is invalid."));
+  render(<MemoryRouter><Harness /></MemoryRouter>);
+  await user.click(await screen.findByRole("button", { name: "Rename Biology" }));
+  const input = screen.getByLabelText("New name for Biology");
+  await user.clear(input);
+  await user.click(screen.getByRole("button", { name: "Save" }));
+  expect(screen.getByRole("alert")).toHaveTextContent("Use a course name");
+  expect(renameCourse).not.toHaveBeenCalled();
+  await user.type(input, "New name");
+  await user.click(screen.getByRole("button", { name: "Save" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("This name is invalid.");
+  expect(screen.getByLabelText("New name for Biology")).toHaveValue("New name");
+});
+
+it("requires confirmation and supports cancellation before deleting a course", async () => {
+  const user = userEvent.setup();
+  vi.mocked(listCourses).mockResolvedValueOnce([biology]).mockResolvedValue([]);
+  vi.mocked(deleteCourse).mockResolvedValue();
+  render(<MemoryRouter><Harness /></MemoryRouter>);
+  await user.click(await screen.findByRole("button", { name: "Delete Biology" }));
+  expect(screen.getByRole("dialog", { name: "Delete Biology?" })).toHaveTextContent("materials");
+  await user.click(screen.getByRole("button", { name: "Cancel" }));
+  expect(deleteCourse).not.toHaveBeenCalled();
+  expect(screen.getByRole("link", { name: /Biology/ })).toBeInTheDocument();
+  await user.click(screen.getByRole("button", { name: "Delete Biology" }));
+  await user.click(screen.getByRole("button", { name: "Delete" }));
+  expect(deleteCourse).toHaveBeenCalledWith("token", 7);
+  expect(await screen.findByText(/You have no courses yet/)).toBeInTheDocument();
+});
+
+it("removes a deleted course from saved quick links and preserves another account", async () => {
+  const user = userEvent.setup();
+  saveLastCourse(1, biology.id);
+  saveLastCourse(2, history.id);
+  vi.mocked(listCourses).mockResolvedValueOnce([biology, history]).mockResolvedValue([history]);
+  vi.mocked(deleteCourse).mockResolvedValue();
+  render(<MemoryRouter><Harness /></MemoryRouter>);
+  await user.click(await screen.findByRole("button", { name: "Delete Biology" }));
+  await user.click(screen.getByRole("button", { name: "Delete" }));
+  await waitFor(() => expect(screen.queryByRole("link", { name: /Biology/ })).not.toBeInTheDocument());
+  expect(readLastCourse(1)).toBeNull();
+  expect(readLastCourse(2)).toBe(history.id);
+  render(<MemoryRouter><QuickLinks courses={[history]} loadFailed={false} userId={1} /></MemoryRouter>);
+  expect(screen.getByRole("list", { name: "Choose a course" })).toBeInTheDocument();
+  expect(screen.queryByRole("link", { name: /Materials/ })).not.toBeInTheDocument();
+});
+
+it("retains a course when deletion fails", async () => {
+  const user = userEvent.setup();
+  vi.mocked(listCourses).mockResolvedValue([biology]);
+  vi.mocked(deleteCourse).mockRejectedValue(new Error("Offline"));
+  render(<MemoryRouter><Harness /></MemoryRouter>);
+  await user.click(await screen.findByRole("button", { name: "Delete Biology" }));
+  await user.click(screen.getByRole("button", { name: "Delete" }));
+  expect(await screen.findByRole("alert")).toHaveTextContent("Could not delete the course");
+  expect(screen.getByRole("link", { name: /Biology/ })).toBeInTheDocument();
 });
 
 it("leaves the page title to the top bar: no heading of its own above the list", async () => {

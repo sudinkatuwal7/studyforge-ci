@@ -62,7 +62,7 @@ export default function DashboardPage({
     return () => {
       cancelled = true;
     };
-  }, [accessToken]);
+  }, [accessToken, refreshKey]);
 
   return (
     <div className="dashboard-page dashboard-columns">
@@ -102,7 +102,7 @@ export default function DashboardPage({
               + New
             </button>
           </div>
-          <CourseList refreshKey={refreshKey} onCourses={showCourses} onLoadFailed={courseLoadFailed} embedded />
+          <CourseList refreshKey={refreshKey} onCourses={showCourses} onLoadFailed={courseLoadFailed} onCourseChanged={onCourseCreated} embedded />
           <CourseForm onCreated={onCourseCreated} />
         </div>
       </div>

@@ -3,7 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { MemoryRouter } from "react-router-dom";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { listCourses } from "../api/courses";
+import { listCourses, renameCourse } from "../api/courses";
 import { listStudySessions } from "../api/studySessions";
 import { listTodos, updateTodoCompletion } from "../api/todos";
 import type { StudySession } from "../types/studySession";
@@ -11,7 +11,11 @@ import type { TodoItem } from "../types/todo";
 import DashboardPage from "./DashboardPage";
 
 // Keep the real error classes: CourseList checks `instanceof NotLoggedInError` when loading fails.
-vi.mock("../api/courses", async (original) => ({ ...await original<typeof import("../api/courses")>(), listCourses: vi.fn() }));
+vi.mock("../api/courses", async (original) => ({
+  ...await original<typeof import("../api/courses")>(),
+  listCourses: vi.fn(),
+  renameCourse: vi.fn(),
+}));
 vi.mock("../api/todos", () => ({ listTodos: vi.fn(), updateTodoCompletion: vi.fn(), createTodo: vi.fn() }));
 vi.mock("../api/studySessions", () => ({ listStudySessions: vi.fn() }));
 vi.mock("../context/AuthContext", () => ({
@@ -185,6 +189,25 @@ describe("dashboard quick links", () => {
     expect(quickLinks.getByRole("status")).toHaveTextContent("Loading quick links...");
     expect(await quickLinks.findByRole("link", { name: /Quizzes/ })).toHaveAttribute("href", "/courses/7/quizzes");
     expect(quickLinks.getByRole("link", { name: /Ask Pandu/ })).toHaveAttribute("href", "/courses/7/materials?pandu=open");
+  });
+
+  it("shows a renamed course in its card and saved quick links", async () => {
+    const user = userEvent.setup();
+    localStorage.setItem("studyforge:lastCourse:1", "7");
+    vi.mocked(listCourses).mockResolvedValue([biology]);
+    vi.mocked(renameCourse).mockResolvedValue({ ...biology, name: "Cell Biology" });
+    renderDashboard();
+
+    const quickLinks = within(screen.getByRole("region", { name: "Quick links" }));
+    expect(await quickLinks.findByText("Biology")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Rename Biology" }));
+    await user.clear(screen.getByLabelText("New name for Biology"));
+    await user.type(screen.getByLabelText("New name for Biology"), "Cell Biology");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    expect(await screen.findByRole("link", { name: /Cell Biology/ })).toBeInTheDocument();
+    expect(await quickLinks.findByText("Cell Biology")).toBeInTheDocument();
+    expect(localStorage.getItem("studyforge:lastCourse:1")).toBe("7");
   });
 
   it("sends all create-course shortcuts to the dashboard's real course form", async () => {

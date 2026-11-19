@@ -84,6 +84,41 @@ it("keeps the upload form hidden when a direct course link returns 404", async (
   expect(screen.queryByLabelText("Document file")).not.toBeInTheDocument();
 });
 
+it("renames an open course and navigates away after confirmed deletion", async () => {
+  let name = course.name;
+  const fetch = vi.fn(async (input: RequestInfo | URL, options?: RequestInit) => {
+    const path = new URL(String(input)).pathname;
+    if (path === `/api/v1/courses/${course.id}/` && options?.method === "PATCH") {
+      name = "Statistics";
+      return Response.json({ ...course, name });
+    }
+    if (path === `/api/v1/courses/${course.id}/` && options?.method === "DELETE") {
+      return new Response(null, { status: 204 });
+    }
+    if (path === `/api/v1/courses/${course.id}/`) return Response.json({ ...course, name });
+    if (path === `/api/v1/courses/${course.id}/documents/`) return Response.json([]);
+    if (path === "/api/v1/conversations/") return Response.json([]);
+    if (path === "/api/v1/todos/") return Response.json([]);
+    throw new Error(`Unexpected request: ${path}`);
+  });
+  vi.stubGlobal("fetch", fetch);
+  render(<MemoryRouter initialEntries={[`/courses/${course.id}/materials`]}>
+    <Routes>
+      <Route path="/courses/:courseId/:section?" element={<CourseDetailPage />} />
+      <Route path="/courses" element={<p>Course list</p>} />
+    </Routes>
+  </MemoryRouter>);
+  fireEvent.click(await screen.findByRole("button", { name: `Rename ${course.name}` }));
+  fireEvent.change(screen.getByLabelText(`New name for ${course.name}`), { target: { value: "Statistics" } });
+  fireEvent.click(screen.getByRole("button", { name: "Save" }));
+  expect(await screen.findByRole("heading", { name: "Statistics" })).toBeInTheDocument();
+  fireEvent.click(screen.getByRole("button", { name: "Delete Statistics" }));
+  expect(screen.getByRole("dialog", { name: "Delete Statistics?" })).toHaveTextContent("materials");
+  fireEvent.click(screen.getByRole("button", { name: "Delete" }));
+  expect(await screen.findByText("Course list")).toBeInTheDocument();
+  expect(fetch.mock.calls.some(([url, options]) => String(url).endsWith(`/courses/${course.id}/`) && options?.method === "DELETE")).toBe(true);
+});
+
 it("keeps an in-flight course chat question mounted through an access-token refresh", async () => {
   sessionStorage.clear();
   let finishQuestion!: (response: Response) => void;
