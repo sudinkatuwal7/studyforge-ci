@@ -11,6 +11,14 @@ def validate_course_name(value):
     return value
 
 
+def validate_todo_title(value, submitted_value):
+    if not isinstance(submitted_value, str):
+        raise serializers.ValidationError("Task title must be text.")
+    if any(ord(character) < 32 or ord(character) == 127 for character in value):
+        raise serializers.ValidationError("Task title cannot contain control characters.")
+    return value
+
+
 class CourseSerializer(serializers.ModelSerializer):
     class Meta:
         model = Course
@@ -42,6 +50,9 @@ class TodoItemSerializer(serializers.ModelSerializer):
         fields = ["id", "title", "course", "due_date", "is_completed", "created_at", "creation_key"]
         read_only_fields = ["id", "is_completed", "created_at"]
 
+    def validate_title(self, value):
+        return validate_todo_title(value, self.initial_data.get("title"))
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         request = self.context.get("request")
@@ -55,11 +66,7 @@ class TodoUpdateSerializer(serializers.Serializer):
     is_completed = serializers.BooleanField(required=False)
 
     def validate_title(self, value):
-        if not isinstance(self.initial_data.get("title"), str):
-            raise serializers.ValidationError("Task title must be text.")
-        if any(ord(character) < 32 or ord(character) == 127 for character in value):
-            raise serializers.ValidationError("Task title cannot contain control characters.")
-        return value
+        return validate_todo_title(value, self.initial_data.get("title"))
 
     def validate(self, attrs):
         if not attrs:

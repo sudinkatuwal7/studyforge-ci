@@ -276,6 +276,30 @@ class TodoAPITests(APITestCase):
                 self.assertEqual(response.status_code, status.HTTP_400_BAD_REQUEST)
                 self.assertEqual(TodoItem.objects.count(), initial_count)
 
+    def test_title_with_control_characters_is_rejected_on_create_and_edit(self):
+        title = "Review\nnotes"
+        created = self.client.post(
+            self.list_url,
+            {
+                "title": title,
+                "course": self.course_a.pk,
+                "creation_key": str(uuid.uuid4()),
+            },
+            format="json",
+        )
+        self.assertEqual(created.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("title", created.data)
+
+        updated = self.client.patch(
+            self.detail_url(self.todo_a.pk), {"title": title}, format="json"
+        )
+
+        self.assertEqual(updated.status_code, status.HTTP_400_BAD_REQUEST)
+        self.assertIn("title", updated.data)
+        self.todo_a.refresh_from_db()
+        self.assertEqual(self.todo_a.title, "Read chapter 1")
+        self.assertFalse(TodoItem.objects.filter(title=title).exists())
+
     def test_cannot_create_for_another_students_or_missing_course(self):
         initial_count = TodoItem.objects.count()
         for course_id in (self.course_b.pk, max(self.course_a.pk, self.course_b.pk) + 1):
