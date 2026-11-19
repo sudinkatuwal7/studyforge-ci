@@ -157,6 +157,11 @@ def worker_bridge(monkeypatch, settings):
                            sources=sources, store=store, state=state, embed=embed)
 
 
+def task_receipt(payload):
+    """The task returns only correlation fields; the callback carries the result."""
+    return {key: payload[key] for key in ("job_id", "document_id", "attempt", "status")}
+
+
 def upload_job(owner_client, course, pdf_factory, kind="text"):
     response = owner_client.post(
         f"/api/v1/courses/{course.pk}/documents/",
@@ -180,7 +185,9 @@ def test_uploaded_pdf_reaches_ready_and_identical_redelivery_is_acknowledged(
     document, job = upload_job(owner_client, course, pdf_factory)
     assert owner_client.get(f"/api/v1/documents/{document.pk}/").json()["status"] == "PENDING"
     dispatch.assert_called_once_with(job.pk, document.pk, document.sha256)
-    result = worker_bridge.task.run(job.pk, document.pk, document.sha256)
+    receipt = worker_bridge.task.run(job.pk, document.pk, document.sha256)
+    result = worker_bridge.callbacks[-1][0]
+    assert receipt == task_receipt(result)
     assert worker_bridge.results.submit_callback(job.pk, result) == "duplicate"
     job.refresh_from_db()
     document.refresh_from_db()
@@ -263,7 +270,9 @@ def test_worker_crash_redelivery_finishes_once(
 
     # Redis/Celery replays the original task with its original retry counter.
     assert tasks.extract_document is original_extract
-    result = worker_bridge.task.run(job.pk, document.pk, document.sha256)
+    receipt = worker_bridge.task.run(job.pk, document.pk, document.sha256)
+    result = worker_bridge.callbacks[-1][0]
+    assert receipt == task_receipt(result)
     assert result["status"] == "SUCCEEDED"
     assert worker_bridge.results.submit_callback(job.pk, result) == "duplicate"
 
@@ -298,8 +307,10 @@ def test_uploaded_office_uses_existing_worker_callback_and_notes_path(
     job = document.jobs.get()
     dispatch.assert_called_once_with(job.pk, document.pk, document.sha256)
 
-    result = worker_bridge.task.run(job.pk, document.pk, document.sha256)
+    receipt = worker_bridge.task.run(job.pk, document.pk, document.sha256)
     assert [payload["status"] for payload, _ in worker_bridge.callbacks] == ["RUNNING", "SUCCEEDED"]
+    result = worker_bridge.callbacks[-1][0]
+    assert receipt == task_receipt(result)
     assert worker_bridge.results.submit_callback(job.pk, result) == "duplicate"
     document.refresh_from_db()
     job.refresh_from_db()
@@ -388,7 +399,9 @@ def test_cross_user_job_document_pair_cannot_process_or_expose_results(
     assert (document_a.status, document_b.status) == (Document.Status.PENDING, Document.Status.PENDING)
     assert not Chunk.objects.exists()
 
-    result_b = worker_bridge.task.run(job_b.pk, document_b.pk, document_b.sha256)
+    receipt_b = worker_bridge.task.run(job_b.pk, document_b.pk, document_b.sha256)
+    result_b = worker_bridge.callbacks[-1][0]
+    assert receipt_b == task_receipt(result_b)
     with pytest.raises(worker_bridge.errors.PermanentProcessingError):
         worker_bridge.results.submit_callback(job_a.pk, {**result_b, "job_id": job_a.pk})
     assert worker_bridge.callbacks[-1][0]["status"] == "SUCCEEDED"
@@ -476,8 +489,9 @@ def test_persistence_outage_allows_original_callback_to_be_redelivered(
     assert job.terminal_callback_sha256 == ""
     assert not document.chunks.exists()
 
-    result = worker_bridge.task.run(job.pk, document.pk, document.sha256)
-    assert result == payload
+    receipt = worker_bridge.task.run(job.pk, document.pk, document.sha256)
+    assert receipt == task_receipt(payload)
+    assert worker_bridge.callbacks[-1] == (payload, 200)
     assert worker_bridge.callback_outcomes[-1] == "applied"
     assert execution.delivery_status == "DELIVERED"
     assert execution.delivered_at is not None
@@ -525,7 +539,8 @@ def test_lost_response_after_commit_replays_exact_result_as_duplicate(
     first_chunk_ids = list(document.chunks.order_by("pk").values_list("pk", flat=True))
     assert len(first_chunk_ids) == len(saved["chunks"]) > 0
 
-    assert worker_bridge.task.run(job.pk, document.pk, document.sha256) == saved
+    assert worker_bridge.task.run(job.pk, document.pk, document.sha256) == task_receipt(saved)
+    assert worker_bridge.callbacks[-1] == (saved, 200)
     assert worker_bridge.callback_outcomes[-1] == "duplicate"
     assert execution.delivery_status == "DELIVERED"
     assert execution.delivered_at is not None
@@ -567,7 +582,8 @@ def test_failed_result_survives_temporary_callback_outage(
     job.refresh_from_db()
     assert job.status == Job.Status.RUNNING
 
-    assert worker_bridge.task.run(job.pk, document.pk, document.sha256) == saved
+    assert worker_bridge.task.run(job.pk, document.pk, document.sha256) == task_receipt(saved)
+    assert worker_bridge.callbacks[-1] == (saved, 200)
     assert execution.delivery_status == "DELIVERED"
     assert execution.delivered_at is not None
     assert execution.attempts == 1
