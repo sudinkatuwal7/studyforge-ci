@@ -23,9 +23,10 @@ function getCsrfToken(): string | undefined {
 export type AuthFieldErrors = Record<string, string[]>;
 
 // "credentials": wrong email/password. "validation": the server rejected
-// specific fields. "unavailable": network, CSRF, or server-side failure.
+// specific fields. "rate_limit": too many reset requests.
+// "unavailable": network, CSRF, or server-side failure.
 export class AuthError extends Error {
-  readonly kind: "credentials" | "validation" | "unavailable";
+  readonly kind: "credentials" | "validation" | "rate_limit" | "unavailable";
   readonly fieldErrors: AuthFieldErrors;
 
   constructor(
@@ -43,6 +44,7 @@ export class AuthError extends Error {
 const UNAVAILABLE_MESSAGE =
   "We couldn't reach StudyForge. Check your connection and try again.";
 const SERVER_ERROR_MESSAGE = "Something went wrong on our side. Please try again.";
+const RESET_RATE_LIMIT_MESSAGE = "Too many password reset requests. Please try again later.";
 
 // fetch() rejects only when the request never got a response (offline, CORS, server down).
 async function sendAuthRequest(url: string, init?: RequestInit): Promise<Response> {
@@ -306,4 +308,106 @@ export async function register(input: RegisterInput): Promise<PublicUser> {
 
   const { user } = (await response.json()) as { user: PublicUser };
   return user;
+}
+
+export class InvalidPasswordResetLinkError extends Error {
+  constructor() {
+    super("This reset link is invalid or has expired.");
+    this.name = "InvalidPasswordResetLinkError";
+  }
+}
+
+async function postPasswordReset(path: string, body: object): Promise<Response> {
+  if (!API_BASE_URL) {
+    throw new Error("VITE_API_BASE_URL is not configured");
+  }
+
+  const csrfResponse = await sendAuthRequest(`${API_BASE_URL}/auth/csrf/`, {
+    credentials: "include",
+  });
+  const csrfToken = csrfResponse.ok ? getCsrfToken() : undefined;
+  if (!csrfToken) {
+    throw new AuthError("unavailable", SERVER_ERROR_MESSAGE);
+  }
+
+  return sendAuthRequest(`${API_BASE_URL}${path}`, {
+    method: "POST",
+    credentials: "include",
+    headers: {
+      "Content-Type": "application/json",
+      "X-CSRFToken": csrfToken,
+    },
+    body: JSON.stringify(body),
+  });
+}
+
+// Existing accounts that are limited or ineligible receive a generic response.
+// An unknown email receives a distinct code so the form can explain the problem.
+export async function requestPasswordReset(email: string): Promise<void> {
+  const response = await postPasswordReset("/auth/password-reset/request/", { email });
+  if (response.ok) return;
+
+  if (response.status === 429) {
+    throw new AuthError("rate_limit", RESET_RATE_LIMIT_MESSAGE);
+  }
+
+  if (response.status === 404) {
+    const body: unknown = await response.json().catch(() => ({}));
+    if (
+      typeof body === "object" &&
+      body !== null &&
+      "code" in body &&
+      body.code === "EMAIL_NOT_FOUND"
+    ) {
+      const message = "No account found with that email address.";
+      throw new AuthError("validation", message, { email: [message] });
+    }
+  }
+
+  if (response.status === 400) {
+    const body: unknown = await response.json().catch(() => ({}));
+    throw new AuthError("validation", "Enter a valid email address.", toFieldErrors(body));
+  }
+  throw new AuthError("unavailable", SERVER_ERROR_MESSAGE);
+}
+
+export async function validatePasswordResetLink(uid: string, token: string): Promise<boolean> {
+  const response = await postPasswordReset("/auth/password-reset/validate/", { uid, token });
+  if (response.ok) {
+    const body = (await response.json()) as { valid?: boolean };
+    return body.valid === true;
+  }
+  if (response.status === 400) return false;
+  throw new AuthError("unavailable", SERVER_ERROR_MESSAGE);
+}
+
+export async function confirmPasswordReset(
+  uid: string,
+  token: string,
+  newPassword: string,
+): Promise<void> {
+  const response = await postPasswordReset("/auth/password-reset/confirm/", {
+    uid,
+    token,
+    new_password: newPassword,
+  });
+  if (response.ok) return;
+
+  if (response.status === 400) {
+    const body: unknown = await response.json().catch(() => ({}));
+    if (
+      typeof body === "object" &&
+      body !== null &&
+      "code" in body &&
+      body.code === "INVALID_RESET_LINK"
+    ) {
+      throw new InvalidPasswordResetLinkError();
+    }
+    throw new AuthError(
+      "validation",
+      "Please fix the highlighted fields.",
+      toFieldErrors(body),
+    );
+  }
+  throw new AuthError("unavailable", SERVER_ERROR_MESSAGE);
 }
