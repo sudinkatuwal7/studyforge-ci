@@ -33,3 +33,9 @@ for _key in ("OPENAI_API_KEY", "GEMINI_API_KEY", "GOOGLE_API_KEY", "GOOGLE_APPLI
     os.environ.pop(_key, None)
 GEMINI_API_KEY = ""
 CELERY_BROKER_URL = "memory://"
+PASSWORD_RESET_FRONTEND_URL = "https://frontend.example.test"
+EMAIL_BACKEND = "django.core.mail.backends.locmem.EmailBackend"
+CACHES["password_reset"] = {
+    "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+    "LOCATION": "studyforge-password-reset-tests",
+}

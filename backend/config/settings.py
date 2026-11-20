@@ -246,6 +246,66 @@ SIMPLE_JWT = {
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
+    # A password change immediately rejects access tokens issued before it.
+    "CHECK_REVOKE_TOKEN": True,
+}
+
+# A reset link is built from this configured origin, never from the request Host.
+# Only local development may use HTTP; deployments must configure an HTTPS origin.
+PASSWORD_RESET_FRONTEND_URL = os.environ.get(
+    "PASSWORD_RESET_FRONTEND_URL",
+    "http://localhost:5173" if DEBUG else "",
+).strip().rstrip("/")
+_reset_frontend = urlsplit(PASSWORD_RESET_FRONTEND_URL)
+if (
+    not _reset_frontend.netloc
+    or _reset_frontend.path
+    or _reset_frontend.query
+    or _reset_frontend.fragment
+    or _reset_frontend.username
+    or _reset_frontend.password
+    or not (
+        _reset_frontend.scheme == "https"
+        or (
+            DEBUG
+            and _reset_frontend.scheme == "http"
+            and _reset_frontend.hostname in {"localhost", "127.0.0.1", "::1"}
+        )
+    )
+):
+    raise ImproperlyConfigured("PASSWORD_RESET_FRONTEND_URL must be a trusted HTTPS origin.")
+PASSWORD_RESET_TIMEOUT = 60 * 60
+
+EMAIL_BACKEND = os.environ.get(
+    "DJANGO_EMAIL_BACKEND",
+    "django.core.mail.backends.console.EmailBackend"
+    if DEBUG else "django.core.mail.backends.smtp.EmailBackend",
+)
+EMAIL_HOST = os.environ.get("EMAIL_HOST", "localhost")
+EMAIL_PORT = int(os.environ.get("EMAIL_PORT", "587"))
+EMAIL_HOST_USER = os.environ.get("EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = _env_bool("EMAIL_USE_TLS")
+EMAIL_USE_SSL = _env_bool("EMAIL_USE_SSL")
+EMAIL_TIMEOUT = 10
+DEFAULT_FROM_EMAIL = os.environ.get("DEFAULT_FROM_EMAIL", "StudyForge <no-reply@localhost>")
+
+# Redis makes request limits consistent across production workers. The dedicated
+# cache uses expiring keys, so unrecognized addresses do not grow a database table.
+CACHES = {
+    "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
+    "password_reset": (
+        {
+            "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+            "LOCATION": "studyforge-password-reset",
+        }
+        if DEBUG
+        else {
+            "BACKEND": "django.core.cache.backends.redis.RedisCache",
+            "LOCATION": os.environ.get("PASSWORD_RESET_CACHE_URL", CELERY_BROKER_URL),
+            "KEY_PREFIX": "studyforge_password_reset",
+        }
+    ),
 }
 CORS_ALLOWED_ORIGINS = _env_csv(
     "CORS_ALLOWED_ORIGINS",
