@@ -18,6 +18,7 @@ type LoginPageProps = {
   onCreateAccount?: () => void;
   // Fills in the email field, after a sign-up whose automatic login failed.
   initialEmail?: string;
+  onForgotPassword?: () => void;
   // Shared with the other card, so only one sign-in request runs at a time.
   signInLock: SignInLock;
 };
@@ -32,6 +33,7 @@ const SIGNED_OUT_MESSAGES: Record<SignedOutReason, string> = {
 export default function LoginPage({
   onCreateAccount,
   initialEmail = "",
+  onForgotPassword,
   signInLock,
 }: LoginPageProps) {
   const [email, setEmail] = useState(initialEmail);
@@ -165,9 +167,8 @@ export default function LoginPage({
               </button>
             }
           />
-          {/* Placeholder: the backend has no password-reset API yet. */}
           <div className="auth-row-end">
-            <button type="button" className="link-button" disabled title="Coming soon">
+            <button type="button" className="link-button" onClick={onForgotPassword} disabled={!onForgotPassword}>
               Forgot password?
             </button>
           </div>

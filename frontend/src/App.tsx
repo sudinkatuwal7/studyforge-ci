@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { Link, Navigate, Route, Routes, matchPath, useLocation, useNavigate } from "react-router-dom";
 import { getHealth } from "./api/health";
 import { useAuth } from "./context/AuthContext";
 import AppShell from "./components/dashboard/AppShell";
@@ -8,6 +8,8 @@ import { useSignInLock } from "./components/auth/useSignInLock";
 import LandingPage from "./pages/LandingPage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
+import ForgotPasswordPage from "./pages/ForgotPasswordPage";
+import ResetPasswordPage from "./pages/ResetPasswordPage";
 import CourseDetailPage from "./pages/CourseDetailPage";
 import CalendarPage from "./pages/CalendarPage";
 import CoursesPage from "./pages/CoursesPage";
@@ -97,6 +99,32 @@ function App() {
     );
   }
 
+  // An emailed link must open even if another session is still active here.
+  if (location.pathname === "/forgot-password") {
+    return (
+      <AuthLayout
+        heroTitle="Find your way back"
+        heroText="A fresh password will get you back to your study space."
+        footer={healthMessage}
+      >
+        <ForgotPasswordPage />
+      </AuthLayout>
+    );
+  }
+
+  if (location.pathname.startsWith("/reset-password")) {
+    const resetMatch = matchPath("/reset-password/:uid/:token", location.pathname);
+    return (
+      <AuthLayout
+        heroTitle="A fresh start"
+        heroText="Choose a new password to keep your study space secure."
+        footer={healthMessage}
+      >
+        <ResetPasswordPage key={location.pathname} uid={resetMatch?.params.uid} token={resetMatch?.params.token} />
+      </AuthLayout>
+    );
+  }
+
   if (!user) {
     const loginCard = (
       <AuthLayout
@@ -107,6 +135,7 @@ function App() {
         <LoginPage
           initialEmail={createdEmail}
           onCreateAccount={() => navigate("/register")}
+          onForgotPassword={() => navigate("/forgot-password")}
           signInLock={signInLock}
         />
       </AuthLayout>
