@@ -144,6 +144,8 @@ Also in scope: loading and error states when sending a message.
     `pages/CourseDetailPage.test.tsx`.
 - Other: `.claude/skills/scrum-25-pandu-voice-chat/SKILL.md`, the current Pandu chat working notes (including SCRUM-24 history)
   for AI-assisted sessions.
+- The password-reset handoff at `.claude/skills/scrum-135-password-reset/SKILL.md`
+  also preserves the earlier SCRUM-24 working notes in its historical section.
 
 ## Prerequisites
 
