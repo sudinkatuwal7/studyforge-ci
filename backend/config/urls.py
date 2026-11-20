@@ -11,6 +11,11 @@ from apps.users.views import (
     RegisterView,
     csrf_cookie,
 )
+from apps.users.password_reset import (
+    PasswordResetConfirmView,
+    PasswordResetRequestView,
+    PasswordResetValidateView,
+)
 from django.contrib import admin
 from django.urls import include, path
 
@@ -55,4 +60,10 @@ urlpatterns = [
     path("api/v1/auth/me/", MeView.as_view()),
 
     path("api/v1/auth/logout/", LogoutView.as_view()),
+
+    path("api/v1/auth/password-reset/request/", PasswordResetRequestView.as_view()),
+
+    path("api/v1/auth/password-reset/validate/", PasswordResetValidateView.as_view()),
+
+    path("api/v1/auth/password-reset/confirm/", PasswordResetConfirmView.as_view()),
 ]

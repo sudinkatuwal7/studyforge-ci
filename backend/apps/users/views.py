@@ -1,3 +1,5 @@
+from secrets import token_urlsafe
+
 from django.conf import settings
 from django.contrib.auth import get_user_model
 from django.db import IntegrityError, transaction
@@ -18,16 +20,25 @@ from rest_framework_simplejwt.serializers import (
     TokenRefreshSerializer,
 )
 from rest_framework_simplejwt.state import token_backend
+from rest_framework_simplejwt.settings import api_settings
 from rest_framework_simplejwt.token_blacklist.models import (
     BlacklistedToken,
     OutstandingToken,
 )
 from rest_framework_simplejwt.tokens import RefreshToken
+from rest_framework_simplejwt.utils import get_md5_hash_password
 
 from .google import (
     GoogleSignInUnavailable,
     InvalidGoogleCredential,
     verify_google_credential,
+)
+from .password_reset import (
+    RESET_BROWSER_COOKIE,
+    RESET_BROWSER_COOKIE_MAX_AGE,
+    RESET_BROWSER_COOKIE_PATH,
+    RESET_BROWSER_COOKIE_SALT,
+    get_reset_browser_id,
 )
 from .serializers import (
     GoogleLoginSerializer,
@@ -76,6 +87,15 @@ def revoke_all_sessions_if_reused(refresh_token):
     if not BlacklistedToken.objects.filter(token__jti=payload.get("jti")).exists():
         return
 
+    # Password reset deliberately blacklists old refresh tokens. Their replay
+    # should not revoke a fresh login made after the reset.
+    try:
+        user = User.objects.filter(pk=payload.get(api_settings.USER_ID_CLAIM)).first()
+    except (ValueError, TypeError):
+        return
+    if user is None or payload.get(api_settings.REVOKE_TOKEN_CLAIM) != get_md5_hash_password(user.password):
+        return
+
     active = OutstandingToken.objects.filter(
         user_id=payload.get("user_id"),
         blacklistedtoken__isnull=True,
@@ -88,7 +108,20 @@ def revoke_all_sessions_if_reused(refresh_token):
 
 @ensure_csrf_cookie
 def csrf_cookie(request):
-    return JsonResponse({"status": "ok"})
+    response = JsonResponse({"status": "ok"})
+    response["Cache-Control"] = "no-store"
+    browser_id = get_reset_browser_id(request) or token_urlsafe(24)
+    response.set_signed_cookie(
+        RESET_BROWSER_COOKIE,
+        browser_id,
+        salt=RESET_BROWSER_COOKIE_SALT,
+        max_age=RESET_BROWSER_COOKIE_MAX_AGE,
+        path=RESET_BROWSER_COOKIE_PATH,
+        httponly=True,
+        secure=not settings.DEBUG,
+        samesite="Lax",
+    )
+    return response
 
 
 class RegisterView(APIView):
@@ -230,8 +263,15 @@ class RefreshView(APIView):
         serializer = TokenRefreshSerializer(data={"refresh": refresh_token})
 
         try:
+            # TokenRefreshSerializer checks the account status but not SimpleJWT's
+            # password-revocation claim. Reject a raced or previously issued
+            # refresh token even if it escaped the outstanding-token blacklist.
+            refresh = RefreshToken(refresh_token)
+            user = User.objects.filter(pk=refresh.get(api_settings.USER_ID_CLAIM)).first()
+            if user is None or refresh.get(api_settings.REVOKE_TOKEN_CLAIM) != get_md5_hash_password(user.password):
+                raise AuthenticationFailed("Refresh token is missing or invalid.")
             serializer.is_valid(raise_exception=True)
-        except (TokenError, User.DoesNotExist, AuthenticationFailed):
+        except (TokenError, User.DoesNotExist, AuthenticationFailed, ValueError, TypeError):
             response = Response(
                 {"detail": "Refresh token is missing or invalid."},
                 status=status.HTTP_401_UNAUTHORIZED,
