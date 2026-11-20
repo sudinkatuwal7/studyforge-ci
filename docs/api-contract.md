@@ -136,6 +136,9 @@ POST   /api/v1/auth/register/
 POST   /api/v1/auth/token/
 POST   /api/v1/auth/token/refresh/
 POST   /api/v1/auth/google/
+POST   /api/v1/auth/password-reset/request/
+POST   /api/v1/auth/password-reset/validate/
+POST   /api/v1/auth/password-reset/confirm/
 
 GET    /api/v1/courses/
 POST   /api/v1/courses/
@@ -208,6 +211,81 @@ registration does not verify email ownership, so that case returns `409`.
 
 Configuration: the backend reads `GOOGLE_OAUTH_CLIENT_ID`, and the frontend build
 reads `VITE_GOOGLE_CLIENT_ID`. Both hold the same OAuth Web client ID.
+
+## Password reset (SCRUM-135)
+
+All three routes are public, CSRF-protected POSTs. A browser first gets the
+`csrftoken` cookie from `GET /api/v1/auth/csrf/` and sends it as `X-CSRFToken`.
+That GET also issues a signed, anonymous `studyforge_reset_browser` cookie with
+a rolling two-hour lifetime. It is HttpOnly, SameSite=Lax, scoped to
+`/api/v1/auth/`, and Secure outside local development. The browser sends it
+automatically with reset requests. Responses carry `Cache-Control: no-store`.
+
+| Route | JSON request | Success |
+|---|---|---|
+| `/api/v1/auth/password-reset/request/` | `{"email":"student@example.edu"}` | `200 {"detail":"If an eligible account exists, we will email a password reset link."}` |
+| `/api/v1/auth/password-reset/validate/` | `{"uid":"<uid>","token":"<token>"}` | `200 {"valid":true}` |
+| `/api/v1/auth/password-reset/confirm/` | `{"uid":"<uid>","token":"<token>","new_password":"<password>"}` | `200 {"detail":"Your password has been reset."}` |
+
+An unknown email returns
+`404 {"code":"EMAIL_NOT_FOUND","detail":"No account found with that email address."}`.
+This explicit response lets callers check whether an email is registered, as
+requested for this flow, including after repeated requests for that address
+while the browser and shared request limits permit a lookup. An inactive
+account, a Google-only account, and a per-email-limited request for an
+existing account receive the generic `200` response above. Only an active
+account with a usable password receives mail at its registered address.
+The per-email limit is three requests per normalized email in a 60-minute
+window. It counts requests for unknown addresses too. After that limit, no mail
+is sent; existing addresses still receive the generic `200`, and unknown
+addresses still receive `404` if the broader limits permit a lookup.
+
+The request route also allows ten submissions per signed browser cookie in a
+60-minute window, across all email addresses, and at most 300 submissions
+across the service in 60 seconds. A missing or invalid browser cookie, either
+broader limit, or an unavailable limit cache returns
+`429 {"code":"RESET_REQUEST_LIMITED","detail":"Too many password reset requests. Please try again later."}`
+before any account lookup or email. There is no IP-based limit. Malformed
+request fields get ordinary `400` field errors while below those limits, and
+CSRF failures get `403`.
+
+The browser cookie groups requests from one browser profile, not a physical
+device. Clearing cookies or obtaining a new cookie can bypass that limit. The
+shared cap bounds origin lookup and mail work, but a deployment still needs a
+path-specific limit at Vercel's edge and/or Oracle's Nginx to reject deliberate
+floods before Django; protect the direct Oracle API URL as well as any Vercel
+proxy path.
+
+The email link is `${PASSWORD_RESET_FRONTEND_URL}/reset-password/<uid>/<token>`.
+The configured origin must use HTTPS outside local development; it is never
+derived from an incoming Host header. The token expires after 60 minutes and
+becomes invalid after use. An expired, altered, or used link returns
+`400 {"code":"INVALID_RESET_LINK","detail":"This reset link is invalid or expired."}`
+from both validation and confirmation. An unacceptable new password returns
+`400 {"new_password":["..."]}` using Django's configured password validators.
+
+Completion changes the password without signing the student in, sends a
+confirmation email, blacklists existing refresh tokens, and rejects previously
+issued access tokens. In local DEBUG mode, mail prints in the backend terminal.
+The planned sender is `StudyForge <cs3398drlehr@gmail.com>`. Configure
+`smtp.gmail.com:587` with STARTTLS, `cs3398drlehr@gmail.com` as `EMAIL_HOST_USER`,
+that sender as `DEFAULT_FROM_EMAIL`, and a Gmail app password in `EMAIL_HOST_PASSWORD` (requires
+2-Step Verification). Keep the app password in deployment secrets, not Git.
+See [Google's SMTP settings](https://developers.google.com/workspace/gmail/imap/imap-smtp)
+and [app password requirements](https://support.google.com/accounts/answer/185833).
+Production also needs a shared Redis cache for limits; see `backend/.env.example`.
+
+The Google sign-in OAuth client ID is a separate Web application credential
+created in Google Cloud. A project Gmail address does not supply that ID. When
+the new client is created, set the same ID in backend `GOOGLE_OAUTH_CLIENT_ID`
+and frontend `VITE_GOOGLE_CLIENT_ID`, then configure the site's authorized
+JavaScript origins in Google Cloud.
+
+An SMTP exception or zero accepted sends is logged for operators without
+changing the public response or exposing delivery status.
+Monitor mail logs and provider delivery reports: SMTP acceptance does not prove
+that a message reached the inbox. The request UI advises students to check spam
+and retry later if no email arrives.
 
 ## Course material management (SCRUM-61)
 
