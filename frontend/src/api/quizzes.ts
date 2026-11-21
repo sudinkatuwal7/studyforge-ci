@@ -21,7 +21,7 @@ export class QuizRequestError extends Error {
   }
 }
 
-async function readJson<T>(response: Response): Promise<T> {
+export async function readJson<T>(response: Response): Promise<T> {
   if (response.ok) return (await response.json()) as T;
 
   let code = "";
