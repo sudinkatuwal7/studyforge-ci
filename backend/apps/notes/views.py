@@ -8,18 +8,23 @@ from apps.documents.models import Document
 from apps.documents.selectors import get_owned_course_documents
 
 from apps.notes.llm import InvalidLLMOutput, LLMError, NotesMergeTooLargeError
-from apps.notes.selectors import get_owned_course, get_owned_document, get_owned_notes
+from apps.notes.selectors import get_owned_course, get_owned_document, get_owned_notes, list_owned_notes
 from apps.notes.serializers import (
     CourseNotesSerializer,
+    CourseNotesSummarySerializer,
     GenerateCourseNotesSerializer,
+    NotesLibraryQuerySerializer,
     StudyGuideSerializer,
+    UpdateCourseNotesSerializer,
 )
 from apps.notes.services import (
     EmptyDocumentError,
     EmptyMaterialsError,
+    InvalidNotesContent,
     NotesInputTooLargeError,
     generate_course_notes,
     generate_study_guide,
+    update_course_notes,
 )
 
 logger = logging.getLogger(__name__)
@@ -153,11 +158,46 @@ class CourseNotesView(APIView):
         return Response(CourseNotesSerializer(notes).data, status=status.HTTP_201_CREATED)
 
 
-class CourseNotesDetailView(APIView):
-    """GET /api/v1/notes/{notes_id}/"""
+class NotesLibraryView(APIView):
+    """GET /api/v1/notes/?course={course_id}"""
 
     permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        query = NotesLibraryQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        notes = list_owned_notes(request.user, query.validated_data.get("course"))
+        return Response(CourseNotesSummarySerializer(notes, many=True).data, status=status.HTTP_200_OK)
+
+
+class CourseNotesDetailView(APIView):
+    """GET, PATCH and DELETE /api/v1/notes/{notes_id}/
+
+    Another student's notes are a 404, never a 403, so their existence is not
+    revealed. PATCH only: the client sends just the fields it changed.
+    """
+
+    permission_classes = [IsAuthenticated]
+    http_method_names = ["get", "patch", "delete", "head", "options"]
 
     def get(self, request, notes_id):
         notes = get_owned_notes(request.user, notes_id)
         return Response(CourseNotesSerializer(notes).data, status=status.HTTP_200_OK)
+
+    def patch(self, request, notes_id):
+        notes = get_owned_notes(request.user, notes_id)
+        serializer = UpdateCourseNotesSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        try:
+            notes = update_course_notes(notes, serializer.validated_data)
+        except InvalidNotesContent as exc:
+            return Response(
+                {"code": "NOTES_INVALID_CONTENT", "detail": str(exc)},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response(CourseNotesSerializer(notes).data, status=status.HTTP_200_OK)
+
+    def delete(self, request, notes_id):
+        # NoteSource rows cascade with the notes.
+        get_owned_notes(request.user, notes_id).delete()
+        return Response(status=status.HTTP_204_NO_CONTENT)

@@ -26,6 +26,8 @@ export default function AppShell({
   const onDashboard = pathname === "/";
   // Courses stays highlighted inside a course (/courses/7/notes), since that is where it leads.
   const onCourses = pathname === "/courses" || pathname.startsWith("/courses/");
+  // Notes stays highlighted on a single note (/notes/5), which is opened from the library.
+  const onNotes = pathname === "/notes" || pathname.startsWith("/notes/");
   const onTasks = pathname === "/tasks";
   const onCalendar = pathname === "/calendar";
 
@@ -99,6 +101,9 @@ export default function AppShell({
           <Link to="/courses" className={navClass(onCourses)} aria-current={onCourses ? "page" : undefined}>
             <CoursesIcon /> Courses
           </Link>
+          <Link to="/notes" className={navClass(onNotes)} aria-current={onNotes ? "page" : undefined}>
+            <NotesIcon /> Notes
+          </Link>
           <Link to="/tasks" className={navClass(onTasks)} aria-current={onTasks ? "page" : undefined}>
             <TasksIcon /> Tasks
           </Link>
@@ -152,6 +157,8 @@ function shellClass(pathname: string, navOpen: boolean) {
 function pageTitle(pathname: string): string {
   if (pathname.startsWith("/courses/")) return "Course";
   if (pathname === "/courses") return "My Courses";
+  if (pathname.startsWith("/notes/")) return "Notes";
+  if (pathname === "/notes") return "My Notes";
   if (pathname === "/tasks") return "Tasks";
   if (pathname === "/calendar") return "Calendar";
   return "Dashboard";
@@ -173,6 +180,15 @@ function CoursesIcon() {
   return (
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M4 6.5h16M4 12h16M4 17.5h10" />
+    </svg>
+  );
+}
+
+function NotesIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M6 3.5h9l4 4V20a.5.5 0 0 1-.5.5h-12A.5.5 0 0 1 6 20z" />
+      <path d="M15 3.5V8h4M9 12h7M9 16h5" />
     </svg>
   );
 }

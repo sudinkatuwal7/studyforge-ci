@@ -1,6 +1,6 @@
 from django.urls import path
 
-from apps.notes.views import CourseNotesDetailView, CourseNotesView, StudyGuideView
+from apps.notes.views import CourseNotesDetailView, CourseNotesView, NotesLibraryView, StudyGuideView
 
 urlpatterns = [
     path(
@@ -12,6 +12,11 @@ urlpatterns = [
         "courses/<int:course_id>/notes/",
         CourseNotesView.as_view(),
         name="course-notes",
+    ),
+    path(
+        "notes/",
+        NotesLibraryView.as_view(),
+        name="notes-library",
     ),
     path(
         "notes/<int:notes_id>/",

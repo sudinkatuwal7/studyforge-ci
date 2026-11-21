@@ -1,0 +1,49 @@
+.note-detail {
+  min-width: 0;
+}
+
+.note-detail-back {
+  display: inline-block;
+  margin-bottom: 0.75rem;
+}
+
+.note-detail-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  margin-bottom: 1rem;
+}
+
+.note-detail-dates {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.note-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.note-detail button {
+  min-height: 2.75rem;
+  border: 1px solid #d8d0dd;
+  border-radius: 0.6rem;
+  padding: 0.4rem 0.8rem;
+  background: #f7f3fa;
+  color: #384466;
+  font: inherit;
+  cursor: pointer;
+}
+
+.note-detail button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+.note-detail .notes-result {
+  overflow-wrap: anywhere;
+}

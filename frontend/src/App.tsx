@@ -14,6 +14,8 @@ import CourseDetailPage from "./pages/CourseDetailPage";
 import CalendarPage from "./pages/CalendarPage";
 import CoursesPage from "./pages/CoursesPage";
 import DashboardPage from "./pages/DashboardPage";
+import NoteDetailPage from "./pages/NoteDetailPage";
+import NotesLibraryPage from "./pages/NotesLibraryPage";
 import TasksPage from "./pages/TasksPage";
 import "./styles/dashboard.css";
 
@@ -188,6 +190,8 @@ function App() {
             onCourseCreated={() => setCourseListVersion((version) => version + 1)}
           />
         } />
+        <Route path="/notes" element={<NotesLibraryPage key={user.id} />} />
+        <Route path="/notes/:notesId" element={<NoteDetailPage key={user.id} />} />
         <Route path="/tasks" element={<TasksPage key={user.id} refreshKey={courseListVersion} />} />
         <Route path="/courses/:courseId/:section?" element={<CourseDetailPage onCourseChanged={() => setCourseListVersion((version) => version + 1)} />} />
         <Route path="/calendar" element={<CalendarPage />} />

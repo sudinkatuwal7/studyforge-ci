@@ -1,4 +1,5 @@
 import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import { generateNotes, getNotes, NotesRequestError } from "../../api/notes";
 import type { TrackedDocument } from "../../types/document";
@@ -19,7 +20,7 @@ const doc = (id: number, name: string, status: "READY" | "PROCESSING" | "FAILED"
 const materials = [doc(1, "Cells.pdf", "READY"), doc(2, "Genes.pdf", "READY"), doc(3, "Slides.pptx", "PROCESSING")];
 
 const notes: CourseNotes = {
-  id: 5, title: "Notes: Cells.pdf, Genes.pdf", course: 42, overview: "Cells carry genes.", created_at: "",
+  id: 5, title: "Notes: Cells.pdf, Genes.pdf", course: 42, overview: "Cells carry genes.", created_at: "", updated_at: "",
   options: DEFAULT_NOTES_OPTIONS,
   source_documents: [{ id: 1, name: "Cells.pdf" }, { id: 2, name: "Genes.pdf" }],
   sections: [{
@@ -29,7 +30,8 @@ const notes: CourseNotes = {
   }],
 };
 
-const renderPanel = (list = materials) => render(<NotesPanel courseId={42} materials={list} />);
+// The panel links to the notes library and note page, so it needs a router.
+const renderPanel = (list = materials) => render(<NotesPanel courseId={42} materials={list} />, { wrapper: MemoryRouter });
 const generateButton = () => screen.getByRole("button", { name: "Generate notes" });
 
 it("disables materials that are not READY and requires a selection", () => {
@@ -253,4 +255,41 @@ it("renders bullet notes as a list and paragraph notes as prose, with the option
   expect(screen.getByText("Cells divide by mitosis.").tagName).toBe("P");
   expect(screen.getByRole("heading", { name: "Explanation", level: 5 })).toBeVisible();
   expect(screen.getByText("Summary · Brief · Paragraphs")).toBeVisible();
+});
+
+it("links to this course's notes in the library before any notes are open", () => {
+  renderPanel();
+
+  expect(screen.getByRole("link", { name: "All notes for this course" })).toHaveAttribute("href", "/notes?course=42");
+  expect(screen.queryByRole("link", { name: "Edit or delete these notes" })).not.toBeInTheDocument();
+});
+
+it("links new notes to their page, where they can be edited or deleted", async () => {
+  vi.mocked(generateNotes).mockResolvedValue(notes);
+  renderPanel();
+  fireEvent.click(screen.getByLabelText("Cells.pdf"));
+  fireEvent.click(generateButton());
+
+  await screen.findByRole("heading", { name: notes.title });
+  expect(screen.getByRole("link", { name: "Edit or delete these notes" })).toHaveAttribute("href", "/notes/5");
+  expect(screen.getByRole("link", { name: "All notes for this course" })).toHaveAttribute("href", "/notes?course=42");
+});
+
+it("links restored notes to their page after a reload", async () => {
+  sessionStorage.setItem("studyforge:notes:1:42", "5");
+  vi.mocked(getNotes).mockResolvedValue(notes);
+  renderPanel();
+
+  expect(await screen.findByRole("link", { name: "Edit or delete these notes" })).toHaveAttribute("href", "/notes/5");
+});
+
+it("drops the edit link when Create new notes returns to the setup", async () => {
+  vi.mocked(generateNotes).mockResolvedValue(notes);
+  renderPanel();
+  fireEvent.click(screen.getByLabelText("Cells.pdf"));
+  fireEvent.click(generateButton());
+  fireEvent.click(await screen.findByRole("button", { name: "Create new notes" }));
+
+  expect(screen.queryByRole("link", { name: "Edit or delete these notes" })).not.toBeInTheDocument();
+  expect(screen.getByRole("link", { name: "All notes for this course" })).toBeInTheDocument();
 });

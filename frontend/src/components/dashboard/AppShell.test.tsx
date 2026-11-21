@@ -44,11 +44,12 @@ describe("AppShell main navigation", () => {
   const NAV = [
     ["Dashboard", "/"],
     ["Courses", "/courses"],
+    ["Notes", "/notes"],
     ["Tasks", "/tasks"],
     ["Calendar", "/calendar"],
   ] as const;
 
-  it("links Dashboard, Courses, Tasks and Calendar to their own pages, in that order", () => {
+  it("links Dashboard, Courses, Notes, Tasks and Calendar to their own pages, in that order", () => {
     renderShell("/");
     const nav = screen.getByRole("navigation", { name: "Main" });
     const links = Array.from(nav.querySelectorAll("a"));
@@ -63,6 +64,9 @@ describe("AppShell main navigation", () => {
     ["/courses", "Courses", "My Courses"],
     ["/courses/7/notes", "Courses", "Course"],
     ["/courses/7/materials?pandu=open", "Courses", "Course"],
+    ["/notes", "Notes", "My Notes"],
+    ["/notes?course=7", "Notes", "My Notes"],
+    ["/notes/5", "Notes", "Notes"],
     ["/tasks", "Tasks", "Tasks"],
     ["/calendar", "Calendar", "Calendar"],
   ])("at %s highlights only %s and titles the page %s", (path, active, title) => {

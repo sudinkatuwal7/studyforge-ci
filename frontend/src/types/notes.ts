@@ -52,4 +52,13 @@ export type CourseNotes = {
   sections: NotesSection[];
   source_documents: { id: number; name: string }[];
   created_at: string;
+  updated_at: string;
 };
+
+// One row of the notes library (GET /notes/): no content, so the list stays small.
+export type CourseNotesSummary = Pick<CourseNotes, "id" | "title" | "course" | "options" | "created_at" | "updated_at"> & {
+  course_name: string;
+};
+
+// The only fields a student may edit. Owner, course, options and sources are read-only.
+export type NotesChanges = Partial<Pick<CourseNotes, "title" | "overview" | "sections">>;

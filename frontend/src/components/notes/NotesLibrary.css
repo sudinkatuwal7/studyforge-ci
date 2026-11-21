@@ -1,0 +1,56 @@
+.notes-library {
+  min-width: 0;
+}
+
+.notes-library-toolbar {
+  flex-wrap: wrap;
+  gap: 0.75rem;
+}
+
+.notes-library-filter {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.notes-library-filter select {
+  min-height: 2.75rem;
+  max-width: 100%;
+  border: 1px solid #d8d0dd;
+  border-radius: 0.6rem;
+  padding: 0.35rem 0.6rem;
+  background: white;
+  color: var(--navy);
+  font: inherit;
+}
+
+.notes-library-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+  margin: 0.75rem 0 0;
+  padding: 0;
+  list-style: none;
+}
+
+.notes-library-item {
+  padding: 0.9rem 1rem;
+  border: 1px solid #efeae3;
+  border-radius: 0.95rem;
+  background: var(--cream);
+  overflow-wrap: anywhere;
+}
+
+.notes-library-title {
+  color: var(--navy);
+  font-weight: 600;
+}
+
+.notes-library-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 0.75rem;
+  margin: 0.3rem 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}

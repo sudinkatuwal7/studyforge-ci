@@ -4,7 +4,13 @@ from django.db import transaction
 from django.http import Http404
 
 from apps.documents.models import Document
-from apps.notes.llm import DEFAULT_NOTE_OPTIONS, get_client
+from apps.notes.llm import (
+    DEFAULT_NOTE_OPTIONS,
+    InvalidLLMOutput,
+    NoteOptions,
+    get_client,
+    validate_course_notes,
+)
 from apps.notes.models import CourseNotes, NoteSource, StudyGuide
 from apps.notes.selectors import build_note_sources, get_ordered_chunks
 
@@ -29,6 +35,10 @@ class EmptyMaterialsError(Exception):
 
 class NotesInputTooLargeError(Exception):
     """The selected materials exceed what one request may process."""
+
+
+class InvalidNotesContent(Exception):
+    """Edited notes that do not have the structure generated notes must have."""
 
 
 def generate_study_guide(document, text=None):
@@ -119,4 +129,38 @@ def generate_course_notes(owner, course, documents, options=DEFAULT_NOTE_OPTIONS
             NoteSource(notes=notes, document_id=document_id, position=position)
             for position, document_id in enumerate(document_ids)
         )
+    return notes
+
+
+def update_course_notes(notes, changes):
+    """Apply a student's edit to saved notes and return them.
+
+    `changes` holds any of title, overview and sections. Edited content must
+    pass validate_course_notes with the notes' own options, the same check
+    generated notes pass, so an edit cannot leave notes the library cannot
+    show. A field left out keeps its saved value; nothing is saved on failure.
+    """
+    fields = []
+
+    if "overview" in changes or "sections" in changes:
+        payload = {
+            "overview": changes.get("overview", notes.overview),
+            "sections": changes.get("sections", notes.sections),
+        }
+        options = NoteOptions(note_type=notes.note_type, detail_level=notes.detail_level, format=notes.format)
+        try:
+            content = validate_course_notes(payload, options)
+        except InvalidLLMOutput as exc:
+            raise InvalidNotesContent(str(exc)) from exc
+        notes.overview = content["overview"]
+        notes.sections = content["sections"]
+        fields += ["overview", "sections"]
+
+    if "title" in changes:
+        notes.title = changes["title"]
+        fields.append("title")
+
+    if fields:
+        # auto_now only applies to fields named in update_fields.
+        notes.save(update_fields=[*fields, "updated_at"])
     return notes

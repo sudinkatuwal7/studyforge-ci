@@ -1,0 +1,13 @@
+/* How saved notes read, in the course Notes tab and on the note page (/notes/:id). */
+.notes-sources { margin: .2rem 0 1rem; color: #707a91; font-size: .9rem; overflow-wrap: anywhere; }
+.notes-options-used { margin: -.6rem 0 1rem; color: #5f52b5; font-size: .85rem; font-weight: 600; }
+.notes-paragraphs p { margin: 0 0 .7rem; line-height: 1.55; }
+.notes-overview { margin: 0 0 1rem; }
+.notes-section { margin-bottom: 1rem; padding: .8rem 1rem; border: 1px solid #e3e6ed; border-radius: 1rem; }
+.notes-section h4 { margin: 0 0 .5rem; font-size: 1.05rem; }
+.notes-section h5 { margin: .8rem 0 .3rem; font-size: .9rem; color: #4a5368; }
+.notes-section dl { margin: 0; }
+.notes-section dl > div { margin-bottom: .5rem; }
+.notes-section dt { font-weight: 600; }
+.notes-section dd { margin: 0; color: #4a5368; }
+.notes-section ul { margin: 0; padding-left: 1.2rem; }

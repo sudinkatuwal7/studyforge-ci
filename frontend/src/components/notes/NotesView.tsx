@@ -1,7 +1,9 @@
 import { useEffect, useRef } from "react";
 import { DEFAULT_NOTES_OPTIONS, DETAIL_LEVELS, NOTE_FORMATS, NOTE_TYPES, type CourseNotes, type NotesSection } from "../../types/notes";
+import "./NotesView.css";
 
-type Props = { notes: CourseNotes; onCreateNew: () => void };
+// onCreateNew is the course Notes tab's way back to generation; the note page has none.
+type Props = { notes: CourseNotes; onCreateNew?: () => void };
 
 function labelOf<T extends string>(choices: { value: T; label: string }[], value: T): string {
   return choices.find((choice) => choice.value === value)?.label ?? value;
@@ -58,6 +60,6 @@ export default function NotesView({ notes, onCreateNew }: Props) {
       </section>;
     })}
 
-    <button type="button" onClick={onCreateNew}>Create new notes</button>
+    {onCreateNew && <button type="button" onClick={onCreateNew}>Create new notes</button>}
   </article>;
 }

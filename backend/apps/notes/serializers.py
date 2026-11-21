@@ -32,24 +32,72 @@ class GenerateCourseNotesSerializer(serializers.Serializer):
         )
 
 
+def notes_options(notes):
+    return {
+        "note_type": notes.note_type,
+        "detail_level": notes.detail_level,
+        "format": notes.format,
+    }
+
+
 class CourseNotesSerializer(serializers.ModelSerializer):
     options = serializers.SerializerMethodField()
     source_documents = serializers.SerializerMethodField()
 
     class Meta:
         model = CourseNotes
-        fields = ["id", "title", "course", "options", "overview", "sections", "source_documents", "created_at"]
+        fields = [
+            "id", "title", "course", "options", "overview", "sections", "source_documents",
+            "created_at", "updated_at",
+        ]
         read_only_fields = fields
 
     def get_options(self, notes):
-        return {
-            "note_type": notes.note_type,
-            "detail_level": notes.detail_level,
-            "format": notes.format,
-        }
+        return notes_options(notes)
 
     def get_source_documents(self, notes):
         return get_source_documents(notes)
+
+
+class CourseNotesSummarySerializer(serializers.ModelSerializer):
+    """One row of the notes library: no content, so the list stays small."""
+
+    course_name = serializers.CharField(source="course.name", read_only=True)
+    options = serializers.SerializerMethodField()
+
+    class Meta:
+        model = CourseNotes
+        fields = ["id", "title", "course", "course_name", "options", "created_at", "updated_at"]
+        read_only_fields = fields
+
+    def get_options(self, notes):
+        return notes_options(notes)
+
+
+class NotesLibraryQuerySerializer(serializers.Serializer):
+    # Bounded to a bigint so an oversized id is a 400, not a database error.
+    course = serializers.IntegerField(min_value=1, max_value=2**63 - 1, required=False)
+
+
+class UpdateCourseNotesSerializer(serializers.Serializer):
+    """The editable fields of saved notes; any other key is ignored.
+
+    Owner, course, options and source documents are never written here.
+    `overview` and `sections` are taken as raw JSON so that
+    validate_course_notes, the check generated notes pass, judges their shape
+    rather than a serializer coercing them first.
+    """
+
+    title = serializers.CharField(max_length=CourseNotes._meta.get_field("title").max_length, required=False)
+    overview = serializers.JSONField(required=False)
+    sections = serializers.JSONField(required=False)
+
+    def validate_title(self, value):
+        if not isinstance(self.initial_data.get("title"), str):
+            raise serializers.ValidationError("Title must be text.")
+        if any(ord(character) < 32 or ord(character) == 127 for character in value):
+            raise serializers.ValidationError("Title cannot contain control characters.")
+        return value
 
 
 class StudyGuideSerializer(serializers.ModelSerializer):

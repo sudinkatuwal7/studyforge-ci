@@ -18,6 +18,18 @@ def get_owned_notes(user, notes_id):
     )
 
 
+def list_owned_notes(user, course_id=None):
+    """The student's saved notes, newest first, optionally for one course.
+
+    Another student's course id simply matches nothing, so the filter never
+    reveals whether that course exists.
+    """
+    notes = CourseNotes.objects.filter(owner=user).select_related("course").order_by("-created_at", "-pk")
+    if course_id is not None:
+        notes = notes.filter(course_id=course_id)
+    return notes
+
+
 def get_source_documents(notes):
     """[{"id", "name"}] for the materials the notes were built from, in order.
 

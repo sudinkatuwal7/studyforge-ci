@@ -401,7 +401,7 @@ it("keeps an in-progress quiz, its answers and current question through section 
 
 it("keeps a note generation running through section changes and shows its result", async () => {
   const notes: CourseNotes = {
-    id: 6, title: "Notes: Cells.pdf", course: 42, overview: "Cells are small.", created_at: "",
+    id: 6, title: "Notes: Cells.pdf", course: 42, overview: "Cells are small.", created_at: "", updated_at: "",
     options: DEFAULT_NOTES_OPTIONS,
     source_documents: [{ id: 81, name: "Cells.pdf" }],
     sections: [{ heading: "Cell structure", key_concepts: [], points: ["Cells divide by mitosis."] }],

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { generateNotes, getNotes, NotesRequestError } from "../../api/notes";
 import { useAuth } from "../../context/AuthContext";
 import type { MaterialsLoadState, TrackedDocument } from "../../types/document";
@@ -122,8 +123,14 @@ function Notes({ courseId, materials, materialsState = "ready", accessToken, sto
 
   const createNew = () => { saveNotesId(storageKey, null); setNotes(null); setError(""); };
 
+  // Editing and deleting happen on the note page; the library keeps every earlier set of notes.
+  const links = <p className="notes-panel-links">
+    {notes && <Link to={`/notes/${notes.id}`}>Edit or delete these notes</Link>}
+    <Link to={`/notes?course=${courseId}`}>All notes for this course</Link>
+  </p>;
+
   if (restoring) return <p role="status">Loading your notes…</p>;
-  if (notes) return <NotesView key={notes.id} notes={notes} onCreateNew={createNew} />;
-  return <NotesSetup courseId={courseId} materials={materials} materialsState={materialsState} selected={selected} onSelectedChange={setSelected}
-    options={options} onOptionsChange={setOptions} busy={busy} error={error} onGenerate={generate} />;
+  if (notes) return <>{links}<NotesView key={notes.id} notes={notes} onCreateNew={createNew} /></>;
+  return <>{links}<NotesSetup courseId={courseId} materials={materials} materialsState={materialsState} selected={selected} onSelectedChange={setSelected}
+    options={options} onOptionsChange={setOptions} busy={busy} error={error} onGenerate={generate} /></>;
 }
