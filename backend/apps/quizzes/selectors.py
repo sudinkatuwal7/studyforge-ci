@@ -44,6 +44,28 @@ def get_owned_survival_session(user, session_id):
     )
 
 
+def list_quiz_history(user, course_id=None):
+    """The user's finished quizzes, newest first, optionally for one course.
+
+    A row is a QuizSubmission: a regular quiz gets one when it is submitted
+    and a Survival game when it ends, so unsubmitted quizzes and games still
+    running are left out without checking any status.
+    """
+    submissions = (
+        QuizSubmission.objects.filter(quiz__owner=user)
+        .select_related("quiz__course", "quiz__survival_session")
+        .order_by("-submitted_at", "-pk")
+    )
+    if course_id is not None:
+        submissions = submissions.filter(quiz__course_id=course_id)
+    return submissions
+
+
+def quiz_mode(quiz):
+    """"survival" for a quiz played as a Survival game, else "regular"."""
+    return "survival" if hasattr(quiz, "survival_session") else "regular"
+
+
 def _sample_evenly(chunks, budget):
     """Keep every k-th chunk so the sample spans the whole document,
     rather than its first pages only."""
