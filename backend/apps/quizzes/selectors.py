@@ -1,5 +1,7 @@
 import math
 
+from django.db.models import Count, F, FloatField, Max, Q
+from django.db.models.functions import NullIf
 from django.shortcuts import get_object_or_404
 
 from apps.courses.models import Course
@@ -64,6 +66,42 @@ def list_quiz_history(user, course_id=None):
 def quiz_mode(quiz):
     """"survival" for a quiz played as a Survival game, else "regular"."""
     return "survival" if hasattr(quiz, "survival_session") else "regular"
+
+
+RECENT_RESULTS = 5
+
+
+def get_quiz_progress(user, course):
+    """Quizzes taken, best percentage per mode, and the latest results for
+    one of the user's courses.
+
+    Best is per mode because a Survival game that ends early is scored
+    against every question, reached or not, so its percentage is not
+    comparable with a regular quiz's.
+    """
+    history = list_quiz_history(user, course.pk)
+    percentage = F("score") * 100.0 / NullIf(F("total_questions"), 0)
+    survival = Q(quiz__survival_session__isnull=False)
+    regular = Q(quiz__survival_session__isnull=True)
+    totals = history.aggregate(
+        quizzes_taken=Count("pk"),
+        best_regular=Max(percentage, filter=regular, output_field=FloatField()),
+        best_survival=Max(percentage, filter=survival, output_field=FloatField()),
+    )
+
+    def rounded(value):
+        # Rounded the same way as QuizSubmission.percentage.
+        return None if value is None else round(value)
+
+    return {
+        "course": course.pk,
+        "quizzes_taken": totals["quizzes_taken"],
+        "best_percentage": {
+            "regular": rounded(totals["best_regular"]),
+            "survival": rounded(totals["best_survival"]),
+        },
+        "recent": list(history[:RECENT_RESULTS]),
+    }
 
 
 def _sample_evenly(chunks, budget):

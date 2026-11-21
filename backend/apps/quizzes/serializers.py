@@ -168,6 +168,21 @@ class QuizHistoryItemSerializer(serializers.ModelSerializer):
         return session.status if session else None
 
 
+class BestPercentageSerializer(serializers.Serializer):
+    # Null when no quiz of that mode has been finished in the course.
+    regular = serializers.IntegerField(allow_null=True)
+    survival = serializers.IntegerField(allow_null=True)
+
+
+class QuizProgressSerializer(serializers.Serializer):
+    """Built from the dict get_quiz_progress returns."""
+
+    course = serializers.IntegerField()
+    quizzes_taken = serializers.IntegerField()
+    best_percentage = BestPercentageSerializer()
+    recent = QuizHistoryItemSerializer(many=True)
+
+
 class SurvivalAnswerInputSerializer(serializers.Serializer):
     """One Survival answer. The client names the question it is answering,
     so a double click or a stale tab cannot land on the next question.

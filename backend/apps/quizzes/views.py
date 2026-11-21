@@ -13,12 +13,14 @@ from apps.quizzes.selectors import (
     get_owned_quiz,
     get_owned_submission,
     get_owned_survival_session,
+    get_quiz_progress,
     list_quiz_history,
 )
 from apps.quizzes.serializers import (
     GenerateQuizSerializer,
     QuizHistoryItemSerializer,
     QuizHistoryQuerySerializer,
+    QuizProgressSerializer,
     QuizResultSerializer,
     QuizSerializer,
     SubmitQuizSerializer,
@@ -188,6 +190,17 @@ class QuizHistoryView(APIView):
 
         history = list_quiz_history(request.user, course_id)
         return Response(QuizHistoryItemSerializer(history, many=True).data, status=status.HTTP_200_OK)
+
+
+class CourseQuizProgressView(APIView):
+    """GET /api/v1/courses/{course_id}/quiz-progress/"""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request, course_id):
+        course = get_owned_course(request.user, course_id)
+        progress = get_quiz_progress(request.user, course)
+        return Response(QuizProgressSerializer(progress).data, status=status.HTTP_200_OK)
 
 
 class CourseSurvivalSessionsView(APIView):
