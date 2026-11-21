@@ -1,0 +1,45 @@
+apiVersion: keda.sh/v1alpha1
+kind: TriggerAuthentication
+metadata:
+  name: processing-worker-redis
+  namespace: studyforge
+spec:
+  secretTargetRef:
+    - parameter: tls
+      name: studyforge-processing-scaler
+      key: tls
+    - parameter: ca
+      name: studyforge-processing-scaler
+      key: ca
+    - parameter: username
+      name: studyforge-processing-scaler
+      key: username
+    - parameter: password
+      name: studyforge-processing-scaler
+      key: password
+---
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: processing-worker-scaler
+  namespace: studyforge
+spec:
+  scaleTargetRef:
+    name: processing-worker
+  pollingInterval: 15
+  minReplicaCount: 1
+  maxReplicaCount: 2
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          stabilizationWindowSeconds: 150
+  triggers:
+    - type: redis
+      metadata:
+        address: 10.0.0.234:6380
+        databaseIndex: "0"
+        listName: document-processing
+        listLength: "5"
+      authenticationRef:
+        name: processing-worker-redis

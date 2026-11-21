@@ -25,6 +25,21 @@ data:
   EMBEDDING_DIMENSION: "768"
   EMBEDDING_BATCH_SIZE: "16"
 ---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: studyforge-processing-runtime
+  namespace: studyforge
+data:
+  PROCESSING_DB_HOST: 10.0.0.234
+  PROCESSING_DB_PORT: "5432"
+  PROCESSING_DB_NAME: studyforge_processing
+  PROCESSING_DB_USER: studyforge_processing
+  PROCESSING_STORAGE_BUCKET: studyforge-documents-dev
+  PROCESSING_STORAGE_REGION: us-phoenix-1
+  PROCESSING_STORAGE_ENDPOINT_URL: https://axcyydnoof5f.compat.objectstorage.us-phoenix-1.oraclecloud.com
+  PROCESSING_STORAGE_ADDRESSING_STYLE: path
+---
 apiVersion: apps/v1
 kind: Deployment
 metadata:

@@ -12,6 +12,7 @@
 #   studyforge_django  Gunicorn publisher, the VM's legacy Celery consumer and
 #                      the password-reset cache
 #   studyforge_worker  OKE worker: document-processing queue, events, pidbox
+#   studyforge_scaler  KEDA: queue length only
 set -euo pipefail
 
 [[ $# -eq 1 ]] || { echo "Usage: $0 OUT_DIR" >&2; exit 2; }
@@ -30,15 +31,18 @@ hash() { printf '%s' "$1" | openssl dgst -sha256 -r | cut -d' ' -f1; }
 ops=$(openssl rand -hex 32)
 django=$(openssl rand -hex 32)
 worker=$(openssl rand -hex 32)
+scaler=$(openssl rand -hex 32)
 
 sed -e "s/@OPS_HASH@/$(hash "$ops")/" \
     -e "s/@DJANGO_HASH@/$(hash "$django")/" \
     -e "s/@WORKER_HASH@/$(hash "$worker")/" \
+    -e "s/@SCALER_HASH@/$(hash "$scaler")/" \
     "$template" >"$out/redis-users.acl"
 cat >"$out/redis-credentials.env" <<EOF
 REDIS_OPS_PASSWORD=$ops
 REDIS_DJANGO_PASSWORD=$django
 REDIS_WORKER_PASSWORD=$worker
+REDIS_SCALER_PASSWORD=$scaler
 EOF
 chmod 600 "$out/redis-users.acl" "$out/redis-credentials.env"
 echo "Wrote $out/redis-users.acl and $out/redis-credentials.env."

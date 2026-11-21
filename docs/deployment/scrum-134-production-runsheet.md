@@ -126,6 +126,7 @@ scp -i ~/.ssh/studyforge-api-vm-gaurav -o IdentitiesOnly=yes -o UserKnownHostsFi
 # VM
 sudo install -d -m 700 -o root -g root /etc/studyforge /etc/studyforge/tls
 sudo install -m 644 -o root -g root ~/sf134-in/{ca.crt,postgres.crt,redis.crt} /etc/studyforge/tls/
+sudo install -m 644 -o root -g root ~/sf134-in/ca.crt /etc/studyforge-client-ca.crt
 sudo install -m 600 -o root -g root ~/sf134-in/{postgres.key,redis.key} /etc/studyforge/tls/
 sudo install -m 600 -o root -g root ~/sf134-in/redis-users.acl /etc/studyforge/
 sudo install -m 600 -o root -g root ~/sf134-in/vm-redis.env /etc/studyforge/redis-credentials.env
@@ -233,27 +234,35 @@ cd /home/ubuntu/studyforge
 If `/etc/studyforge.env` names the database variables differently, map them
 here. Do not read or print its values.
 
-**W5. Point Django at the named Redis user** (on failure: R1).
+**W5. Configure TLS for Django and the legacy Celery worker** (on failure: R1).
 
 Edit with `sudoedit /etc/studyforge.env`. Do not echo the file. Set:
 
 ```
-CELERY_BROKER_URL=redis://studyforge_django:<REDIS_DJANGO_PASSWORD>@127.0.0.1:6379/0
+POSTGRES_HOST=127.0.0.1
+POSTGRES_SSLMODE=verify-full
+POSTGRES_SSLROOTCERT=/etc/studyforge-client-ca.crt
+CELERY_BROKER_URL='rediss://studyforge_django:<REDIS_DJANGO_PASSWORD>@10.0.0.234:6380/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/studyforge-client-ca.crt&ssl_check_hostname=true'
+STUDYFORGE_REQUIRE_SECURE_CONNECTIONS=1
 ```
 
 Copy the password from `/etc/studyforge/redis-credentials.env`. It is hex,
 so it needs no URL escaping. If `PASSWORD_RESET_CACHE_URL` is set, give it
-the same value. If it is unset, it already follows the broker URL.
+the same value. If it is unset, it already follows the broker URL. Verify
+both service users can read the public CA copy. Keep the existing application
+database, SCRUM-127 private S3 settings, and matching processing service token.
+Stop before starting the services if those prerequisites are missing.
 
 **W6. Start Django and the legacy worker, then verify** (on failure: R1).
 
 ```sh
 systemctl start studyforge-gunicorn studyforge-celery
 sleep 10; systemctl is-active studyforge-gunicorn studyforge-celery          # expect: active active
-journalctl -u studyforge-celery -n 40 --no-pager | grep -E 'Connected to redis://studyforge_django|ready'
+journalctl -u studyforge-celery -n 40 --no-pager | grep -q 'Connected to rediss://studyforge_django' && echo 'Celery TLS connected'
 curl -fsS https://studyforge-rodians.duckdns.org/api/v1/health/ && echo       # expect: healthy JSON
+curl -fsS https://studyforge-rodians.duckdns.org/api/v1/ready/ && echo        # expect: ready JSON
 ( set -a; . /etc/studyforge/redis-credentials.env; set +a
-  export SF134_BROKER_URL="redis://studyforge_django:$REDIS_DJANGO_PASSWORD@127.0.0.1:6379/0"
+  export SF134_BROKER_URL="rediss://studyforge_django:$REDIS_DJANGO_PASSWORD@10.0.0.234:6380/0?ssl_cert_reqs=required&ssl_ca_certs=/etc/studyforge-client-ca.crt&ssl_check_hostname=true"
   backend/.venv/bin/python -B infrastructure/secure-transport/broker_probe.py ping
   backend/.venv/bin/python -B infrastructure/secure-transport/broker_probe.py reset-cache
   backend/.venv/bin/python -B infrastructure/secure-transport/broker_probe.py send celery sf134-prod-check )
@@ -399,6 +408,34 @@ H2. Two Secret keys in `studyforge-processing-secrets` come from this work:
 Add them with Sanish in one session, creating the Secret from a temporary
 `0600` file (never `--from-literal`). Do not send them over chat. The
 storage and Gemini keys are not part of SCRUM-134.
+
+After OKE access is restored, confirm the worker objects are absent and
+obtain approval for each create or apply below. Set `ca_file` to the public
+CA from P1 and `worker_env_file` to the approved mode-0600 handoff. The
+handoff must include the two values above, `PROCESSING_SECRET_KEY`,
+`PROCESSING_SERVICE_TOKEN` matching Django, `GEMINI_API_KEY`, and
+`PROCESSING_STORAGE_ACCESS_KEY_ID` plus
+`PROCESSING_STORAGE_SECRET_ACCESS_KEY` from the read-only worker identity.
+
+```sh
+kube=(kubectl --kubeconfig "$HOME/.kube/studyforge-oke-bastion" -n studyforge)
+"${kube[@]}" apply --dry-run=server --validate=strict -f services/document-processing/oke-worker.yaml
+"${kube[@]}" create configmap studyforge-processing-trust --from-file=postgres-ca.pem="$ca_file" --from-file=redis-ca.pem="$ca_file"
+"${kube[@]}" create secret generic studyforge-processing-secrets --from-env-file="$worker_env_file"
+"${kube[@]}" apply --validate=strict -f services/document-processing/oke-worker.yaml
+"${kube[@]}" rollout status deployment/processing-worker --timeout=5m
+```
+
+Once the single worker is healthy and KEDA is installed, set
+`scaler_env_file` to a separate approved mode-0600 file with `tls=enable`,
+`username=studyforge_scaler`, and `password` from
+`REDIS_SCALER_PASSWORD`. Use the corresponding Redis ACL generated in P1.
+Review and approve both changes before running them.
+
+```sh
+"${kube[@]}" create secret generic studyforge-processing-scaler --from-env-file="$scaler_env_file" --from-file=ca="$ca_file"
+"${kube[@]}" apply --validate=strict -f services/document-processing/oke-worker-autoscaling.yaml
+```
 
 ## Rollback
 
