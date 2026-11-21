@@ -4,6 +4,7 @@ Run with a Python environment containing backend and document-processing
 requirements, plus Docker Compose:
 
     python scripts/check_processing_live.py [--storage {filesystem,s3}]
+    python scripts/check_processing_live.py --storage oci --oci-env-file <path>
 
 This creates a disposable Compose project, two databases, a real Django HTTP
 server, and a standalone Celery worker. Only external AI provider functions
@@ -14,6 +15,13 @@ With --storage s3, a disposable SeaweedFS container stores the sources. Django
 uses a read/write identity, the worker a separate read-only identity, and the
 worker reads through the authenticated object locator (production mode). The
 run also restarts storage and the worker, then deletes a document.
+
+With --storage oci, the same checks run against a real Oracle Object Storage
+bucket using the Django and worker customer secret keys from the credentials
+file described in scripts/check_oci_storage.py (never printed). PostgreSQL
+and Redis stay local and disposable. The storage restart is skipped (the
+worker is still replaced), and every object this run created is deleted from
+the shared bucket afterwards.
 """
 
 from __future__ import annotations
@@ -23,6 +31,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import secrets
 import socket
 import subprocess
@@ -48,6 +57,12 @@ SEAWEEDFS_IMAGE = (
 )
 S3_BUCKET = "studyforge-live-documents"
 S3_REGION = "us-east-1"
+# Only names this harness or Django's upload service generate (uuid4 hex).
+RUN_OBJECT_KEY = re.compile(
+    r"documents/\d{4}/\d{2}/[0-9a-f]{32}\.pdf|documents/live-worker-write-[0-9a-f]{32}\.pdf"
+)
+# Tolerance between the local clock and the bucket's LastModified time.
+CLOCK_SKEW_SECONDS = 300
 
 
 class FakeGeminiClient:
@@ -327,18 +342,87 @@ def wait_until_ready(client, upload, deadline_seconds=90):
     raise AssertionError(f"Timed out waiting for READY: {statuses}")
 
 
-def s3_client(endpoint, credentials):
+def s3_client(store, credentials):
     import boto3
     from botocore.config import Config
 
     return boto3.client(
-        "s3", endpoint_url=endpoint, region_name=S3_REGION,
+        "s3", endpoint_url=store.endpoint, region_name=store.region,
         aws_access_key_id=credentials[0], aws_secret_access_key=credentials[1],
         config=Config(
-            connect_timeout=2, read_timeout=5, retries={"max_attempts": 1},
+            connect_timeout=5, read_timeout=15, retries={"max_attempts": 1},
             s3={"addressing_style": "path"},
         ),
     )
+
+
+def load_oci_store(env_file):
+    """Use the real OCI bucket and the two customer secret keys from the file."""
+    sys.path.insert(0, str(ROOT / "scripts"))
+    from check_oci_storage import ConfigError, load_env_file
+
+    try:
+        values = load_env_file(Path(env_file))
+    except ConfigError as exc:
+        raise SystemExit(f"[live] OCI configuration: {exc}") from None
+    return SimpleNamespace(
+        name=None, local=False,
+        endpoint=values["SCRUM133_OCI_ENDPOINT_URL"],
+        bucket=values["SCRUM133_OCI_BUCKET"],
+        region=values["SCRUM133_OCI_REGION"],
+        django_key=(values["SCRUM133_OCI_DJANGO_ACCESS_KEY_ID"], values["SCRUM133_OCI_DJANGO_SECRET_ACCESS_KEY"]),
+        worker_key=(values["SCRUM133_OCI_WORKER_ACCESS_KEY_ID"], values["SCRUM133_OCI_WORKER_SECRET_ACCESS_KEY"]),
+        created_keys=set(),
+        run_started=time.time(),
+    )
+
+
+def cleanup_remote_objects(store):
+    """Delete only objects this run created in the shared bucket.
+
+    A key is deleted only if it was tracked by this run or listed in this
+    run's fresh disposable database, matches the random-UUID names Django and
+    this harness generate, and was last modified after the run started.
+    The bucket is never listed.
+    """
+    from botocore.exceptions import ClientError
+
+    keys = set(store.created_keys)
+    try:
+        # Rows of this run's disposable database name every uploaded source.
+        from apps.documents.models import Document
+
+        keys.update(name for name in Document.objects.values_list("file", flat=True) if name)
+    except Exception:  # Django was never set up, so nothing was uploaded.
+        pass
+    client = s3_client(store, store.django_key)
+    remaining, skipped = [], []
+    for key in sorted(keys):
+        if not RUN_OBJECT_KEY.fullmatch(key):
+            skipped.append(key)
+            continue
+        try:
+            head = client.head_object(Bucket=store.bucket, Key=key)
+        except ClientError as exc:
+            if exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode") != 404:
+                remaining.append(key)
+            continue  # Already gone (or never created, e.g. a denied worker write).
+        if head["LastModified"].timestamp() < store.run_started - CLOCK_SKEW_SECONDS:
+            skipped.append(key)  # Older than this run: not ours, never delete it.
+            continue
+        try:
+            client.delete_object(Bucket=store.bucket, Key=key)
+            client.head_object(Bucket=store.bucket, Key=key)
+            remaining.append(key)
+        except ClientError as exc:
+            if exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode") != 404:
+                remaining.append(key)
+    if skipped:
+        print(f"[live] OCI cleanup skipped {len(skipped)} key(s) not created by this run: {skipped}", file=sys.stderr)
+    if remaining:
+        print(f"[live] OCI cleanup left {len(remaining)} object(s): {remaining}", file=sys.stderr)
+    if not skipped and not remaining:
+        print(f"[live] OCI cleanup: {len(keys)} test object key(s) checked, none remain", flush=True)
 
 
 def start_object_store(name, volume, temp):
@@ -369,8 +453,9 @@ def start_object_store(name, volume, temp):
         "-s3.config=/etc/studyforge/s3.json", f"-bucket={S3_BUCKET}",
     ])
     store = SimpleNamespace(
-        name=name, endpoint=f"http://127.0.0.1:{port}",
-        django_key=django_key, worker_key=worker_key,
+        name=name, local=True, endpoint=f"http://127.0.0.1:{port}",
+        bucket=S3_BUCKET, region=S3_REGION,
+        django_key=django_key, worker_key=worker_key, created_keys=set(),
     )
     wait_for_bucket(store)
     return store
@@ -379,11 +464,11 @@ def start_object_store(name, volume, temp):
 def wait_for_bucket(store, deadline_seconds=60):
     from botocore.exceptions import BotoCoreError, ClientError
 
-    client = s3_client(store.endpoint, store.django_key)
+    client = s3_client(store, store.django_key)
     deadline = time.monotonic() + deadline_seconds
     while time.monotonic() < deadline:
         try:
-            client.head_bucket(Bucket=S3_BUCKET)
+            client.head_bucket(Bucket=store.bucket)
             return
         except (BotoCoreError, ClientError):
             time.sleep(1)
@@ -391,23 +476,28 @@ def wait_for_bucket(store, deadline_seconds=60):
 
 
 def storage_env(store):
+    # Only the local SeaweedFS store may use HTTP; an empty value also stops
+    # backend/.env from supplying one (load_dotenv never overrides).
+    allow_http = "1" if store.local else ""
     backend = {
         "DOCUMENT_STORAGE_BACKEND": "s3",
-        "DOCUMENT_STORAGE_BUCKET": S3_BUCKET,
-        "DOCUMENT_STORAGE_REGION": S3_REGION,
+        "DOCUMENT_STORAGE_BUCKET": store.bucket,
+        "DOCUMENT_STORAGE_REGION": store.region,
         "DOCUMENT_STORAGE_ENDPOINT_URL": store.endpoint,
         "DOCUMENT_STORAGE_ACCESS_KEY_ID": store.django_key[0],
         "DOCUMENT_STORAGE_SECRET_ACCESS_KEY": store.django_key[1],
-        "DOCUMENT_STORAGE_ALLOW_HTTP": "1",
+        "DOCUMENT_STORAGE_ALLOW_HTTP": allow_http,
+        "DOCUMENT_STORAGE_SESSION_TOKEN": "",
+        "DOCUMENT_STORAGE_CA_BUNDLE": "",
     }
     worker = {
         "PROCESSING_SOURCE_MODE": "s3",
-        "PROCESSING_STORAGE_BUCKET": S3_BUCKET,
-        "PROCESSING_STORAGE_REGION": S3_REGION,
+        "PROCESSING_STORAGE_BUCKET": store.bucket,
+        "PROCESSING_STORAGE_REGION": store.region,
         "PROCESSING_STORAGE_ENDPOINT_URL": store.endpoint,
         "PROCESSING_STORAGE_ACCESS_KEY_ID": store.worker_key[0],
         "PROCESSING_STORAGE_SECRET_ACCESS_KEY": store.worker_key[1],
-        "PROCESSING_STORAGE_ALLOW_HTTP": "1",
+        "PROCESSING_STORAGE_ALLOW_HTTP": allow_http,
     }
     return backend, worker
 
@@ -436,8 +526,8 @@ def check_worker_ready(env):
     print("[live] Worker readiness reports database, Redis and storage ok", flush=True)
 
 
-def object_sha256(client, key):
-    body = client.get_object(Bucket=S3_BUCKET, Key=key)["Body"]
+def object_sha256(client, store, key):
+    body = client.get_object(Bucket=store.bucket, Key=key)["Body"]
     try:
         return hashlib.sha256(body.read()).hexdigest()
     finally:
@@ -445,12 +535,17 @@ def object_sha256(client, key):
 
 
 def assert_denied(label, operation):
+    """SeaweedFS answers 403 AccessDenied; OCI hides denied writes as 404 NoSuchBucket.
+
+    Callers also re-check the object afterwards, so a 404 cannot hide a write.
+    """
     from botocore.exceptions import ClientError
 
     try:
         operation()
     except ClientError as exc:
-        assert exc.response["Error"]["Code"] == "AccessDenied", exc.response
+        status = exc.response.get("ResponseMetadata", {}).get("HTTPStatusCode")
+        assert status in {403, 404}, exc.response.get("Error")
         return
     raise AssertionError(f"Worker identity was allowed to {label}.")
 
@@ -460,24 +555,37 @@ def verify_object_storage(flow, store, media_root, django_log, base_url):
     import httpx
     from apps.documents.models import Document
 
+    from botocore.exceptions import ClientError
+
     document = Document.objects.get(pk=flow.document_id)
     key = document.file.name
+    store.created_keys.add(key)
     assert key.startswith("documents/") and key.endswith(".pdf"), key
-    django_client = s3_client(store.endpoint, store.django_key)
-    worker_client = s3_client(store.endpoint, store.worker_key)
-    assert object_sha256(django_client, key) == document.sha256
-    assert object_sha256(worker_client, key) == document.sha256
+    django_client = s3_client(store, store.django_key)
+    worker_client = s3_client(store, store.worker_key)
+    assert object_sha256(django_client, store, key) == document.sha256
+    assert object_sha256(worker_client, store, key) == document.sha256
+    worker_write_key = f"documents/live-worker-write-{uuid4().hex}.pdf"
+    store.created_keys.add(worker_write_key)
     assert_denied("upload", lambda: worker_client.put_object(
-        Bucket=S3_BUCKET, Key="documents/worker-write.pdf", Body=b"%PDF"))
-    assert_denied("delete", lambda: worker_client.delete_object(Bucket=S3_BUCKET, Key=key))
-    assert object_sha256(django_client, key) == document.sha256
+        Bucket=store.bucket, Key=worker_write_key, Body=b"%PDF"))
+    assert_denied("overwrite", lambda: worker_client.put_object(
+        Bucket=store.bucket, Key=key, Body=b"%PDF"))
+    assert_denied("delete", lambda: worker_client.delete_object(Bucket=store.bucket, Key=key))
+    assert object_sha256(django_client, store, key) == document.sha256
+    try:
+        django_client.head_object(Bucket=store.bucket, Key=worker_write_key)
+    except ClientError as exc:
+        assert exc.response["ResponseMetadata"]["HTTPStatusCode"] == 404, exc.response.get("Error")
+    else:
+        raise AssertionError("Worker identity created an object.")
     stored_files = [path for path in media_root.rglob("*") if path.is_file()] if media_root.exists() else []
     assert not stored_files, stored_files
     detail = check_response(httpx.get(
         f"{base_url}/api/v1/documents/{flow.document_id}/",
         headers={"Authorization": f"Bearer {flow.token}"}, timeout=20,
     ), 200)
-    private_values = (key, store.endpoint, S3_BUCKET, *store.django_key, *store.worker_key)
+    private_values = (key, store.endpoint, store.bucket, *store.django_key, *store.worker_key)
     for label, body in (("upload", flow.upload), ("detail", detail)):
         exposed = json.dumps(body)
         leaked = [value for value in private_values if value in exposed]
@@ -499,13 +607,15 @@ def verify_restart(flow, store, first_key, base_url, start_worker, django_log):
     import httpx
     from apps.documents.models import Document, Job
 
-    run(["docker", "stop", store.name])
-    run(["docker", "start", store.name])
+    if store.local:
+        # A managed bucket cannot be restarted; only the local store is.
+        run(["docker", "stop", store.name])
+        run(["docker", "start", store.name])
     wait_for_bucket(store)
     first = Document.objects.get(pk=flow.document_id)
     assert first.file.name == first_key
-    django_client = s3_client(store.endpoint, store.django_key)
-    assert object_sha256(django_client, first_key) == first.sha256
+    django_client = s3_client(store, store.django_key)
+    assert object_sha256(django_client, store, first_key) == first.sha256
     start_worker()
 
     with httpx.Client(
@@ -524,14 +634,15 @@ def verify_restart(flow, store, first_key, base_url, start_worker, django_log):
         )
         statuses = wait_until_ready(client, upload)
     second = Document.objects.get(pk=upload["id"])
+    store.created_keys.add(second.file.name)
     second_job = Job.objects.get(document=second)
     assert second_job.status == Job.Status.SUCCEEDED
     assert RESTART_PDF_TEXT in " ".join(second.chunks.values_list("content", flat=True))
-    assert object_sha256(django_client, second.file.name) == second.sha256
+    assert object_sha256(django_client, store, second.file.name) == second.sha256
     assert f"GET /internal/v1/jobs/{second_job.pk}/object/" in django_log.read_text(errors="replace")
+    restarted = "storage and worker restart" if store.local else "worker restart"
     print(
-        f"[live] After storage and worker restart: original source intact, "
-        f"new upload {statuses}",
+        f"[live] After {restarted}: original source intact, new upload {statuses}",
         flush=True,
     )
     return second
@@ -551,14 +662,14 @@ def verify_deletion(flow, store, first_key, second, base_url):
         assert response.status_code == 204, response.status_code
         assert client.get(f"/api/v1/documents/{flow.document_id}/").status_code == 404
     assert not Document.objects.filter(pk=flow.document_id).exists()
-    django_client = s3_client(store.endpoint, store.django_key)
+    django_client = s3_client(store, store.django_key)
     try:
-        django_client.head_object(Bucket=S3_BUCKET, Key=first_key)
+        django_client.head_object(Bucket=store.bucket, Key=first_key)
     except ClientError as exc:
         assert exc.response["Error"]["Code"] in {"404", "NoSuchKey", "NotFound"}, exc.response
     else:
         raise AssertionError("Deleted material's object is still in the bucket.")
-    assert object_sha256(django_client, second.file.name) == second.sha256
+    assert object_sha256(django_client, store, second.file.name) == second.sha256
     print("[live] Deleting a material removed only its object", flush=True)
 
 
@@ -578,7 +689,9 @@ def print_log_tail(label, path):
         print(f"[live] {label} log tail:\n{path.read_text(errors='replace')[-5000:]}", file=sys.stderr)
 
 
-def main(storage="filesystem"):
+def main(storage="filesystem", oci_env_file=None):
+    # Fail on a bad credentials file before starting any container.
+    remote_store = load_oci_store(oci_env_file) if storage == "oci" else None
     unique = uuid4().hex[:10]
     project = f"sf-processing-live-{unique}"
     app_db = f"studyforge_live_app_{unique}"
@@ -589,7 +702,11 @@ def main(storage="filesystem"):
     token = secrets.token_urlsafe(32)
     port = free_local_port()
     base_url = f"http://127.0.0.1:{port}"
-    base_env = os.environ.copy()
+    # Inherited storage settings must never point a run at other storage.
+    base_env = {
+        key: value for key, value in os.environ.items()
+        if not key.startswith(("DOCUMENT_STORAGE_", "PROCESSING_STORAGE_", "AWS_", "SCRUM133_OCI_"))
+    }
     base_env.update({
         "POSTGRES_DB": app_db,
         "POSTGRES_USER": admin,
@@ -630,6 +747,13 @@ def main(storage="filesystem"):
                 store_started = True
                 print(f"[live] Starting disposable object store {store_name}", flush=True)
                 store = start_object_store(store_name, store_volume, temp)
+            elif remote_store is not None:
+                store = remote_store
+                print(
+                    f"[live] Using OCI bucket {store.bucket} in {store.region} "
+                    "with separate Django and worker keys",
+                    flush=True,
+                )
 
             backend_env = {
                 **base_env,
@@ -741,7 +865,7 @@ def main(storage="filesystem"):
             assert TASK_NAME in worker_output
             if store is not None:
                 print(
-                    f"[live] PASS (s3): {flow.statuses}, {flow.chunk_count} persisted "
+                    f"[live] PASS ({storage}): {flow.statuses}, {flow.chunk_count} persisted "
                     "chunk(s), Django S3 upload, real Redis worker, object locator, "
                     "read-only worker GetObject, callback POST, restart and deletion",
                     flush=True,
@@ -760,6 +884,12 @@ def main(storage="filesystem"):
         finally:
             stop_process(worker)
             stop_process(server)
+            if remote_store is not None:
+                # Before Compose down: the disposable database lists the uploads.
+                try:
+                    cleanup_remote_objects(remote_store)
+                except Exception as exc:
+                    print(f"[live] OCI cleanup failed: {type(exc).__name__}", file=sys.stderr)
             if store_started:
                 # Remove only this run's uniquely named container and volume,
                 # skipping either one if startup failed before creating it.
@@ -798,5 +928,10 @@ if __name__ == "__main__":
         main()
     elif len(sys.argv) == 3 and sys.argv[1] == "--storage" and sys.argv[2] in {"filesystem", "s3"}:
         main(sys.argv[2])
+    elif len(sys.argv) == 5 and sys.argv[1:3] == ["--storage", "oci"] and sys.argv[3] == "--oci-env-file":
+        main("oci", oci_env_file=sys.argv[4])
     else:
-        raise SystemExit("Usage: python scripts/check_processing_live.py [--storage {filesystem,s3}]")
+        raise SystemExit(
+            "Usage: python scripts/check_processing_live.py [--storage {filesystem,s3}]\n"
+            "       python scripts/check_processing_live.py --storage oci --oci-env-file <path>"
+        )
