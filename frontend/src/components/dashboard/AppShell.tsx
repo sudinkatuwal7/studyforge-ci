@@ -29,6 +29,7 @@ export default function AppShell({
   // Notes stays highlighted on a single note (/notes/5), which is opened from the library.
   const onNotes = pathname === "/notes" || pathname.startsWith("/notes/");
   const onTasks = pathname === "/tasks";
+  const onQuizHistory = pathname === "/quiz-history";
   const onCalendar = pathname === "/calendar";
 
   // On phones the sidebar is a drawer. It stays open only for the location it
@@ -107,6 +108,9 @@ export default function AppShell({
           <Link to="/tasks" className={navClass(onTasks)} aria-current={onTasks ? "page" : undefined}>
             <TasksIcon /> Tasks
           </Link>
+          <Link to="/quiz-history" className={navClass(onQuizHistory)} aria-current={onQuizHistory ? "page" : undefined}>
+            <QuizHistoryIcon /> Quiz History
+          </Link>
           <Link to="/calendar" className={navClass(onCalendar)} aria-current={onCalendar ? "page" : undefined}>
             <CalendarIcon /> Calendar
           </Link>
@@ -160,6 +164,7 @@ function pageTitle(pathname: string): string {
   if (pathname.startsWith("/notes/")) return "Notes";
   if (pathname === "/notes") return "My Notes";
   if (pathname === "/tasks") return "Tasks";
+  if (pathname === "/quiz-history") return "Quiz History";
   if (pathname === "/calendar") return "Calendar";
   return "Dashboard";
 }
@@ -207,6 +212,15 @@ function TasksIcon() {
     <svg viewBox="0 0 24 24" aria-hidden="true">
       <path d="M5 7h14M5 12h14M5 17h9" />
       <path d="M4 7.2 5.2 8.4 7.4 6M4 12.2 5.2 13.4 7.4 11" />
+    </svg>
+  );
+}
+
+function QuizHistoryIcon() {
+  return (
+    <svg viewBox="0 0 24 24" aria-hidden="true">
+      <path d="M4 20V4M4 20h16" />
+      <path d="M8 16l3.5-4 3 2.5L19 8" />
     </svg>
   );
 }

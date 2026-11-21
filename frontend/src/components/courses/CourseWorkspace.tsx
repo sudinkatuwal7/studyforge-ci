@@ -85,6 +85,9 @@ export default function CourseWorkspace({ course, section, onRenamed, onDeleted 
           </div>
           {/* Stays mounted while hidden so a quiz in progress survives a tab switch. */}
           <div role="tabpanel" id="panel-Quizzes" aria-labelledby="tab-Quizzes" hidden={tab !== "Quizzes"} className="course-quizzes">
+            <p className="course-quizzes-history">
+              <Link to={`/quiz-history?course=${course.id}`}>View quiz history and progress</Link>
+            </p>
             <QuizPanel courseId={course.id} materials={materials} materialsState={materialsState} />
           </div>
           <div role="tabpanel" id="panel-Tasks" aria-labelledby="tab-Tasks" hidden={tab !== "Tasks"}>

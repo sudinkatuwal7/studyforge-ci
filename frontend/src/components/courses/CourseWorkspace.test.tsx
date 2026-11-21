@@ -108,6 +108,14 @@ it("offers multi-material notes in the Notes tab, separate from material managem
   expect(screen.getByRole("tab", { name: "Notes" })).toHaveAttribute("aria-controls", "panel-Notes");
 });
 
+it("links the Quizzes tab to this course's quiz history and progress", async () => {
+  renderWorkspace("/courses/42/quizzes");
+  const panel = within(screen.getByRole("tabpanel", { name: "Quizzes" }));
+  const link = panel.getByRole("link", { name: "View quiz history and progress" });
+  expect(link).toHaveAttribute("href", "/quiz-history?course=42");
+  expect(await panel.findByRole("heading", { name: "Generate a quiz" })).toBeVisible();
+});
+
 it("collapses and restores the assistant without losing the course content", async () => {
   renderWorkspace();
   await screen.findByText(/No materials uploaded yet./);

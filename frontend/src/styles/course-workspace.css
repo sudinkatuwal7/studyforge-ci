@@ -65,6 +65,7 @@
 .course-workspace .document-status strong { background: #edf3fa; padding: .15rem .4rem; border-radius: .4rem; font-size: .8rem; }
 .course-workspace select { display: block; max-width: 100%; width: 100%; padding: .6rem; margin-top: .4rem; border: 1px solid #ddddeb; border-radius: .6rem; background: white; }
 .course-quizzes h3, .course-notes h3, .course-workspace .todo-list h2 { margin-top: 0; }
+.course-quizzes-history { margin: 0 0 0.75rem; text-align: right; }
 .quiz-setup fieldset, .quiz-question { border: 1px solid #e3e6ed; border-radius: 1rem; margin: 0 0 1rem; padding: .8rem 1rem; min-width: 0; }
 .quiz-setup legend, .quiz-question legend { padding: 0 .35rem; font-weight: 600; }
 .quiz-question legend { font-size: 1.05rem; line-height: 1.4; }
