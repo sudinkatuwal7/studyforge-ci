@@ -8,6 +8,7 @@ import type { QuizHistoryItem } from "../../types/quizHistory";
 import { coursePath } from "../courses/courseSections";
 import EmptyState from "../shared/EmptyState";
 import { formatDate, loadErrorMessage, modeLabel, scoreLabel } from "./quizHistoryFormat";
+import QuizProgressPanel from "./QuizProgressPanel";
 import "./QuizHistory.css";
 
 type LoadState<T> =
@@ -109,6 +110,11 @@ function History({ accessToken }: { accessToken: string }) {
       {/* The results still list without courses; only the filter is lost. */}
       {courses.status === "error" && (
         <p className="form-error" role="alert">{courses.message} The course filter is unavailable.</p>
+      )}
+
+      {/* Waits for the courses, so a filter about to be dropped never requests progress. */}
+      {courseId !== undefined && courses.status !== "loading" && (
+        <QuizProgressPanel key={courseId} courseId={courseId} courseName={knownCourse?.name} accessToken={accessToken} />
       )}
 
       {result.status === "loading" && <p role="status">Loading quiz history…</p>}

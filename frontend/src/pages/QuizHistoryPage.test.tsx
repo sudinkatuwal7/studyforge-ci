@@ -1,11 +1,11 @@
 import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router-dom";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
 import { listCourses } from "../api/courses";
-import { listQuizHistory } from "../api/quizHistory";
+import { getQuizProgress, listQuizHistory } from "../api/quizHistory";
 import { QuizRequestError } from "../api/quizzes";
-import type { QuizHistoryItem } from "../types/quizHistory";
+import type { QuizHistoryItem, QuizProgress } from "../types/quizHistory";
 import QuizHistoryPage from "./QuizHistoryPage";
 
 vi.mock("../api/courses", async (original) => ({
@@ -16,6 +16,13 @@ vi.mock("../api/quizHistory", () => ({ listQuizHistory: vi.fn(), getQuizProgress
 vi.mock("../context/AuthContext", () => ({ useAuth: () => ({ user: { id: 1 }, accessToken: "token" }) }));
 
 afterEach(() => vi.clearAllMocks());
+
+const noProgress = (course: number): QuizProgress => ({
+  course, quizzes_taken: 0, best_percentage: { regular: null, survival: null }, recent: [],
+});
+beforeEach(() => {
+  vi.mocked(getQuizProgress).mockImplementation(async (courseId) => noProgress(courseId));
+});
 
 const biology = { id: 7, name: "Biology", description: "", owner: 1, created_at: "2026-10-01" };
 const history = { id: 8, name: "History", description: "", owner: 1, created_at: "2026-10-01" };
@@ -199,4 +206,91 @@ it("still lists results when the courses cannot be loaded, without the filter", 
   expect(await screen.findByText("Quiz: Cells")).toBeInTheDocument();
   expect(screen.getByRole("alert")).toHaveTextContent("The course filter is unavailable.");
   expect(filter()).toBeDisabled();
+});
+
+it("shows the chosen course's quizzes taken, best scores and recent scores", async () => {
+  vi.mocked(listCourses).mockResolvedValue([biology, history]);
+  vi.mocked(listQuizHistory).mockResolvedValue([cells]);
+  vi.mocked(getQuizProgress).mockResolvedValue({
+    course: 7, quizzes_taken: 4, best_percentage: { regular: 80, survival: 40 },
+    recent: [cells, { ...treaties, quiz_id: 3, course: 7, course_name: "Biology" }],
+  });
+  renderHistory("/quiz-history?course=7");
+
+  const progress = within(await screen.findByRole("region", { name: "Progress in Biology" }));
+  expect(getQuizProgress).toHaveBeenCalledWith(7, "token", expect.any(AbortSignal));
+  expect(progress.getByText("Quizzes taken").nextElementSibling).toHaveTextContent("4");
+  expect(progress.getByText("Best quiz score").nextElementSibling).toHaveTextContent("80%");
+  expect(progress.getByText("Best Survival score").nextElementSibling).toHaveTextContent("40%");
+  const recent = within(progress.getByRole("list", { name: "Recent scores, newest first" })).getAllByRole("listitem");
+  expect(recent.map((item) => item.querySelector("strong")?.textContent)).toEqual(["60%", "40%"]);
+  expect(recent[1]).toHaveTextContent("Survival · Game over");
+});
+
+it("says None yet for a mode the student has not finished in that course", async () => {
+  vi.mocked(listCourses).mockResolvedValue([biology]);
+  vi.mocked(listQuizHistory).mockResolvedValue([cells]);
+  vi.mocked(getQuizProgress).mockResolvedValue({
+    course: 7, quizzes_taken: 1, best_percentage: { regular: 60, survival: null }, recent: [cells],
+  });
+  renderHistory("/quiz-history?course=7");
+
+  const progress = within(await screen.findByRole("region", { name: "Progress in Biology" }));
+  expect(progress.getByText("Best Survival score").nextElementSibling).toHaveTextContent("None yet");
+});
+
+it("shows no progress for all courses, only for one", async () => {
+  vi.mocked(listCourses).mockResolvedValue([biology]);
+  vi.mocked(listQuizHistory).mockResolvedValue([cells]);
+  renderHistory();
+
+  await screen.findByText("Quiz: Cells");
+  expect(getQuizProgress).not.toHaveBeenCalled();
+  expect(screen.queryByRole("region", { name: /Progress in/ })).not.toBeInTheDocument();
+});
+
+it("leaves the progress out when the course has no finished quizzes", async () => {
+  vi.mocked(listCourses).mockResolvedValue([biology]);
+  vi.mocked(listQuizHistory).mockResolvedValue([]);
+  renderHistory("/quiz-history?course=7");
+
+  expect(await screen.findByText("No quiz results for Biology yet.")).toBeInTheDocument();
+  await vi.waitFor(() => expect(getQuizProgress).toHaveBeenCalled());
+  expect(screen.queryByRole("region", { name: /Progress in/ })).not.toBeInTheDocument();
+});
+
+it("never asks for progress on a course that is not the student's", async () => {
+  vi.mocked(listCourses).mockResolvedValue([biology]);
+  vi.mocked(listQuizHistory).mockResolvedValue([cells]);
+  renderHistory("/quiz-history?course=99");
+
+  await screen.findByText("Quiz: Cells");
+  expect(url()).toBe("/quiz-history");
+  expect(getQuizProgress).not.toHaveBeenCalled();
+});
+
+it("switches the progress when the student picks another course", async () => {
+  vi.mocked(listCourses).mockResolvedValue([biology, history]);
+  vi.mocked(listQuizHistory).mockResolvedValue([cells]);
+  vi.mocked(getQuizProgress).mockImplementation(async (courseId) => ({
+    ...noProgress(courseId), quizzes_taken: courseId === 7 ? 2 : 5, recent: [cells],
+  }));
+  renderHistory("/quiz-history?course=7");
+  await screen.findByRole("region", { name: "Progress in Biology" });
+
+  fireEvent.change(filter(), { target: { value: "8" } });
+
+  const progress = within(await screen.findByRole("region", { name: "Progress in History" }));
+  expect(progress.getByText("Quizzes taken").nextElementSibling).toHaveTextContent("5");
+  expect(screen.queryByRole("region", { name: "Progress in Biology" })).not.toBeInTheDocument();
+});
+
+it("shows a progress error without hiding the history", async () => {
+  vi.mocked(listCourses).mockResolvedValue([biology]);
+  vi.mocked(listQuizHistory).mockResolvedValue([cells]);
+  vi.mocked(getQuizProgress).mockRejectedValue(new QuizRequestError(500));
+  renderHistory("/quiz-history?course=7");
+
+  expect(await screen.findByRole("alert")).toHaveTextContent("Could not load your progress.");
+  expect(screen.getByText("Quiz: Cells")).toBeInTheDocument();
 });
