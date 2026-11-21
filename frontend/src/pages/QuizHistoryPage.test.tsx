@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
@@ -136,7 +136,8 @@ it("drops a filter that is not one of the student's courses and shows every resu
   for (const path of ["/quiz-history?course=99", "/quiz-history?course=abc", "/quiz-history?course=0"]) {
     const { unmount } = renderHistory(path);
     expect(await screen.findByText("Quiz: Cells")).toBeInTheDocument();
-    expect(url()).toBe("/quiz-history");
+    // React Router applies URL changes in a transition, so the list can render first.
+    await waitFor(() => expect(url()).toBe("/quiz-history"));
     expect(filter()).toHaveValue("");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     unmount();
@@ -265,7 +266,8 @@ it("never asks for progress on a course that is not the student's", async () => 
   renderHistory("/quiz-history?course=99");
 
   await screen.findByText("Quiz: Cells");
-  expect(url()).toBe("/quiz-history");
+  // React Router applies URL changes in a transition, so the list can render first.
+  await waitFor(() => expect(url()).toBe("/quiz-history"));
   expect(getQuizProgress).not.toHaveBeenCalled();
 });
 
