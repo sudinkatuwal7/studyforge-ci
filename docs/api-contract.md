@@ -959,3 +959,68 @@ Questions never reached are saved as unanswered (`selected_option_index: null`) 
 count as incorrect, the same rule as a regular quiz. The full review is then
 available from `GET /api/v1/quizzes/{quiz_id}/results/`. Nothing is saved to
 history while a game is still running; an abandoned game stays `ACTIVE`.
+
+## Quiz history and progress (SCRUM-90)
+
+Read-only lists of a student's finished quizzes, for the history page and the
+per-course progress view. Every route requires a valid JWT (`401` otherwise). A
+history row is a quiz submission, so a regular quiz appears once it is submitted
+and a Survival game once it ends. Quizzes never submitted and Survival games still
+`ACTIVE` are not listed. A student only ever sees their own results.
+
+| Route | Method | Contract |
+| --- | --- | --- |
+| `/api/v1/quiz-history/` | GET | Every finished quiz and Survival game, newest first. Optional `?course={course_id}` limits it to one course. |
+| `/api/v1/courses/{course_id}/quiz-progress/` | GET | Quizzes taken, best percentage per mode, and the 5 most recent results for one course. |
+
+### History row
+
+```json
+{
+  "quiz_id": 42,
+  "title": "Quiz: Lecture 3",
+  "course": 3,
+  "course_name": "CS 3358",
+  "mode": "survival",
+  "survival_status": "GAME_OVER",
+  "score": 2,
+  "total_questions": 5,
+  "percentage": 40,
+  "submitted_at": "2026-11-20T18:44:00Z"
+}
+```
+
+- `mode` is `regular` or `survival`. `survival_status` is `GAME_OVER` or
+  `COMPLETED` for Survival and `null` for a regular quiz.
+- `submitted_at` is when the quiz was submitted or the game ended. Rows are ordered
+  by it, newest first.
+- `percentage` is rounded the same way as in `/quizzes/{quiz_id}/results/`, which
+  gives the full review of any row.
+- The list is not paginated.
+
+### Progress
+
+```json
+{
+  "course": 3,
+  "quizzes_taken": 4,
+  "best_percentage": {"regular": 80, "survival": 60},
+  "recent": [{ "...": "up to 5 history rows, newest first" }]
+}
+```
+
+- `quizzes_taken` counts both modes.
+- `best_percentage` is reported per mode because a Survival game that ends early
+  is scored against every question, including those never reached, so its
+  percentage is not comparable with a regular quiz's. A mode with no finished
+  quiz in the course is `null`.
+- A course with no finished quizzes returns `quizzes_taken: 0`, both best values
+  `null` and an empty `recent`.
+
+### Errors
+
+| Status | When |
+| --- | --- |
+| 400 | `course` is not a positive integer. Field error `{"course": [...]}`. |
+| 401 | Missing, invalid or expired JWT. |
+| 404 | The course does not exist or belongs to another student, for either route. |
