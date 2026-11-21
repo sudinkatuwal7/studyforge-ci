@@ -13,9 +13,12 @@ from apps.quizzes.selectors import (
     get_owned_quiz,
     get_owned_submission,
     get_owned_survival_session,
+    list_quiz_history,
 )
 from apps.quizzes.serializers import (
     GenerateQuizSerializer,
+    QuizHistoryItemSerializer,
+    QuizHistoryQuerySerializer,
     QuizResultSerializer,
     QuizSerializer,
     SubmitQuizSerializer,
@@ -167,6 +170,24 @@ class QuizResultsView(APIView):
     def get(self, request, quiz_id):
         submission = get_owned_submission(request.user, quiz_id)
         return Response(QuizResultSerializer(submission).data, status=status.HTTP_200_OK)
+
+
+class QuizHistoryView(APIView):
+    """GET /api/v1/quiz-history/?course={course_id}"""
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        query = QuizHistoryQuerySerializer(data=request.query_params)
+        query.is_valid(raise_exception=True)
+        course_id = query.validated_data.get("course")
+        # Another student's course is a 404, not an empty list, the same
+        # as every other course endpoint.
+        if course_id is not None:
+            get_owned_course(request.user, course_id)
+
+        history = list_quiz_history(request.user, course_id)
+        return Response(QuizHistoryItemSerializer(history, many=True).data, status=status.HTTP_200_OK)
 
 
 class CourseSurvivalSessionsView(APIView):

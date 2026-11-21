@@ -2,6 +2,7 @@ from rest_framework import serializers
 
 from apps.quizzes.llm import ALLOWED_QUESTION_COUNTS
 from apps.quizzes.models import Question, Quiz, QuizSubmission, SurvivalAnswer, SurvivalSession
+from apps.quizzes.selectors import quiz_mode
 
 MAX_SOURCE_DOCUMENTS = 20
 
@@ -124,6 +125,47 @@ class QuizResultSerializer(serializers.ModelSerializer):
             "questions",
         ]
         read_only_fields = fields
+
+
+class QuizHistoryQuerySerializer(serializers.Serializer):
+    course = serializers.IntegerField(min_value=1, required=False)
+
+
+class QuizHistoryItemSerializer(serializers.ModelSerializer):
+    """One finished quiz or Survival game. Built from a QuizSubmission
+    loaded by list_quiz_history, so course and mode need no extra query."""
+
+    quiz_id = serializers.IntegerField(source="quiz.id")
+    title = serializers.CharField(source="quiz.title")
+    course = serializers.IntegerField(source="quiz.course_id")
+    course_name = serializers.CharField(source="quiz.course.name")
+    mode = serializers.SerializerMethodField()
+    # GAME_OVER or COMPLETED for Survival, null for a regular quiz.
+    survival_status = serializers.SerializerMethodField()
+    percentage = serializers.IntegerField()
+
+    class Meta:
+        model = QuizSubmission
+        fields = [
+            "quiz_id",
+            "title",
+            "course",
+            "course_name",
+            "mode",
+            "survival_status",
+            "score",
+            "total_questions",
+            "percentage",
+            "submitted_at",
+        ]
+        read_only_fields = fields
+
+    def get_mode(self, submission):
+        return quiz_mode(submission.quiz)
+
+    def get_survival_status(self, submission):
+        session = getattr(submission.quiz, "survival_session", None)
+        return session.status if session else None
 
 
 class SurvivalAnswerInputSerializer(serializers.Serializer):
